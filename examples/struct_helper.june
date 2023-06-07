@@ -1,0 +1,14 @@
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun helper() -> Employee {
+    let employee = new Employee(name: "Bob", age: 123)
+
+    return employee
+}
+
+fun main() {
+    helper()
+}

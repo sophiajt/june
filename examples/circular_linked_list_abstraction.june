@@ -1,0 +1,53 @@
+struct Node<T> {
+    data: T
+    next: raw Node<T>?
+}
+
+allocator struct CircularList<T> {
+    node: raw Node<T>?
+}
+
+impl CircularList<T> {
+    fun new() -> Self {
+        Self { node: None }
+    }
+
+    fun push(mut self, data: T) {
+        if self.node.is_some() {
+            let next = self.node!.next
+            self.node!.next = new raw Node(data, next)
+        } else {
+            self.node = new raw Node(data, None)
+            self.node!.next = self.node
+        }
+    }
+
+    fun next(mut self) -> T? {
+        if self.node.is_some() {
+            let ret = self.node!.data
+
+            self.node = self.node.next
+            return ret
+        } else {
+            return None
+        }
+    }
+}
+
+fun helper() {
+    let list = new CircularList()
+
+    return list // error, list does not live long enough
+}
+
+fun main() {
+    mut list = new CircularList()
+
+    list.push(1)
+    list.push(2)
+    list.push(3)
+
+    println(list.next())
+    println(list.next())
+    println(list.next())
+}

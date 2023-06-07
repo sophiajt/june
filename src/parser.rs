@@ -10,12 +10,22 @@ pub struct Parser<'source> {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum AllocationType {
+    Normal,
+    Raw,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum AstNode {
     Int,
     Float,
     String,
     Name,
-    Type,
+    Type {
+        params: Option<NodeId>,
+        optional: bool,
+        raw: bool,
+    },
     Variable,
 
     // Booleans
@@ -96,13 +106,17 @@ pub enum AstNode {
         lhs: NodeId,
         rhs: NodeId,
     },
+    MemberAccess {
+        target: NodeId,
+        field: NodeId,
+    },
     Block(Vec<NodeId>),
     If {
         condition: NodeId,
         then_block: NodeId,
         else_expression: Option<NodeId>,
     },
-    New(NodeId),
+    New(AllocationType, NodeId),
     Statement(NodeId),
     Garbage,
 }
@@ -257,31 +271,41 @@ impl<'source> Parser<'source> {
         )
     }
 
-    // pub fn is_less_than(&mut self) -> bool {
-    //     matches!(
-    //         self.lexer.peek(),
-    //         Some(Token {
-    //             token_type: TokenType::LessThan,
-    //             ..
-    //         })
-    //     )
-    // }
+    pub fn is_less_than(&mut self) -> bool {
+        matches!(
+            self.lexer.peek(),
+            Some(Token {
+                token_type: TokenType::LessThan,
+                ..
+            })
+        )
+    }
 
-    // pub fn is_greater_than(&mut self) -> bool {
-    //     matches!(
-    //         self.lexer.peek(),
-    //         Some(Token {
-    //             token_type: TokenType::GreaterThan,
-    //             ..
-    //         })
-    //     )
-    // }
+    pub fn is_greater_than(&mut self) -> bool {
+        matches!(
+            self.lexer.peek(),
+            Some(Token {
+                token_type: TokenType::GreaterThan,
+                ..
+            })
+        )
+    }
 
     pub fn is_pipe(&mut self) -> bool {
         matches!(
             self.lexer.peek(),
             Some(Token {
                 token_type: TokenType::Pipe,
+                ..
+            })
+        )
+    }
+
+    pub fn is_question_mark(&mut self) -> bool {
+        matches!(
+            self.lexer.peek(),
+            Some(Token {
+                token_type: TokenType::QuestionMark,
                 ..
             })
         )
@@ -337,15 +361,15 @@ impl<'source> Parser<'source> {
         )
     }
 
-    // pub fn is_dot(&mut self) -> bool {
-    //     matches!(
-    //         self.lexer.peek(),
-    //         Some(Token {
-    //             token_type: TokenType::Dot,
-    //             ..
-    //         })
-    //     )
-    // }
+    pub fn is_dot(&mut self) -> bool {
+        matches!(
+            self.lexer.peek(),
+            Some(Token {
+                token_type: TokenType::Dot,
+                ..
+            })
+        )
+    }
 
     pub fn is_dotdot(&mut self) -> bool {
         matches!(
@@ -581,7 +605,7 @@ impl<'source> Parser<'source> {
         let span_start = self.position();
         self.keyword(b"struct");
 
-        let name = self.name();
+        let name = self.typename();
         self.lcurly();
 
         // parse fields
@@ -731,6 +755,21 @@ impl<'source> Parser<'source> {
             let span_end = self.position();
 
             self.create_node(AstNode::Range { lhs: expr, rhs }, span_start, span_end)
+        } else if self.is_dot() {
+            // Member access
+            self.lexer.next();
+
+            let field = self.variable_or_call();
+            let span_end = self.position();
+
+            self.create_node(
+                AstNode::MemberAccess {
+                    target: expr,
+                    field,
+                },
+                span_start,
+                span_end,
+            )
         } else {
             expr
         }
@@ -893,6 +932,13 @@ impl<'source> Parser<'source> {
     }
 
     pub fn typename(&mut self) -> NodeId {
+        let raw = if self.is_keyword(b"raw") {
+            self.lexer.next();
+            true
+        } else {
+            false
+        };
+
         match self.lexer.peek() {
             Some(Token {
                 token_type: TokenType::Name,
@@ -901,10 +947,61 @@ impl<'source> Parser<'source> {
                 ..
             }) => {
                 self.lexer.next();
-                self.create_node(AstNode::Type, span_start, span_end)
+                let mut params = None;
+                if self.is_less_than() {
+                    // We have generics
+                    params = Some(self.type_params());
+                }
+
+                let optional = if self.is_question_mark() {
+                    // We have an optional type
+                    self.lexer.next();
+                    true
+                } else {
+                    false
+                };
+
+                self.create_node(
+                    AstNode::Type {
+                        params,
+                        optional,
+                        raw,
+                    },
+                    span_start,
+                    span_end,
+                )
             }
             _ => self.error("expect name"),
         }
+    }
+
+    pub fn type_params(&mut self) -> NodeId {
+        let span_start = self.position();
+        let param_list = {
+            self.less_than();
+
+            let mut output = vec![];
+
+            while self.has_tokens() {
+                if self.is_greater_than() {
+                    break;
+                }
+
+                if self.is_comma() {
+                    self.lexer.next();
+                    continue;
+                }
+
+                output.push(self.name());
+            }
+
+            self.greater_than();
+
+            output
+        };
+        let span_end = self.position();
+
+        self.create_node(AstNode::Params(param_list), span_start, span_end)
     }
 
     pub fn params(&mut self) -> NodeId {
@@ -967,10 +1064,21 @@ impl<'source> Parser<'source> {
         let span_start = self.position();
         self.keyword(b"new");
 
+        let allocation_type = if self.is_keyword(b"raw") {
+            self.lexer.next();
+            AllocationType::Raw
+        } else {
+            AllocationType::Normal
+        };
+
         let allocated = self.variable_or_call();
         let span_end = self.position();
 
-        self.create_node(AstNode::New(allocated), span_start, span_end)
+        self.create_node(
+            AstNode::New(allocation_type, allocated),
+            span_start,
+            span_end,
+        )
     }
 
     pub fn if_expression(&mut self) -> NodeId {
@@ -1223,6 +1331,34 @@ impl<'source> Parser<'source> {
             }
             _ => {
                 self.error("expected: right bracket '}'");
+            }
+        }
+    }
+
+    pub fn less_than(&mut self) {
+        match self.lexer.peek() {
+            Some(Token {
+                token_type: TokenType::LessThan,
+                ..
+            }) => {
+                self.lexer.next();
+            }
+            _ => {
+                self.error("expected: less than/left angle bracket '<'");
+            }
+        }
+    }
+
+    pub fn greater_than(&mut self) {
+        match self.lexer.peek() {
+            Some(Token {
+                token_type: TokenType::GreaterThan,
+                ..
+            }) => {
+                self.lexer.next();
+            }
+            _ => {
+                self.error("expected: greater than/right angle bracket '>'");
             }
         }
     }

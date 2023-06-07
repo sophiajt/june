@@ -1,0 +1,18 @@
+struct File {
+    fun read_all(raw self) -> string {
+        // read into string
+    }
+}
+
+fun file::load(fname: string) -> raw File {
+    let ptr = c::fopen(fname.c_str(), "rb");
+
+    return unsafe { ptr as raw File }
+}
+
+
+fun main() {
+    mut file = file::load("foo.txt")
+
+    let contents = file.read_all()
+}

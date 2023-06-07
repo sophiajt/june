@@ -1,0 +1,14 @@
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun local_fun() -> Employee {
+    let employee = new(local) Employee(name: "Bob", age: 123)
+
+    return employee // <-- escaping allocation
+}
+
+fun main() {
+    local_fun()
+}

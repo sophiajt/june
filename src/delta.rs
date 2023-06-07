@@ -95,10 +95,10 @@ impl<'a> EngineDelta<'a> {
                     self.print_helper(node, indent + 2);
                 }
             }
-            AstNode::New(node) => {
+            AstNode::New(allocation_type, node) => {
                 println!(
-                    "New ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "New {:?} ({}, {}):",
+                    allocation_type, self.span_start[node_id.0], self.span_end[node_id.0],
                 );
                 self.print_helper(node, indent + 2);
             }
@@ -154,6 +154,15 @@ impl<'a> EngineDelta<'a> {
 
                 self.print_helper(lhs, indent + 2);
                 self.print_helper(rhs, indent + 2)
+            }
+            AstNode::MemberAccess { target, field } => {
+                println!(
+                    "MemberAccess ({}, {}):",
+                    self.span_start[node_id.0], self.span_end[node_id.0],
+                );
+
+                self.print_helper(target, indent + 2);
+                self.print_helper(field, indent + 2)
             }
             AstNode::If {
                 condition,

@@ -40,6 +40,7 @@ pub enum TokenType {
     GreaterThanEqual,
     Ampersand,
     AmpersandAmpersand,
+    QuestionMark,
 }
 
 #[derive(Debug)]
@@ -53,7 +54,7 @@ pub struct Token<'source> {
 fn is_symbol(b: u8) -> bool {
     [
         b'+', b'-', b'*', b'/', b'.', b',', b'(', b'[', b'{', b'<', b')', b']', b'}', b'>', b':',
-        b';', b'=', b'$', b'|', b'!', b'~', b'&', b'\'', b'"',
+        b';', b'=', b'$', b'|', b'!', b'~', b'&', b'\'', b'"', b'?',
     ]
     .contains(&b)
 }
@@ -466,6 +467,12 @@ impl<'source> Lexer<'source> {
                 span_start,
                 span_end: span_start + 1,
             },
+            b'?' => Token {
+                token_type: TokenType::QuestionMark,
+                contents: &self.source[..1],
+                span_start,
+                span_end: span_start + 1,
+            },
             x => {
                 panic!(
                     "Internal compiler error: symbol character mismatched in lexer: {}",
@@ -514,7 +521,7 @@ impl<'source> Lexer<'source> {
             } else if self.source[0].is_ascii_alphanumeric() || self.source[0] == b'_' {
                 return self.lex_name();
             } else {
-                panic!("unsupported character: {}", self.source[0])
+                panic!("unsupported character: {}", self.source[0] as char)
             }
         }
     }
