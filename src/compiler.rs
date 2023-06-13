@@ -1,13 +1,13 @@
 use crate::errors::SourceError;
 use crate::parser::{AstNode, NodeId};
-use crate::typechecker::Type;
+use crate::typechecker::TypeId;
 
 #[derive(Debug)]
 pub struct Compiler {
     pub span_start: Vec<usize>,
     pub span_end: Vec<usize>,
     pub ast_nodes: Vec<AstNode>,
-    pub node_types: Vec<Type>,
+    pub node_types: Vec<TypeId>,
 
     pub source: Vec<u8>,
 
@@ -38,6 +38,8 @@ impl Compiler {
         } else {
             self.print_helper(&NodeId(self.ast_nodes.len() - 1), 0)
         }
+
+        println!("{:?}", self.node_types);
     }
 
     fn print_helper(&self, node_id: &NodeId, indent: usize) {
