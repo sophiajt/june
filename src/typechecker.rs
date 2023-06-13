@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
     compiler::Compiler,
+    errors::SourceError,
     parser::{AstNode, NodeId},
 };
 
@@ -23,9 +26,28 @@ impl Type {
     }
 }
 
+pub struct Variable {
+    ty: TypeId,
+    is_mutable: bool,
+    where_defined: NodeId,
+}
+
+pub struct Scope {
+    variables: HashMap<Vec<u8>, Variable>,
+}
+
+impl Scope {
+    pub fn new() -> Scope {
+        Scope {
+            variables: HashMap::new(),
+        }
+    }
+}
+
 pub struct Typechecker {
     pub compiler: Compiler,
     pub types: Vec<Type>,
+    pub scope: Vec<Scope>,
 }
 
 pub const UNKNOWN_TYPE_ID: TypeId = TypeId(0);
@@ -46,6 +68,7 @@ impl Typechecker {
                 Type::new(), // f64
                 Type::new(), // bool
             ],
+            scope: vec![Scope::new()],
         }
     }
 
@@ -61,6 +84,38 @@ impl Typechecker {
             }
             AstNode::Int => {
                 self.compiler.node_types[node_id.0] = I64_TYPE_ID;
+            }
+            AstNode::Float => {
+                self.compiler.node_types[node_id.0] = F64_TYPE_ID;
+            }
+            AstNode::True | AstNode::False => {
+                self.compiler.node_types[node_id.0] = BOOL_TYPE_ID;
+            }
+            AstNode::Let {
+                variable_name,
+                initializer,
+                is_mutable,
+                ..
+            } => {
+                let variable_name = *variable_name;
+                let initializer = *initializer;
+                let is_mutable = *is_mutable;
+
+                self.typecheck_node(initializer);
+
+                // FIXME: also check the optional ty above in the Let
+                let ty = self.compiler.node_types[initializer.0];
+
+                self.define_variable(variable_name, ty, is_mutable, node_id);
+            }
+            AstNode::Variable => {
+                let variable = self.find_variable_in_scope(node_id);
+
+                if let Some(variable) = variable {
+                    self.compiler.node_types[node_id.0] = variable.ty;
+                } else {
+                    self.error("can't find variable", node_id);
+                }
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 let lhs = *lhs;
@@ -90,5 +145,50 @@ impl Typechecker {
         self.typecheck_node(NodeId(self.compiler.ast_nodes.len() - 1));
 
         self.compiler
+    }
+
+    pub fn define_variable(
+        &mut self,
+        variable_name: NodeId,
+        ty: TypeId,
+        is_mutable: bool,
+        where_defined: NodeId,
+    ) {
+        let variable_name = self.compiler.source
+            [self.compiler.span_start[variable_name.0]..self.compiler.span_end[variable_name.0]]
+            .to_vec();
+
+        self.scope
+            .last_mut()
+            .expect("internal error: missing typechecking scope")
+            .variables
+            .insert(
+                variable_name,
+                Variable {
+                    ty,
+                    is_mutable,
+                    where_defined,
+                },
+            );
+    }
+
+    pub fn find_variable_in_scope(&self, variable_name: NodeId) -> Option<&Variable> {
+        let name = &self.compiler.source
+            [self.compiler.span_start[variable_name.0]..self.compiler.span_end[variable_name.0]];
+        for scope in self.scope.iter().rev() {
+            if let Some(value) = scope.variables.get(name) {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
+    pub fn error(&mut self, message: impl Into<String>, node_id: NodeId) {
+        self.compiler.errors.push(SourceError {
+            message: message.into(),
+
+            node_id,
+        });
     }
 }

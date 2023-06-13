@@ -31,9 +31,17 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     let typechecker = Typechecker::new(compiler);
     let compiler = typechecker.typecheck();
 
+    for error in &compiler.errors.first() {
+        compiler.print_error(error)
+    }
+
+    if !compiler.errors.is_empty() {
+        return compiler;
+    }
+
     if debug_output {
         println!();
-        println!("parse result:");
+        println!("Results:");
         compiler.print();
     }
 

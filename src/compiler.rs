@@ -214,39 +214,134 @@ impl Compiler {
         }
     }
 
+    // line number, line start, line_end
+    pub fn line_extents(
+        &self,
+        span_position: usize,
+        file_span_start: usize,
+        file_span_end: usize,
+    ) -> (usize, usize, usize) {
+        let contents = &self.source;
+
+        let line_number = contents[0..span_position].split(|x| *x == b'\n').count();
+
+        let mut line_start = span_position;
+        while line_start > file_span_start && contents[line_start] != b'\n' {
+            line_start -= 1;
+        }
+        if span_position != line_start {
+            line_start += 1;
+        }
+
+        let mut line_end = span_position;
+        while line_end < file_span_end && contents[line_end] != b'\n' {
+            line_end += 1;
+        }
+
+        (line_number, line_start, line_end)
+    }
+
     pub fn print_error(&self, error: &SourceError) {
         let SourceError { node_id, message } = error;
 
         let span_start = self.span_start[node_id.0];
         let span_end = self.span_end[node_id.0];
 
-        let contents = &self.source;
+        let mut filename = "unknown".to_string();
+        let mut file_span_start = 0;
+        let mut file_span_end = 0;
 
-        let line_number = contents[0..span_start].split(|x| *x == b'\n').count();
-
-        let mut line_start = span_start;
-        while line_start > 0 && contents[line_start] != b'\n' {
-            line_start -= 1;
-        }
-        line_start += 1;
-
-        let mut line_end = span_end;
-        while line_end < contents.len() && contents[line_end] != b'\n' {
-            line_end += 1;
+        for (fname, file_start, file_end) in &self.file_offsets {
+            if span_start >= *file_start && span_start < *file_end {
+                filename = fname.clone();
+                file_span_start = *file_start;
+                file_span_end = *file_end;
+                break;
+            }
         }
 
-        println!("line: {}", line_number);
+        let (line_number, line_start, line_end) =
+            self.line_extents(span_start, file_span_start, file_span_end);
+
+        let line_number_width = format!("{}", line_number).len();
+
+        let max_number_width = if (line_end + 1) < file_span_end {
+            let (next_line_number, _, _) =
+                self.line_extents(line_end + 1, file_span_start, file_span_end);
+            format!("{}", next_line_number).len()
+        } else {
+            line_number_width
+        };
+
+        for _ in 0..(max_number_width + 2) {
+            print!("─");
+        }
         println!(
-            "{}",
-            String::from_utf8_lossy(&contents[line_start..line_end])
+            "┬─ \x1b[0;36m{}:{}:{}\x1b[0m",
+            filename,
+            line_number,
+            span_start - line_start + 1
         );
-        for _ in line_start..span_start {
+
+        // Previous line in the source code, if available
+        if line_start > (file_span_start + 1) {
+            let (prev_line_number, prev_line_start, prev_line_end) =
+                self.line_extents(line_start - 1, file_span_start, file_span_end);
+            let prev_line_number_str = format!("{}", prev_line_number);
+
+            for _ in 0..(max_number_width - prev_line_number_str.len()) {
+                print!(" ")
+            }
+
+            println!(
+                " {} │ {}",
+                prev_line_number_str,
+                String::from_utf8_lossy(&self.source[prev_line_start..prev_line_end])
+            );
+        }
+
+        // Line being highlighted
+        for _ in 0..(max_number_width - line_number_width) {
+            print!(" ")
+        }
+
+        println!(
+            " {} │ {}",
+            line_number,
+            String::from_utf8_lossy(&self.source[line_start..line_end])
+        );
+
+        for _ in 0..(line_number_width + 2) {
             print!(" ");
         }
-        for _ in span_start..span_end {
-            print!("-");
+        print!("│");
+        for _ in 0..(span_start - line_start + 1) {
+            print!(" ");
         }
-        println!(" {}", message);
+
+        print!("\x1b[0;31m");
+        for _ in span_start..span_end {
+            print!("▰");
+        }
+        println!(" error: {}", message);
+        print!("\x1b[0m");
+
+        // Next line after error, for context
+        if (line_end + 1) < file_span_end {
+            let (next_line_number, next_line_start, next_line_end) =
+                self.line_extents(line_end + 1, file_span_start, file_span_end);
+
+            println!(
+                " {} │ {}",
+                next_line_number,
+                String::from_utf8_lossy(&self.source[next_line_start..next_line_end])
+            );
+        }
+
+        for _ in 0..(max_number_width + 2) {
+            print!("─");
+        }
+        println!("┴─");
     }
 
     pub fn add_file(&mut self, fname: &str, contents: &[u8]) {
