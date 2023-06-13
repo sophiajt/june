@@ -1,22 +1,34 @@
+use crate::errors::SourceError;
 use crate::parser::{AstNode, NodeId};
+use crate::typechecker::Type;
 
 #[derive(Debug)]
-pub struct EngineDelta<'a> {
-    pub node_id_offset: usize,
+pub struct Compiler {
     pub span_start: Vec<usize>,
     pub span_end: Vec<usize>,
     pub ast_nodes: Vec<AstNode>,
-    pub contents: &'a [u8],
+    pub node_types: Vec<Type>,
+
+    pub source: Vec<u8>,
+
+    pub file_offsets: Vec<(String, usize, usize)>, // fname, start, end
+
+    pub errors: Vec<SourceError>,
 }
 
-impl<'a> EngineDelta<'a> {
-    pub fn new(node_id_offset: usize, contents: &'a [u8]) -> Self {
+impl Compiler {
+    pub fn new() -> Self {
         Self {
-            node_id_offset,
             span_start: vec![],
             span_end: vec![],
             ast_nodes: vec![],
-            contents,
+            node_types: vec![],
+
+            source: vec![],
+
+            file_offsets: vec![],
+
+            errors: vec![],
         }
     }
 
@@ -71,11 +83,15 @@ impl<'a> EngineDelta<'a> {
             AstNode::Fun {
                 name,
                 params,
+                return_ty,
                 block,
             } => {
                 println!("Fun:",);
                 self.print_helper(name, indent + 2);
                 self.print_helper(params, indent + 2);
+                if let Some(return_ty) = return_ty {
+                    self.print_helper(return_ty, indent + 2);
+                }
                 self.print_helper(block, indent + 2);
             }
             AstNode::Struct { name, fields } => {
@@ -179,6 +195,14 @@ impl<'a> EngineDelta<'a> {
                     self.print_helper(else_expression, indent + 2)
                 }
             }
+            AstNode::While { condition, block } => {
+                println!(
+                    "While ({}, {}):",
+                    self.span_start[node_id.0], self.span_end[node_id.0],
+                );
+                self.print_helper(condition, indent + 2);
+                self.print_helper(block, indent + 2);
+            }
             x => {
                 println!(
                     "{:?} ({}, {})",
@@ -186,5 +210,57 @@ impl<'a> EngineDelta<'a> {
                 )
             }
         }
+    }
+
+    pub fn print_error(&self, error: &SourceError) {
+        let SourceError { node_id, message } = error;
+
+        let span_start = self.span_start[node_id.0];
+        let span_end = self.span_end[node_id.0];
+
+        let contents = &self.source;
+
+        let line_number = contents[0..span_start].split(|x| *x == b'\n').count();
+
+        let mut line_start = span_start;
+        while line_start > 0 && contents[line_start] != b'\n' {
+            line_start -= 1;
+        }
+        line_start += 1;
+
+        let mut line_end = span_end;
+        while line_end < contents.len() && contents[line_end] != b'\n' {
+            line_end += 1;
+        }
+
+        println!("line: {}", line_number);
+        println!(
+            "{}",
+            String::from_utf8_lossy(&contents[line_start..line_end])
+        );
+        for _ in line_start..span_start {
+            print!(" ");
+        }
+        for _ in span_start..span_end {
+            print!("-");
+        }
+        println!(" {}", message);
+    }
+
+    pub fn add_file(&mut self, fname: &str, contents: &[u8]) {
+        let span_offset = self.source.len();
+
+        self.file_offsets
+            .push((fname.to_string(), span_offset, span_offset + contents.len()));
+
+        self.source.extend_from_slice(contents);
+    }
+
+    pub fn span_offset(&self) -> usize {
+        self.source.len()
+    }
+
+    pub fn node_id_offset(&self) -> usize {
+        self.ast_nodes.len()
     }
 }
