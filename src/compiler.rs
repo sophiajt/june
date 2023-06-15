@@ -1,6 +1,6 @@
 use crate::errors::SourceError;
 use crate::parser::{AstNode, NodeId};
-use crate::typechecker::TypeId;
+use crate::typechecker::{Function, TypeId, Variable};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -12,6 +12,9 @@ pub struct Compiler {
     pub source: Vec<u8>,
 
     pub file_offsets: Vec<(String, usize, usize)>, // fname, start, end
+
+    pub variables: Vec<Variable>,
+    pub functions: Vec<Function>,
 
     pub errors: Vec<SourceError>,
 }
@@ -28,6 +31,9 @@ impl Compiler {
 
             file_offsets: vec![],
 
+            variables: vec![],
+            functions: vec![],
+
             errors: vec![],
         }
     }
@@ -40,6 +46,14 @@ impl Compiler {
         }
 
         println!("{:?}", self.node_types);
+
+        for (var_id, var) in self.variables.iter().enumerate() {
+            println!("{}: {:?}", var_id, var);
+        }
+
+        for (fun_id, fun) in self.functions.iter().enumerate() {
+            println!("{}: {:?}", fun_id, fun);
+        }
     }
 
     fn print_helper(&self, node_id: &NodeId, indent: usize) {
@@ -70,9 +84,7 @@ impl Compiler {
                     self.span_start[node_id.0], self.span_end[node_id.0],
                 );
                 self.print_helper(name, indent + 2);
-                if let Some(ty) = ty {
-                    self.print_helper(ty, indent + 2);
-                }
+                self.print_helper(ty, indent + 2);
             }
             // AstNode::Closure { params, block } => {
             //     println!(

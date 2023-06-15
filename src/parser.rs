@@ -76,7 +76,7 @@ pub enum AstNode {
     Params(Vec<NodeId>),
     Param {
         name: NodeId,
-        ty: Option<NodeId>,
+        ty: NodeId,
     },
     Struct {
         name: NodeId,
@@ -1112,25 +1112,15 @@ impl Parser {
             let span_start = self.position();
             let name = self.name();
             if self.is_colon() {
-                // Optional type
                 self.colon();
 
                 let ty = self.name();
 
                 let span_end = self.position();
 
-                params.push(self.create_node(
-                    AstNode::Param { name, ty: Some(ty) },
-                    span_start,
-                    span_end,
-                ))
+                params.push(self.create_node(AstNode::Param { name, ty }, span_start, span_end))
             } else {
-                let span_end = self.position();
-                params.push(self.create_node(
-                    AstNode::Param { name, ty: None },
-                    span_start,
-                    span_end,
-                ))
+                params.push(self.error("parameter missing type"))
             }
         }
 

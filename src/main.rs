@@ -29,6 +29,7 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     }
 
     let typechecker = Typechecker::new(compiler);
+
     let compiler = typechecker.typecheck();
 
     for error in &compiler.errors.first() {
