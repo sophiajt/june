@@ -188,6 +188,8 @@ impl Typechecker {
         }
 
         self.typecheck_node(body);
+
+        self.exit_scope();
     }
 
     pub fn typecheck_block(&mut self, node_id: NodeId, nodes: &[NodeId]) {
