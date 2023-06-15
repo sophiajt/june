@@ -39,9 +39,22 @@ pub struct Variable {
     where_defined: NodeId,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct Param {
+    name: Vec<u8>,
+    location: NodeId,
+    ty: TypeId,
+}
+
+impl Param {
+    pub fn new(name: Vec<u8>, location: NodeId, ty: TypeId) -> Param {
+        Param { name, location, ty }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Function {
-    params: Vec<(Vec<u8>, TypeId)>,
+    params: Vec<Param>,
     return_type: TypeId,
     body: NodeId,
 }
@@ -77,7 +90,7 @@ impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
         // temporarily - let's add `println` for now, to get examples to typecheck
         compiler.functions.push(Function {
-            params: vec![(b"input".to_vec(), STRING_TYPE_ID)],
+            params: vec![Param::new(b"input".to_vec(), NodeId(0), STRING_TYPE_ID)],
             body: NodeId(0),
             return_type: VOID_TYPE_ID,
         });
@@ -108,25 +121,35 @@ impl Typechecker {
         VOID_TYPE_ID
     }
 
-    pub fn typecheck_fun(
+    pub fn get_source(&self, node_id: NodeId) -> &[u8] {
+        &self.compiler.source
+            [self.compiler.span_start[node_id.0]..self.compiler.span_end[node_id.0]]
+    }
+
+    pub fn typecheck_fun_predecl(
         &mut self,
         name: NodeId,
         params: NodeId,
         return_ty: Option<NodeId>,
         block: NodeId,
-    ) {
-        let fun_params = vec![];
+    ) -> FunId {
+        let mut fun_params = vec![];
         let name = self.compiler.source
             [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
             .to_vec();
 
-        self.typecheck_node(block);
-
-        if let AstNode::Params(unchecked_params) = &self.compiler.ast_nodes[params.0] {
+        //FIXME: remove clone?
+        if let AstNode::Params(unchecked_params) = self.compiler.ast_nodes[params.0].clone() {
             for unchecked_param in unchecked_params {
                 if let AstNode::Param { name, ty } = &self.compiler.ast_nodes[unchecked_param.0] {
+                    let name = *name;
+                    let param_name = self.get_source(name).to_vec();
+                    let ty = *ty;
+                    let ty = self.typecheck_typename(ty);
+
+                    fun_params.push(Param::new(param_name, name, ty));
                 } else {
-                    self.error("expected function parameter", *unchecked_param);
+                    self.error("expected function parameter", unchecked_param);
                     break;
                 }
             }
@@ -147,9 +170,29 @@ impl Typechecker {
             .expect("internal error: missing function scope")
             .functions
             .insert(name, FunId(fun_id));
+
+        FunId(fun_id)
+    }
+
+    pub fn typecheck_fun(&mut self, fun_id: FunId) {
+        let Function {
+            params,
+            return_type,
+            body,
+        } = self.compiler.functions[fun_id.0].clone();
+
+        self.enter_scope();
+
+        for Param { name, location, ty } in &params {
+            self.define_variable(name.clone(), *ty, false, *location);
+        }
+
+        self.typecheck_node(body);
     }
 
     pub fn typecheck_block(&mut self, node_id: NodeId, nodes: &[NodeId]) {
+        let mut funs = vec![];
+
         for node_id in nodes {
             if let AstNode::Fun {
                 name,
@@ -158,8 +201,12 @@ impl Typechecker {
                 block,
             } = &self.compiler.ast_nodes[node_id.0]
             {
-                self.typecheck_fun(*name, *params, *return_ty, *block)
+                funs.push(self.typecheck_fun_predecl(*name, *params, *return_ty, *block));
             }
+        }
+
+        for fun in funs {
+            self.typecheck_fun(fun);
         }
 
         for node_id in nodes {
@@ -197,7 +244,7 @@ impl Typechecker {
 
                 let arg_type = self.typecheck_node(arg);
 
-                if !self.is_type_compatible(arg_type, param.1) {
+                if !self.is_type_compatible(arg_type, param.ty) {
                     // FIXME: make this a better type error
                     self.error("type mismatch for arg", arg);
                     return return_type;
@@ -250,7 +297,9 @@ impl Typechecker {
                 // FIXME: also check the optional ty above in the Let
                 let ty = self.compiler.node_types[initializer.0];
 
-                self.define_variable(variable_name, ty, is_mutable, node_id);
+                let variable_name = self.get_source(variable_name);
+
+                self.define_variable(variable_name.to_vec(), ty, is_mutable, node_id);
                 VOID_TYPE_ID
             }
             AstNode::Variable => {
@@ -274,6 +323,10 @@ impl Typechecker {
 
                 match &self.compiler.ast_nodes[op.0] {
                     AstNode::Plus | AstNode::Minus | AstNode::Multiply | AstNode::Divide => {
+                        if lhs_ty != rhs_ty {
+                            // FIXME: actually say the types
+                            self.error("type mismatch during operation", op)
+                        }
                         self.compiler.node_types[node_id.0] = lhs_ty;
                         lhs_ty
                     }
@@ -307,15 +360,11 @@ impl Typechecker {
 
     pub fn define_variable(
         &mut self,
-        variable_name: NodeId,
+        variable_name: Vec<u8>,
         ty: TypeId,
         is_mutable: bool,
         where_defined: NodeId,
-    ) {
-        let variable_name = self.compiler.source
-            [self.compiler.span_start[variable_name.0]..self.compiler.span_end[variable_name.0]]
-            .to_vec();
-
+    ) -> VarId {
         self.compiler.variables.push(Variable {
             ty,
             is_mutable,
@@ -329,6 +378,8 @@ impl Typechecker {
             .expect("internal error: missing typechecking scope")
             .variables
             .insert(variable_name, VarId(var_id));
+
+        VarId(var_id)
     }
 
     pub fn find_variable_in_scope(&self, variable_name: NodeId) -> Option<&VarId> {
@@ -353,6 +404,14 @@ impl Typechecker {
         }
 
         None
+    }
+
+    pub fn enter_scope(&mut self) {
+        self.scope.push(Scope::new())
+    }
+
+    pub fn exit_scope(&mut self) {
+        self.scope.pop();
     }
 
     pub fn error(&mut self, message: impl Into<String>, node_id: NodeId) {

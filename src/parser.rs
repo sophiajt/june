@@ -8,13 +8,13 @@ pub struct Parser {
     content_length: usize,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum AllocationType {
     Normal,
     Raw,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum AstNode {
     Int,
     Float,

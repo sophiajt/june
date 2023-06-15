@@ -1,0 +1,7 @@
+fun main() {
+    greet()
+}
+
+fun greet() {
+    println("hello")
+}
