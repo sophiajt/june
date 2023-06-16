@@ -1,0 +1,4 @@
+struct Employee {
+    name: string,
+    age: i64,
+}

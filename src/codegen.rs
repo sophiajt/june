@@ -2,8 +2,8 @@ use crate::{
     compiler::Compiler,
     parser::{AstNode, NodeId},
     typechecker::{
-        FunId, Function, Param, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID, STRING_TYPE_ID,
-        VOID_TYPE_ID,
+        FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
+        STRING_TYPE_ID, VOID_TYPE_ID,
     },
 };
 
@@ -29,6 +29,23 @@ impl Codegen {
             output.extend_from_slice(b"bool");
         } else {
             panic!("unsupported type");
+        }
+    }
+
+    pub fn codegen_structs(&self, output: &mut Vec<u8>) {
+        for (idx, ty) in self.compiler.types.iter().enumerate() {
+            if let Type::Struct(fields) = ty {
+                output.extend_from_slice(b"struct struct_");
+                output.extend_from_slice(idx.to_string().as_bytes());
+                output.extend_from_slice(b"{\n");
+                for field in fields {
+                    self.codegen_typename(field.1, output);
+                    output.push(b' ');
+                    output.extend_from_slice(&field.0);
+                    output.extend_from_slice(b";\n");
+                }
+                output.extend_from_slice(b"};\n");
+            }
         }
     }
 
@@ -203,7 +220,7 @@ impl Codegen {
                 self.codegen_node(*node_id, output);
                 output.extend_from_slice(b";\n");
             }
-            AstNode::Fun { .. } => {
+            AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore this, as we handle it elsewhere
             }
             x => {
@@ -229,6 +246,7 @@ impl Codegen {
         output
             .extend_from_slice(b"#include <stdio.h>\n#include <stdint.h>\n#include <stdbool.h>\n");
 
+        self.codegen_structs(&mut output);
         self.codegen_fun_decls(&mut output);
 
         let mut main_was_output = false;

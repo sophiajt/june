@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::errors::SourceError;
 use crate::parser::{AstNode, NodeId};
-use crate::typechecker::{FunId, Function, TypeId, VarId, Variable};
+use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -18,10 +18,12 @@ pub struct Compiler {
     // Definitions
     pub variables: Vec<Variable>,
     pub functions: Vec<Function>,
+    pub types: Vec<Type>,
 
     // Use/def
     pub fun_resolution: HashMap<NodeId, FunId>,
     pub var_resolution: HashMap<NodeId, VarId>,
+    pub type_resolution: HashMap<NodeId, TypeId>,
 
     pub errors: Vec<SourceError>,
 }
@@ -40,9 +42,11 @@ impl Compiler {
 
             variables: vec![],
             functions: vec![],
+            types: vec![],
 
             fun_resolution: HashMap::new(),
             var_resolution: HashMap::new(),
+            type_resolution: HashMap::new(),
 
             errors: vec![],
         }

@@ -16,20 +16,14 @@ pub struct VarId(pub usize);
 pub struct FunId(pub usize);
 
 #[derive(Debug, PartialEq)]
-pub struct Type {
-    params: Option<Vec<TypeId>>,
-}
-
-impl Type {
-    pub fn new() -> Type {
-        Type { params: None }
-    }
-
-    pub fn new_with_params(params: Vec<TypeId>) -> Type {
-        Type {
-            params: Some(params),
-        }
-    }
+pub enum Type {
+    Unknown,
+    Void,
+    I64,
+    F64,
+    Bool,
+    String,
+    Struct(Vec<(Vec<u8>, TypeId)>),
 }
 
 #[derive(Debug)]
@@ -62,6 +56,7 @@ pub struct Function {
 pub struct Scope {
     variables: HashMap<Vec<u8>, VarId>,
     functions: HashMap<Vec<u8>, FunId>,
+    types: HashMap<Vec<u8>, TypeId>,
 }
 
 impl Scope {
@@ -69,13 +64,13 @@ impl Scope {
         Scope {
             variables: HashMap::new(),
             functions: HashMap::new(),
+            types: HashMap::new(),
         }
     }
 }
 
 pub struct Typechecker {
     pub compiler: Compiler,
-    pub types: Vec<Type>,
     pub scope: Vec<Scope>,
 }
 
@@ -101,6 +96,16 @@ impl Typechecker {
             return_type: VOID_TYPE_ID,
         });
 
+        compiler.types = vec![
+            // hardwire in the core types before the user-defined types
+            Type::Unknown,
+            Type::Void,
+            Type::I64,
+            Type::F64,
+            Type::Bool,
+            Type::String,
+        ];
+
         let mut scope = vec![Scope::new()];
 
         scope
@@ -109,19 +114,7 @@ impl Typechecker {
             .functions
             .insert(b"println".to_vec(), FunId(0));
 
-        Self {
-            compiler,
-            types: vec![
-                // hardwire in the core types before the user-defined types
-                Type::new(), // unknown
-                Type::new(), // void
-                Type::new(), // i64
-                Type::new(), // f64
-                Type::new(), // bool
-                Type::new(), // string
-            ],
-            scope,
-        }
+        Self { compiler, scope }
     }
 
     pub fn typecheck_typename(&mut self, ty: NodeId) -> TypeId {
@@ -215,20 +208,47 @@ impl Typechecker {
         self.exit_scope();
     }
 
+    pub fn typecheck_struct(&mut self, name: NodeId, fields: Vec<(NodeId, NodeId)>) -> TypeId {
+        let struct_name = self.compiler.get_source(name).to_vec();
+
+        let mut output_fields = vec![];
+
+        for (field_name, field_type) in fields {
+            let field_name = self.compiler.get_source(field_name).to_vec();
+            let field_type = self.typecheck_typename(field_type);
+
+            output_fields.push((field_name, field_type));
+        }
+
+        self.compiler.types.push(Type::Struct(output_fields));
+
+        let type_id = TypeId(self.compiler.types.len() - 1);
+
+        self.add_type_to_scope(struct_name, type_id);
+
+        type_id
+    }
+
     pub fn typecheck_block(&mut self, node_id: NodeId, nodes: &[NodeId]) {
         let mut funs = vec![];
 
         self.enter_scope();
 
         for node_id in nodes {
-            if let AstNode::Fun {
-                name,
-                params,
-                return_ty,
-                block,
-            } = &self.compiler.ast_nodes[node_id.0]
-            {
-                funs.push(self.typecheck_fun_predecl(*name, *params, *return_ty, *block));
+            match &self.compiler.ast_nodes[node_id.0] {
+                AstNode::Fun {
+                    name,
+                    params,
+                    return_ty,
+                    block,
+                } => {
+                    funs.push(self.typecheck_fun_predecl(*name, *params, *return_ty, *block));
+                }
+
+                AstNode::Struct { name, fields } => {
+                    self.typecheck_struct(*name, fields.clone());
+                }
+                _ => {}
             }
         }
 
@@ -391,7 +411,7 @@ impl Typechecker {
                 let args = args.clone();
                 self.typecheck_call(head, &args)
             }
-            AstNode::Fun { .. } => {
+            AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore here, since we checked this in an earlier pass
                 VOID_TYPE_ID
             }
@@ -420,6 +440,14 @@ impl Typechecker {
             .expect("internal error: missing typechecking scope")
             .variables
             .insert(variable_name, var_id);
+    }
+
+    pub fn add_type_to_scope(&mut self, variable_name: Vec<u8>, type_id: TypeId) {
+        self.scope
+            .last_mut()
+            .expect("internal error: missing typechecking scope")
+            .types
+            .insert(variable_name, type_id);
     }
 
     pub fn define_variable(
