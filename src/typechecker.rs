@@ -357,17 +357,26 @@ impl Typechecker {
                 variable_name,
                 initializer,
                 is_mutable,
-                ..
+                ty,
             } => {
                 let variable_name = *variable_name;
                 let initializer = *initializer;
                 let is_mutable = *is_mutable;
+                let ty = *ty;
 
-                let ty = self.typecheck_node(initializer);
+                let name = self.compiler.get_source(variable_name).to_vec();
 
-                let name = self.compiler.get_source(variable_name);
+                let initializer_ty = self.typecheck_node(initializer);
 
-                let var_id = self.define_variable(name.to_vec(), ty, is_mutable, node_id);
+                if let Some(ty) = ty {
+                    let ty = self.typecheck_typename(ty);
+                    if !self.is_type_compatible(ty, initializer_ty) {
+                        self.error("initializer and given type do not match", initializer);
+                    }
+                }
+
+                let var_id =
+                    self.define_variable(name.to_vec(), initializer_ty, is_mutable, node_id);
 
                 self.compiler.var_resolution.insert(variable_name, var_id);
 

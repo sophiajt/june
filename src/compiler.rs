@@ -260,7 +260,7 @@ impl Compiler {
         while line_start > file_span_start && contents[line_start] != b'\n' {
             line_start -= 1;
         }
-        if span_position != line_start {
+        if contents[line_start] == b'\n' {
             line_start += 1;
         }
 
