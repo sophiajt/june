@@ -85,8 +85,8 @@ impl Compiler {
                 is_mutable,
             } => {
                 println!(
-                    "Let ({}, {}, mutable: {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0], is_mutable
+                    "Let ({}, {}, mutable: {})[{}]:",
+                    self.span_start[node_id.0], self.span_end[node_id.0], is_mutable, node_id.0
                 );
                 self.print_helper(variable_name, indent + 2);
                 if let Some(ty) = ty {
@@ -96,8 +96,8 @@ impl Compiler {
             }
             AstNode::Param { name, ty } => {
                 println!(
-                    "Param ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "Param ({}, {})[{}]:",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
                 self.print_helper(name, indent + 2);
                 self.print_helper(ty, indent + 2);
@@ -116,7 +116,7 @@ impl Compiler {
                 return_ty,
                 block,
             } => {
-                println!("Fun:",);
+                println!("Fun:[{}]", node_id.0);
                 self.print_helper(name, indent + 2);
                 self.print_helper(params, indent + 2);
                 if let Some(return_ty) = return_ty {
@@ -125,7 +125,7 @@ impl Compiler {
                 self.print_helper(block, indent + 2);
             }
             AstNode::Struct { name, fields } => {
-                println!("Struct:");
+                println!("Struct:[{}]", node_id.0);
                 self.print_helper(name, indent + 2);
                 for field in fields {
                     self.print_helper(&field.0, indent + 2);
@@ -134,8 +134,8 @@ impl Compiler {
             }
             AstNode::Block(nodes) => {
                 println!(
-                    "Block ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "Block ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
                 for node in nodes {
                     self.print_helper(node, indent + 2);
@@ -143,23 +143,26 @@ impl Compiler {
             }
             AstNode::New(allocation_type, node) => {
                 println!(
-                    "New {:?} ({}, {}):",
-                    allocation_type, self.span_start[node_id.0], self.span_end[node_id.0],
+                    "New {:?} ({}, {}):[{}]",
+                    allocation_type,
+                    self.span_start[node_id.0],
+                    self.span_end[node_id.0],
+                    node_id.0
                 );
                 self.print_helper(node, indent + 2);
             }
             AstNode::NamedValue { name, value } => {
                 println!(
-                    "NamedValue ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "NamedValue ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
                 self.print_helper(name, indent + 2);
                 self.print_helper(value, indent + 2);
             }
             AstNode::Params(nodes) => {
                 print!(
-                    "Params ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "Params ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
                 if nodes.is_empty() {
                     println!(" <empty>");
@@ -173,8 +176,8 @@ impl Compiler {
             }
             AstNode::Call { head, args } => {
                 println!(
-                    "Call ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "Call ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
                 self.print_helper(head, indent + 2);
 
@@ -184,8 +187,8 @@ impl Compiler {
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 println!(
-                    "BinaryOp ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "BinaryOp ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
 
                 self.print_helper(lhs, indent + 2);
@@ -194,8 +197,8 @@ impl Compiler {
             }
             AstNode::Range { lhs, rhs } => {
                 println!(
-                    "Range ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "Range ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
 
                 self.print_helper(lhs, indent + 2);
@@ -203,8 +206,8 @@ impl Compiler {
             }
             AstNode::MemberAccess { target, field } => {
                 println!(
-                    "MemberAccess ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "MemberAccess ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
 
                 self.print_helper(target, indent + 2);
@@ -216,8 +219,8 @@ impl Compiler {
                 else_expression,
             } => {
                 println!(
-                    "If ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "If ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
                 self.print_helper(condition, indent + 2);
                 self.print_helper(then_block, indent + 2);
@@ -227,16 +230,16 @@ impl Compiler {
             }
             AstNode::While { condition, block } => {
                 println!(
-                    "While ({}, {}):",
-                    self.span_start[node_id.0], self.span_end[node_id.0],
+                    "While ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
                 self.print_helper(condition, indent + 2);
                 self.print_helper(block, indent + 2);
             }
             x => {
                 println!(
-                    "{:?} ({}, {})",
-                    x, self.span_start[node_id.0], self.span_end[node_id.0],
+                    "{:?} ({}, {}) [{}]",
+                    x, self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 )
             }
         }
@@ -339,7 +342,7 @@ impl Compiler {
             String::from_utf8_lossy(&self.source[line_start..line_end])
         );
 
-        for _ in 0..(line_number_width + 2) {
+        for _ in 0..(max_number_width + 2) {
             print!(" ");
         }
         print!("│");

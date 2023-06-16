@@ -834,7 +834,7 @@ impl Parser {
                 // Member access
                 self.next();
 
-                let field = self.variable_or_call();
+                let field = self.name();
                 let span_end = self.position();
 
                 expr = self.create_node(

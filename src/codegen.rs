@@ -36,6 +36,49 @@ impl Codegen {
         }
     }
 
+    pub fn codegen_allocator_function(
+        &self,
+        type_id: TypeId,
+        fields: &[(Vec<u8>, TypeId)],
+        output: &mut Vec<u8>,
+    ) {
+        output.extend_from_slice(b"struct struct_");
+        output.extend_from_slice(type_id.0.to_string().as_bytes());
+        output.extend_from_slice(b"* allocator_");
+        output.extend_from_slice(type_id.0.to_string().as_bytes());
+        output.push(b'(');
+
+        let mut first = true;
+        for field in fields {
+            if !first {
+                output.extend_from_slice(b", ");
+            } else {
+                first = false;
+            }
+            self.codegen_typename(field.1, output);
+            output.push(b' ');
+            output.extend_from_slice(&field.0);
+        }
+        output.extend_from_slice(b") {\n");
+
+        self.codegen_typename(type_id, output);
+        output.extend_from_slice(b" tmp = (");
+        self.codegen_typename(type_id, output);
+        output.extend_from_slice(b")malloc(sizeof(struct struct_");
+        output.extend_from_slice(type_id.0.to_string().as_bytes());
+        output.extend_from_slice(b"));\n");
+
+        for field in fields {
+            output.extend_from_slice(b"tmp->");
+            output.extend_from_slice(&field.0);
+            output.extend_from_slice(b" = ");
+            output.extend_from_slice(&field.0);
+            output.extend_from_slice(b";\n");
+        }
+
+        output.extend_from_slice(b"return tmp;\n}\n");
+    }
+
     pub fn codegen_structs(&self, output: &mut Vec<u8>) {
         for (idx, ty) in self.compiler.types.iter().enumerate() {
             if let Type::Struct(fields) = ty {
@@ -48,7 +91,10 @@ impl Codegen {
                     output.extend_from_slice(&field.0);
                     output.extend_from_slice(b";\n");
                 }
+
                 output.extend_from_slice(b"};\n");
+
+                self.codegen_allocator_function(TypeId(idx), fields, output);
             }
         }
     }
@@ -130,6 +176,11 @@ impl Codegen {
                 output.extend_from_slice(src);
                 output.extend_from_slice(b"LL");
             }
+            AstNode::Name => {
+                let src = self.compiler.get_source(node_id);
+
+                output.extend_from_slice(src);
+            }
             AstNode::Call { head, args } => {
                 let fun_id = self
                     .compiler
@@ -142,6 +193,11 @@ impl Codegen {
                         output.extend_from_slice(b"printf(\"%s\\n\", ");
                     } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
                         output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                    } else {
+                        panic!(
+                            "unknown type for printf: {}",
+                            self.compiler.node_types[args[0].0].0
+                        );
                     }
                     // special case for println
                     self.codegen_node(args[0], output);
@@ -171,7 +227,12 @@ impl Codegen {
                     .compiler
                     .var_resolution
                     .get(&node_id)
-                    .expect("internal error: unresolved variable in codegen");
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "internal error: unresolved variable in codegen: {}",
+                            node_id.0
+                        )
+                    });
 
                 output.extend_from_slice(b"variable_");
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
@@ -220,14 +281,38 @@ impl Codegen {
                 self.codegen_node(*rhs, output);
                 output.push(b')');
             }
-            AstNode::New(..) => {
+            AstNode::New(_, allocation_call) => {
                 let type_id = self.compiler.node_types[node_id.0];
 
-                output.extend_from_slice(b"(struct struct_");
+                output.extend_from_slice(b"allocator_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
-                output.extend_from_slice(b"*)malloc(sizeof(struct struct_");
-                output.extend_from_slice(type_id.0.to_string().as_bytes());
-                output.extend_from_slice(b"))");
+                output.push(b'(');
+                let mut first = true;
+
+                if let AstNode::Call { head, args } = &self.compiler.ast_nodes[allocation_call.0] {
+                    for arg in args {
+                        if !first {
+                            output.extend_from_slice(b", ");
+                        } else {
+                            first = false;
+                        }
+
+                        self.codegen_node(*arg, output)
+                    }
+                    output.push(b')');
+                } else {
+                    panic!("internal error: expected allocation call during allocation")
+                }
+            }
+            AstNode::NamedValue { value, .. } => {
+                // FIXME: this should probably be handled cleanly via typecheck+codegen
+                // rather than ignoring the name
+                self.codegen_node(*value, output)
+            }
+            AstNode::MemberAccess { target, field } => {
+                self.codegen_node(*target, output);
+                output.extend_from_slice(b"->");
+                self.codegen_node(*field, output);
             }
             AstNode::Statement(node_id) => {
                 self.codegen_node(*node_id, output);

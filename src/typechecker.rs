@@ -365,8 +365,6 @@ impl Typechecker {
 
                 let ty = self.typecheck_node(initializer);
 
-                println!("ty is: {:?} {:?}", ty, initializer);
-
                 let name = self.compiler.get_source(variable_name);
 
                 let var_id = self.define_variable(name.to_vec(), ty, is_mutable, node_id);
@@ -387,6 +385,27 @@ impl Typechecker {
                     variable.ty
                 } else {
                     self.error("can't find variable", node_id);
+                    UNKNOWN_TYPE_ID
+                }
+            }
+            AstNode::MemberAccess { target, field } => {
+                let target = *target;
+                let field = *field;
+
+                let type_id = self.typecheck_node(target);
+
+                if let Type::Struct(fields) = &self.compiler.types[type_id.0] {
+                    let field_name = self.compiler.get_source(field);
+                    for known_field in fields {
+                        if known_field.0 == field_name {
+                            self.compiler.node_types[node_id.0] = known_field.1;
+                            return known_field.1;
+                        }
+                    }
+                    self.error("unknown field", field);
+                    UNKNOWN_TYPE_ID
+                } else {
+                    self.error("field access on non-struct type", target);
                     UNKNOWN_TYPE_ID
                 }
             }
@@ -420,7 +439,6 @@ impl Typechecker {
                 let output = self.typecheck_allocation(allocation_type, allocation_node_id);
                 self.compiler.node_types[node_id.0] = output;
 
-                println!("output is: {:?}", output);
                 output
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
