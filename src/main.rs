@@ -25,7 +25,7 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     }
 
     if !compiler.errors.is_empty() {
-        return compiler;
+        std::process::exit(1);
     }
 
     let typechecker = Typechecker::new(compiler);
@@ -37,7 +37,7 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     }
 
     if !compiler.errors.is_empty() {
-        return compiler;
+        std::process::exit(1);
     }
 
     if debug_output {
