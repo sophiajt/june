@@ -9,7 +9,7 @@ use parser::Parser;
 use typechecker::Typechecker;
 
 fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
-    let debug_output = false;
+    let debug_output = true;
 
     let contents = std::fs::read(fname).unwrap();
 

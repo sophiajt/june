@@ -59,7 +59,9 @@ impl Compiler {
             self.print_helper(&NodeId(self.ast_nodes.len() - 1), 0)
         }
 
-        println!("{:?}", self.node_types);
+        for (node_id, node) in self.ast_nodes.iter().enumerate() {
+            println!("{}: {:?} ({:?})", node_id, node, self.node_types[node_id]);
+        }
 
         for (var_id, var) in self.variables.iter().enumerate() {
             println!("{}: {:?}", var_id, var);

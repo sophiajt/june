@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::Compiler,
     errors::SourceError,
-    parser::{AstNode, NodeId},
+    parser::{AllocationType, AstNode, NodeId},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -127,11 +127,15 @@ impl Typechecker {
             b"bool" => BOOL_TYPE_ID,
             b"void" => VOID_TYPE_ID,
             _ => {
-                self.error(
-                    &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
-                    ty,
-                );
-                UNKNOWN_TYPE_ID
+                if let Some(type_id) = self.find_type_in_scope(ty) {
+                    *type_id
+                } else {
+                    self.error(
+                        &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
+                        ty,
+                    );
+                    UNKNOWN_TYPE_ID
+                }
             }
         }
     }
@@ -359,10 +363,9 @@ impl Typechecker {
                 let initializer = *initializer;
                 let is_mutable = *is_mutable;
 
-                self.typecheck_node(initializer);
+                let ty = self.typecheck_node(initializer);
 
-                // FIXME: also check the optional ty above in the Let
-                let ty = self.compiler.node_types[initializer.0];
+                println!("ty is: {:?} {:?}", ty, initializer);
 
                 let name = self.compiler.get_source(variable_name);
 
@@ -411,6 +414,15 @@ impl Typechecker {
                 let args = args.clone();
                 self.typecheck_call(head, &args)
             }
+            AstNode::New(allocation_type, allocation_node_id) => {
+                let allocation_type = *allocation_type;
+                let allocation_node_id = *allocation_node_id;
+                let output = self.typecheck_allocation(allocation_type, allocation_node_id);
+                self.compiler.node_types[node_id.0] = output;
+
+                println!("output is: {:?}", output);
+                output
+            }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore here, since we checked this in an earlier pass
                 VOID_TYPE_ID
@@ -422,6 +434,24 @@ impl Typechecker {
             x => {
                 panic!("unsupported node: {:?}", x)
             }
+        }
+    }
+
+    pub fn typecheck_allocation(
+        &mut self,
+        allocation_type: AllocationType,
+        node_id: NodeId,
+    ) -> TypeId {
+        if let AstNode::Call { head, args } = &self.compiler.ast_nodes[node_id.0] {
+            if let Some(type_id) = self.find_type_in_scope(*head) {
+                *type_id
+            } else {
+                self.error("unknown type in allocation", *head);
+                UNKNOWN_TYPE_ID
+            }
+        } else {
+            self.error("expected an allocation call", node_id);
+            UNKNOWN_TYPE_ID
         }
     }
 
@@ -487,6 +517,18 @@ impl Typechecker {
             [self.compiler.span_start[function_name.0]..self.compiler.span_end[function_name.0]];
         for scope in self.scope.iter().rev() {
             if let Some(value) = scope.functions.get(name) {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
+    pub fn find_type_in_scope(&self, type_name: NodeId) -> Option<&TypeId> {
+        let name = &self.compiler.source
+            [self.compiler.span_start[type_name.0]..self.compiler.span_end[type_name.0]];
+        for scope in self.scope.iter().rev() {
+            if let Some(value) = scope.types.get(name) {
                 return Some(value);
             }
         }

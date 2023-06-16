@@ -3,7 +3,7 @@ use crate::{
     parser::{AstNode, NodeId},
     typechecker::{
         FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
-        STRING_TYPE_ID, VOID_TYPE_ID,
+        STRING_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
     },
 };
 
@@ -27,8 +27,12 @@ impl Codegen {
             output.extend_from_slice(b"char*");
         } else if ty == BOOL_TYPE_ID {
             output.extend_from_slice(b"bool");
-        } else {
+        } else if ty == UNKNOWN_TYPE_ID {
             panic!("unsupported type");
+        } else {
+            output.extend_from_slice(b"struct struct_");
+            output.extend_from_slice(ty.0.to_string().as_bytes());
+            output.push(b'*');
         }
     }
 
@@ -216,9 +220,21 @@ impl Codegen {
                 self.codegen_node(*rhs, output);
                 output.push(b')');
             }
+            AstNode::New(..) => {
+                let type_id = self.compiler.node_types[node_id.0];
+
+                output.extend_from_slice(b"(struct struct_");
+                output.extend_from_slice(type_id.0.to_string().as_bytes());
+                output.extend_from_slice(b"*)malloc(sizeof(struct struct_");
+                output.extend_from_slice(type_id.0.to_string().as_bytes());
+                output.extend_from_slice(b"))");
+            }
             AstNode::Statement(node_id) => {
                 self.codegen_node(*node_id, output);
                 output.extend_from_slice(b";\n");
+            }
+            AstNode::Block(..) => {
+                self.codegen_block(node_id, output);
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore this, as we handle it elsewhere
@@ -243,8 +259,9 @@ impl Codegen {
     pub fn codegen(self) -> Vec<u8> {
         let mut output = vec![];
 
-        output
-            .extend_from_slice(b"#include <stdio.h>\n#include <stdint.h>\n#include <stdbool.h>\n");
+        output.extend_from_slice(
+            b"#include <stdio.h>\n#include <stdint.h>\n#include <stdbool.h>\n#include <stdlib.h>\n",
+        );
 
         self.codegen_structs(&mut output);
         self.codegen_fun_decls(&mut output);
