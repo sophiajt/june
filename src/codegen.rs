@@ -101,6 +101,11 @@ impl Codegen {
 
                 output.extend_from_slice(src);
             }
+            AstNode::Int => {
+                let src = self.compiler.get_source(node_id);
+
+                output.extend_from_slice(src);
+            }
             AstNode::Call { head, args } => {
                 let fun_id = self
                     .compiler
@@ -109,8 +114,12 @@ impl Codegen {
                     .expect("internal error: missing call resolution in codegen");
 
                 if fun_id.0 == 0 {
+                    if self.compiler.node_types[args[0].0] == STRING_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%s\\n\", ");
+                    } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                    }
                     // special case for println
-                    output.extend_from_slice(b"printf(\"%s\\n\", ");
                     self.codegen_node(args[0], output);
                     output.extend_from_slice(b");\n");
                     return;
@@ -136,6 +145,29 @@ impl Codegen {
                 let src = self.compiler.get_source(node_id);
 
                 output.extend_from_slice(src);
+            }
+            AstNode::Plus => {
+                output.push(b'+');
+            }
+            AstNode::Minus => {
+                output.push(b'-');
+            }
+            AstNode::Multiply => {
+                output.push(b'*');
+            }
+            AstNode::Divide => {
+                output.push(b'/');
+            }
+            AstNode::BinaryOp { lhs, op, rhs } => {
+                output.push(b'(');
+                self.codegen_node(*lhs, output);
+                output.push(b')');
+
+                self.codegen_node(*op, output);
+
+                output.push(b'(');
+                self.codegen_node(*rhs, output);
+                output.push(b')');
             }
             _ => {}
         }

@@ -92,7 +92,7 @@ impl Typechecker {
         // temporarily - let's add `println` for now, to get examples to typecheck
         compiler.functions.push(Function {
             name: NodeId(0),
-            params: vec![Param::new(b"input".to_vec(), NodeId(0), STRING_TYPE_ID)],
+            params: vec![Param::new(b"input".to_vec(), NodeId(0), UNKNOWN_TYPE_ID)],
             body: NodeId(0),
             return_type: VOID_TYPE_ID,
         });
@@ -253,6 +253,19 @@ impl Typechecker {
 
             let params = params.clone();
             let return_type = *return_type;
+
+            if fun_id.0 == 0 {
+                // Just for now, special-case println
+                self.compiler.fun_resolution.insert(head, *fun_id);
+                for arg in args {
+                    // TODO: add name-checking
+                    let arg = *arg;
+
+                    self.typecheck_node(arg);
+                }
+
+                return VOID_TYPE_ID;
+            }
 
             if args.len() != params.len() {
                 self.error(
