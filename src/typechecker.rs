@@ -34,21 +34,20 @@ impl Type {
 
 #[derive(Debug)]
 pub struct Variable {
-    ty: TypeId,
-    is_mutable: bool,
-    where_defined: NodeId,
+    pub ty: TypeId,
+    pub is_mutable: bool,
+    pub where_defined: NodeId,
 }
 
 #[derive(Debug, Clone)]
 pub struct Param {
     pub name: Vec<u8>,
-    pub location: NodeId,
-    pub ty: TypeId,
+    pub var_id: VarId,
 }
 
 impl Param {
-    pub fn new(name: Vec<u8>, location: NodeId, ty: TypeId) -> Param {
-        Param { name, location, ty }
+    pub fn new(name: Vec<u8>, var_id: VarId) -> Param {
+        Param { name, var_id }
     }
 }
 
@@ -90,9 +89,14 @@ pub const STRING_TYPE_ID: TypeId = TypeId(5);
 impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
         // temporarily - let's add `println` for now, to get examples to typecheck
+        compiler.variables.push(Variable {
+            ty: UNKNOWN_TYPE_ID,
+            is_mutable: false,
+            where_defined: NodeId(0),
+        });
         compiler.functions.push(Function {
             name: NodeId(0),
-            params: vec![Param::new(b"input".to_vec(), NodeId(0), UNKNOWN_TYPE_ID)],
+            params: vec![Param::new(b"input".to_vec(), VarId(0))],
             body: NodeId(0),
             return_type: VOID_TYPE_ID,
         });
@@ -160,7 +164,8 @@ impl Typechecker {
                     let ty = *ty;
                     let ty = self.typecheck_typename(ty);
 
-                    fun_params.push(Param::new(param_name, name, ty));
+                    let var_id = self.define_variable(param_name.clone(), ty, false, name);
+                    fun_params.push(Param::new(param_name, var_id));
                 } else {
                     self.error("expected function parameter", unchecked_param);
                     break;
@@ -199,8 +204,8 @@ impl Typechecker {
 
         self.enter_scope();
 
-        for Param { name, location, ty } in &params {
-            self.define_variable(name.clone(), *ty, false, *location);
+        for Param { name, var_id } in &params {
+            self.add_variable_to_scope(name.clone(), *var_id)
         }
 
         self.typecheck_node(body);
@@ -284,8 +289,9 @@ impl Typechecker {
                 let arg = *arg;
 
                 let arg_type = self.typecheck_node(arg);
+                let variable = &self.compiler.variables[param.var_id.0];
 
-                if !self.is_type_compatible(arg_type, param.ty) {
+                if !self.is_type_compatible(arg_type, variable.ty) {
                     // FIXME: make this a better type error
                     self.error("type mismatch for arg", arg);
                     return return_type;
@@ -338,9 +344,12 @@ impl Typechecker {
                 // FIXME: also check the optional ty above in the Let
                 let ty = self.compiler.node_types[initializer.0];
 
-                let variable_name = self.compiler.get_source(variable_name);
+                let name = self.compiler.get_source(variable_name);
 
-                self.define_variable(variable_name.to_vec(), ty, is_mutable, node_id);
+                let var_id = self.define_variable(name.to_vec(), ty, is_mutable, node_id);
+
+                self.compiler.var_resolution.insert(variable_name, var_id);
+
                 VOID_TYPE_ID
             }
             AstNode::Variable => {
@@ -386,6 +395,10 @@ impl Typechecker {
                 // ignore here, since we checked this in an earlier pass
                 VOID_TYPE_ID
             }
+            AstNode::Statement(node_id) => {
+                self.typecheck_node(*node_id);
+                VOID_TYPE_ID
+            }
             x => {
                 panic!("unsupported node: {:?}", x)
             }
@@ -396,10 +409,17 @@ impl Typechecker {
         let num_nodes = self.compiler.ast_nodes.len();
         self.compiler.node_types.resize(num_nodes, UNKNOWN_TYPE_ID);
 
-        println!("{:?}", self.compiler.ast_nodes);
         self.typecheck_node(NodeId(self.compiler.ast_nodes.len() - 1));
 
         self.compiler
+    }
+
+    pub fn add_variable_to_scope(&mut self, variable_name: Vec<u8>, var_id: VarId) {
+        self.scope
+            .last_mut()
+            .expect("internal error: missing typechecking scope")
+            .variables
+            .insert(variable_name, var_id);
     }
 
     pub fn define_variable(
@@ -415,15 +435,11 @@ impl Typechecker {
             where_defined,
         });
 
-        let var_id = self.compiler.variables.len() - 1;
+        let var_id = VarId(self.compiler.variables.len() - 1);
 
-        self.scope
-            .last_mut()
-            .expect("internal error: missing typechecking scope")
-            .variables
-            .insert(variable_name, VarId(var_id));
+        self.add_variable_to_scope(variable_name, var_id);
 
-        VarId(var_id)
+        var_id
     }
 
     pub fn find_variable_in_scope(&self, variable_name: NodeId) -> Option<&VarId> {

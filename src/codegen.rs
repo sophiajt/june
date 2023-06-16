@@ -53,9 +53,11 @@ impl Codegen {
                 first = false;
             }
 
-            self.codegen_typename(param.ty, output);
+            let variable = &self.compiler.variables[param.var_id.0];
+            self.codegen_typename(variable.ty, output);
             output.push(b' ');
-            output.extend_from_slice(&param.name);
+            output.extend_from_slice(b"variable_");
+            output.extend_from_slice(param.var_id.0.to_string().as_bytes());
         }
 
         output.push(b')');
@@ -105,6 +107,7 @@ impl Codegen {
                 let src = self.compiler.get_source(node_id);
 
                 output.extend_from_slice(src);
+                output.extend_from_slice(b"LL");
             }
             AstNode::Call { head, args } => {
                 let fun_id = self
@@ -142,9 +145,36 @@ impl Codegen {
                 output.push(b')');
             }
             AstNode::Variable => {
-                let src = self.compiler.get_source(node_id);
+                //let src = self.compiler.get_source(node_id);
+                let var_id = self
+                    .compiler
+                    .var_resolution
+                    .get(&node_id)
+                    .expect("internal error: unresolved variable in codegen");
 
-                output.extend_from_slice(src);
+                output.extend_from_slice(b"variable_");
+                output.extend_from_slice(var_id.0.to_string().as_bytes());
+            }
+            AstNode::Let {
+                variable_name,
+                initializer,
+                ..
+            } => {
+                let var_id = self
+                    .compiler
+                    .var_resolution
+                    .get(variable_name)
+                    .expect("internal error: unresolved variable in codegen");
+
+                let ty = self.compiler.variables[var_id.0].ty;
+
+                self.codegen_typename(ty, output);
+
+                output.extend_from_slice(b" variable_");
+                output.extend_from_slice(var_id.0.to_string().as_bytes());
+
+                output.extend_from_slice(b" = ");
+                self.codegen_node(*initializer, output);
             }
             AstNode::Plus => {
                 output.push(b'+');
@@ -169,7 +199,16 @@ impl Codegen {
                 self.codegen_node(*rhs, output);
                 output.push(b')');
             }
-            _ => {}
+            AstNode::Statement(node_id) => {
+                self.codegen_node(*node_id, output);
+                output.extend_from_slice(b";\n");
+            }
+            AstNode::Fun { .. } => {
+                // ignore this, as we handle it elsewhere
+            }
+            x => {
+                panic!("unsupported node: {:?}", x)
+            }
         }
     }
 
@@ -192,15 +231,24 @@ impl Codegen {
 
         self.codegen_fun_decls(&mut output);
 
+        let mut main_was_output = false;
         for (idx, fun) in self.compiler.functions.iter().enumerate().skip(1) {
             let name = self.compiler.get_source(fun.name);
 
             if name == b"main" {
                 output.extend_from_slice(b"int main() {\n");
+                self.codegen_node(NodeId(self.compiler.ast_nodes.len() - 1), &mut output);
                 output.extend_from_slice(b"function_");
                 output.extend_from_slice(idx.to_string().as_bytes());
                 output.extend_from_slice(b"();\n}\n");
+                main_was_output = true;
             }
+        }
+
+        if !main_was_output {
+            output.extend_from_slice(b"int main() {\n");
+            self.codegen_block(NodeId(self.compiler.ast_nodes.len() - 1), &mut output);
+            output.extend_from_slice(b"}\n");
         }
 
         output
