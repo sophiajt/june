@@ -1,10 +1,10 @@
-use compiler::Compiler;
-
+mod codegen;
 mod compiler;
 mod errors;
 mod parser;
 mod typechecker;
 
+use compiler::Compiler;
 use parser::Parser;
 use typechecker::Typechecker;
 
@@ -55,4 +55,10 @@ fn main() {
     for fname in std::env::args().skip(1) {
         compiler = compile(&fname, compiler);
     }
+
+    let codegen = codegen::Codegen::new(compiler);
+
+    let output = codegen.codegen();
+
+    println!("{}", String::from_utf8_lossy(&output));
 }

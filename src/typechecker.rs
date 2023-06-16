@@ -41,9 +41,9 @@ pub struct Variable {
 
 #[derive(Debug, Clone)]
 pub struct Param {
-    name: Vec<u8>,
-    location: NodeId,
-    ty: TypeId,
+    pub name: Vec<u8>,
+    pub location: NodeId,
+    pub ty: TypeId,
 }
 
 impl Param {
@@ -54,9 +54,10 @@ impl Param {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    params: Vec<Param>,
-    return_type: TypeId,
-    body: NodeId,
+    pub name: NodeId,
+    pub params: Vec<Param>,
+    pub return_type: TypeId,
+    pub body: NodeId,
 }
 
 pub struct Scope {
@@ -90,6 +91,7 @@ impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
         // temporarily - let's add `println` for now, to get examples to typecheck
         compiler.functions.push(Function {
+            name: NodeId(0),
             params: vec![Param::new(b"input".to_vec(), NodeId(0), STRING_TYPE_ID)],
             body: NodeId(0),
             return_type: VOID_TYPE_ID,
@@ -112,18 +114,29 @@ impl Typechecker {
                 Type::new(), // i64
                 Type::new(), // f64
                 Type::new(), // bool
+                Type::new(), // string
             ],
             scope,
         }
     }
 
     pub fn typecheck_typename(&mut self, ty: NodeId) -> TypeId {
-        VOID_TYPE_ID
-    }
+        let name = self.compiler.get_source(ty);
 
-    pub fn get_source(&self, node_id: NodeId) -> &[u8] {
-        &self.compiler.source
-            [self.compiler.span_start[node_id.0]..self.compiler.span_end[node_id.0]]
+        match name {
+            b"i64" => I64_TYPE_ID,
+            b"f64" => F64_TYPE_ID,
+            b"string" => STRING_TYPE_ID,
+            b"bool" => BOOL_TYPE_ID,
+            b"void" => VOID_TYPE_ID,
+            _ => {
+                self.error(
+                    &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
+                    ty,
+                );
+                UNKNOWN_TYPE_ID
+            }
+        }
     }
 
     pub fn typecheck_fun_predecl(
@@ -134,7 +147,7 @@ impl Typechecker {
         block: NodeId,
     ) -> FunId {
         let mut fun_params = vec![];
-        let name = self.compiler.source
+        let fun_name = self.compiler.source
             [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
             .to_vec();
 
@@ -143,7 +156,7 @@ impl Typechecker {
             for unchecked_param in unchecked_params {
                 if let AstNode::Param { name, ty } = &self.compiler.ast_nodes[unchecked_param.0] {
                     let name = *name;
-                    let param_name = self.get_source(name).to_vec();
+                    let param_name = self.compiler.get_source(name).to_vec();
                     let ty = *ty;
                     let ty = self.typecheck_typename(ty);
 
@@ -157,9 +170,16 @@ impl Typechecker {
             self.error("expected function parameters", params)
         }
 
+        let return_type = if let Some(return_ty) = return_ty {
+            self.typecheck_typename(return_ty)
+        } else {
+            VOID_TYPE_ID
+        };
+
         self.compiler.functions.push(Function {
+            name,
             params: fun_params,
-            return_type: VOID_TYPE_ID,
+            return_type,
             body: block,
         });
 
@@ -169,17 +189,13 @@ impl Typechecker {
             .last_mut()
             .expect("internal error: missing function scope")
             .functions
-            .insert(name, FunId(fun_id));
+            .insert(fun_name, FunId(fun_id));
 
         FunId(fun_id)
     }
 
     pub fn typecheck_fun(&mut self, fun_id: FunId) {
-        let Function {
-            params,
-            return_type,
-            body,
-        } = self.compiler.functions[fun_id.0].clone();
+        let Function { params, body, .. } = self.compiler.functions[fun_id.0].clone();
 
         self.enter_scope();
 
@@ -189,11 +205,15 @@ impl Typechecker {
 
         self.typecheck_node(body);
 
+        // FIXME: check return type
+
         self.exit_scope();
     }
 
     pub fn typecheck_block(&mut self, node_id: NodeId, nodes: &[NodeId]) {
         let mut funs = vec![];
+
+        self.enter_scope();
 
         for node_id in nodes {
             if let AstNode::Fun {
@@ -215,6 +235,8 @@ impl Typechecker {
             self.typecheck_node(*node_id);
         }
         self.compiler.node_types[node_id.0] = VOID_TYPE_ID;
+
+        self.exit_scope()
     }
 
     pub fn is_type_compatible(&self, lhs: TypeId, rhs: TypeId) -> bool {
@@ -239,6 +261,10 @@ impl Typechecker {
                 );
                 return return_type;
             }
+
+            // TODO: do we want to wait until all params are checked
+            // before we mark this as resolved?
+            self.compiler.fun_resolution.insert(head, *fun_id);
 
             for (arg, param) in args.iter().zip(params) {
                 // TODO: add name-checking
@@ -299,7 +325,7 @@ impl Typechecker {
                 // FIXME: also check the optional ty above in the Let
                 let ty = self.compiler.node_types[initializer.0];
 
-                let variable_name = self.get_source(variable_name);
+                let variable_name = self.compiler.get_source(variable_name);
 
                 self.define_variable(variable_name.to_vec(), ty, is_mutable, node_id);
                 VOID_TYPE_ID
@@ -308,6 +334,9 @@ impl Typechecker {
                 let var_id = self.find_variable_in_scope(node_id);
 
                 if let Some(var_id) = var_id {
+                    let var_id = *var_id;
+                    self.compiler.var_resolution.insert(node_id, var_id);
+
                     let variable = &self.compiler.variables[var_id.0];
                     self.compiler.node_types[node_id.0] = variable.ty;
                     variable.ty

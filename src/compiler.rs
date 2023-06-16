@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::errors::SourceError;
 use crate::parser::{AstNode, NodeId};
-use crate::typechecker::{Function, TypeId, Variable};
+use crate::typechecker::{FunId, Function, TypeId, VarId, Variable};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -13,8 +15,13 @@ pub struct Compiler {
 
     pub file_offsets: Vec<(String, usize, usize)>, // fname, start, end
 
+    // Definitions
     pub variables: Vec<Variable>,
     pub functions: Vec<Function>,
+
+    // Use/def
+    pub fun_resolution: HashMap<NodeId, FunId>,
+    pub var_resolution: HashMap<NodeId, VarId>,
 
     pub errors: Vec<SourceError>,
 }
@@ -33,6 +40,9 @@ impl Compiler {
 
             variables: vec![],
             functions: vec![],
+
+            fun_resolution: HashMap::new(),
+            var_resolution: HashMap::new(),
 
             errors: vec![],
         }
@@ -371,5 +381,9 @@ impl Compiler {
 
     pub fn node_id_offset(&self) -> usize {
         self.ast_nodes.len()
+    }
+
+    pub fn get_source(&self, node_id: NodeId) -> &[u8] {
+        &self.source[self.span_start[node_id.0]..self.span_end[node_id.0]]
     }
 }
