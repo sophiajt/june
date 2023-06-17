@@ -176,6 +176,11 @@ impl Codegen {
                 output.extend_from_slice(src);
                 output.extend_from_slice(b"LL");
             }
+            AstNode::Float => {
+                let src = self.compiler.get_source(node_id);
+
+                output.extend_from_slice(src);
+            }
             AstNode::Name => {
                 let src = self.compiler.get_source(node_id);
 
