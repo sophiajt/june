@@ -189,18 +189,26 @@ impl Codegen {
                     .expect("internal error: missing call resolution in codegen");
 
                 if fun_id.0 == 0 {
+                    // special case for println
                     if self.compiler.node_types[args[0].0] == STRING_TYPE_ID {
                         output.extend_from_slice(b"printf(\"%s\\n\", ");
+                        self.codegen_node(args[0], output);
                     } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
                         output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                        self.codegen_node(args[0], output);
+                    } else if self.compiler.node_types[args[0].0] == F64_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%lf\\n\", ");
+                        self.codegen_node(args[0], output);
+                    } else if self.compiler.node_types[args[0].0] == BOOL_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%s\\n\", (");
+                        self.codegen_node(args[0], output);
+                        output.extend_from_slice(br#")?"true":"false""#);
                     } else {
                         panic!(
                             "unknown type for printf: {}",
                             self.compiler.node_types[args[0].0].0
                         );
                     }
-                    // special case for println
-                    self.codegen_node(args[0], output);
                     output.extend_from_slice(b");\n");
                     return;
                 }
@@ -320,6 +328,12 @@ impl Codegen {
             }
             AstNode::Block(..) => {
                 self.codegen_block(node_id, output);
+            }
+            AstNode::True => {
+                output.extend_from_slice(b"true");
+            }
+            AstNode::False => {
+                output.extend_from_slice(b"false");
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore this, as we handle it elsewhere
