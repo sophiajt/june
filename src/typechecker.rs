@@ -312,13 +312,42 @@ impl Typechecker {
                 // TODO: add name-checking
                 let arg = *arg;
 
-                let arg_type = self.typecheck_node(arg);
-                let variable = &self.compiler.variables[param.var_id.0];
+                match &self.compiler.ast_nodes[arg.0] {
+                    AstNode::NamedValue { name, value } => {
+                        let name = *name;
+                        let value = *value;
 
-                if !self.is_type_compatible(arg_type, variable.ty) {
-                    // FIXME: make this a better type error
-                    self.error("type mismatch for arg", arg);
-                    return return_type;
+                        let arg_ty = self.typecheck_node(value);
+
+                        if !self
+                            .is_type_compatible(arg_ty, self.compiler.variables[param.var_id.0].ty)
+                        {
+                            // FIXME: make this a better error
+                            self.error("types incompatible with function", value);
+                        }
+
+                        let arg_name = self.compiler.get_source(name);
+
+                        if arg_name != param.name {
+                            self.error(
+                                &format!(
+                                    "expected name '{}'",
+                                    String::from_utf8_lossy(&param.name)
+                                ),
+                                name,
+                            )
+                        }
+                    }
+                    _ => {
+                        let arg_type = self.typecheck_node(arg);
+                        let variable = &self.compiler.variables[param.var_id.0];
+
+                        if !self.is_type_compatible(arg_type, variable.ty) {
+                            // FIXME: make this a better type error
+                            self.error("type mismatch for arg", arg);
+                            return return_type;
+                        }
+                    }
                 }
             }
 

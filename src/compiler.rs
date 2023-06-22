@@ -257,6 +257,10 @@ impl Compiler {
         let line_number = contents[0..span_position].split(|x| *x == b'\n').count();
 
         let mut line_start = span_position;
+        if line_start > file_span_start && contents[line_start] == b'\n' {
+            line_start -= 1;
+        }
+
         while line_start > file_span_start && contents[line_start] != b'\n' {
             line_start -= 1;
         }
