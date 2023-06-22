@@ -47,7 +47,13 @@ pub enum AstNode {
     And,
     Or,
     Pow,
+
+    // Assignments
     Assignment,
+    AddAssignment,
+    SubtractAssigment,
+    MultiplyAssignment,
+    DivideAssignment,
 
     // Statements
     Let {
@@ -121,6 +127,8 @@ pub enum AstNode {
     Garbage,
 }
 
+pub const ASSIGNMENT_PRECEDENCE: usize = 10;
+
 impl AstNode {
     pub fn precedence(&self) -> usize {
         match self {
@@ -136,7 +144,11 @@ impl AstNode {
             | AstNode::NotEqual => 80,
             AstNode::And => 50,
             AstNode::Or => 40,
-            AstNode::Assignment => 10,
+            AstNode::Assignment
+            | AstNode::AddAssignment
+            | AstNode::SubtractAssigment
+            | AstNode::MultiplyAssignment
+            | AstNode::DivideAssignment => ASSIGNMENT_PRECEDENCE,
             _ => 0,
         }
     }
@@ -159,6 +171,7 @@ pub enum TokenType {
     Semicolon,
     Plus,
     PlusPlus,
+    PlusEquals,
     Dash,
     Exclamation,
     Asterisk,
@@ -252,6 +265,7 @@ impl Parser {
                     | TokenType::AmpersandAmpersand
                     | TokenType::PipePipe
                     | TokenType::Equals
+                    | TokenType::PlusEquals
             ),
             _ => false,
         }
@@ -532,6 +546,14 @@ impl Parser {
         }
     }
 
+    pub fn error_on_node(&mut self, message: impl Into<String>, node_id: NodeId) {
+        self.compiler.errors.push(SourceError {
+            message: message.into(),
+
+            node_id,
+        });
+    }
+
     pub fn error(&mut self, message: impl Into<String>) -> NodeId {
         if let Some(Token {
             span_start,
@@ -590,29 +612,14 @@ impl Parser {
             } else if self.is_keyword(b"fun") {
                 let result = self.fun_definition();
                 code_body.push(result);
-
-                // if !self.is_rcurly()
-                //     && !self.is_rparen()
-                //     && !self.is_semicolon()
-                //     && self.has_tokens()
-                // {
-                //     let p = self.peek();
-                //     self.error(format!("expected newline or semicolon but found {:?}", p));
-                // }
             } else if self.is_keyword(b"struct") {
                 let result = self.struct_definition();
                 code_body.push(result);
-
-                // if !self.is_rcurly()
-                //     && !self.is_rparen()
-                //     && !self.is_semicolon()
-                //     && self.has_tokens()
-                // {
-                //     let p = self.peek();
-                //     self.error(format!("expected newline or semicolon but found {:?}", p));
-                // }
             } else if self.is_keyword(b"let") {
                 let result = self.let_statement();
+                code_body.push(result);
+            } else if self.is_keyword(b"mut") {
+                let result = self.mut_statement();
                 code_body.push(result);
             } else if self.is_keyword(b"while") {
                 let result = self.while_statement();
@@ -622,7 +629,7 @@ impl Parser {
                 code_body.push(result);
             } else {
                 let span_start = self.position();
-                let expression = self.expression();
+                let expression = self.expression_or_assignment();
                 let span_end = self.position();
 
                 if self.is_semicolon() {
@@ -705,7 +712,15 @@ impl Parser {
         self.create_node(AstNode::Struct { name, fields }, span_start, span_end)
     }
 
+    pub fn expression_or_assignment(&mut self) -> NodeId {
+        self.math_expression(true)
+    }
+
     pub fn expression(&mut self) -> NodeId {
+        self.math_expression(false)
+    }
+
+    pub fn math_expression(&mut self, allow_assignment: bool) -> NodeId {
         let mut expr_stack = vec![];
 
         let mut last_prec = 1000000;
@@ -730,6 +745,11 @@ impl Parser {
             if self.is_operator() {
                 let op = self.operator();
                 let op_prec = self.operator_precedence(op);
+
+                if op_prec == ASSIGNMENT_PRECEDENCE && !allow_assignment {
+                    println!("assignment precedence");
+                    self.error_on_node("assignment found in expression", op);
+                }
 
                 let rhs = if self.is_simple_expression() {
                     self.simple_expression()
@@ -961,6 +981,10 @@ impl Parser {
                     self.next();
                     self.create_node(AstNode::Assignment, span_start, span_end)
                 }
+                TokenType::PlusEquals => {
+                    self.next();
+                    self.create_node(AstNode::AddAssignment, span_start, span_end)
+                }
                 _ => self.error("expected: operator"),
             },
             _ => self.error("expected: operator"),
@@ -1176,15 +1200,45 @@ impl Parser {
     }
 
     pub fn let_statement(&mut self) -> NodeId {
-        let mut is_mutable = false;
+        let is_mutable = false;
         let span_start = self.position();
 
         self.keyword(b"let");
 
-        if self.is_keyword(b"mut") {
-            is_mutable = true;
-            self.next();
-        }
+        let variable_name = self.variable();
+
+        let ty = if self.is_colon() {
+            // We have a type
+            self.colon();
+
+            Some(self.typename())
+        } else {
+            None
+        };
+
+        self.equals();
+
+        let initializer = self.expression();
+
+        let span_end = self.position();
+
+        self.create_node(
+            AstNode::Let {
+                variable_name,
+                ty,
+                initializer,
+                is_mutable,
+            },
+            span_start,
+            span_end,
+        )
+    }
+
+    pub fn mut_statement(&mut self) -> NodeId {
+        let is_mutable = true;
+        let span_start = self.position();
+
+        self.keyword(b"mut");
 
         let variable_name = self.variable();
 
@@ -1696,6 +1750,14 @@ impl Parser {
                 {
                     Token {
                         token_type: TokenType::PlusPlus,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
+                } else if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b'='
+                {
+                    Token {
+                        token_type: TokenType::PlusEquals,
                         span_start,
                         span_end: span_start + 2,
                     }

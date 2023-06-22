@@ -463,6 +463,14 @@ impl Typechecker {
                         self.compiler.node_types[node_id.0] = lhs_ty;
                         lhs_ty
                     }
+                    AstNode::Assignment | AstNode::AddAssignment => {
+                        if lhs_ty != rhs_ty {
+                            // FIXME: actually say the types
+                            self.error("type mismatch during operation", op)
+                        }
+                        self.compiler.node_types[node_id.0] = VOID_TYPE_ID;
+                        VOID_TYPE_ID
+                    }
                     x => panic!("unsupported operator: {:?}", x),
                 }
             }
@@ -495,10 +503,10 @@ impl Typechecker {
 
     pub fn typecheck_allocation(
         &mut self,
-        allocation_type: AllocationType,
+        _allocation_type: AllocationType,
         node_id: NodeId,
     ) -> TypeId {
-        if let AstNode::Call { head, args } = &self.compiler.ast_nodes[node_id.0] {
+        if let AstNode::Call { head, .. } = &self.compiler.ast_nodes[node_id.0] {
             if let Some(type_id) = self.find_type_in_scope(*head) {
                 *type_id
             } else {

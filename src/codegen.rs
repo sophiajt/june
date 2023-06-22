@@ -283,6 +283,12 @@ impl Codegen {
             AstNode::Divide => {
                 output.push(b'/');
             }
+            AstNode::Assignment => {
+                output.push(b'=');
+            }
+            AstNode::AddAssignment => {
+                output.extend_from_slice(b"+=");
+            }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 output.push(b'(');
                 self.codegen_node(*lhs, output);
@@ -302,7 +308,7 @@ impl Codegen {
                 output.push(b'(');
                 let mut first = true;
 
-                if let AstNode::Call { head, args } = &self.compiler.ast_nodes[allocation_call.0] {
+                if let AstNode::Call { args, .. } = &self.compiler.ast_nodes[allocation_call.0] {
                     for arg in args {
                         if !first {
                             output.extend_from_slice(b", ");
