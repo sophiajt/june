@@ -1,5 +1,6 @@
 let x = 5
 
+// variable is not mutable, so this will error
 x = x + 6
 
 println(x)

@@ -289,6 +289,15 @@ impl Codegen {
             AstNode::AddAssignment => {
                 output.extend_from_slice(b"+=");
             }
+            AstNode::SubtractAssignment => {
+                output.extend_from_slice(b"-=");
+            }
+            AstNode::MultiplyAssignment => {
+                output.extend_from_slice(b"*=");
+            }
+            AstNode::DivideAssignment => {
+                output.extend_from_slice(b"/=");
+            }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 output.push(b'(');
                 self.codegen_node(*lhs, output);

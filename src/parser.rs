@@ -51,7 +51,7 @@ pub enum AstNode {
     // Assignments
     Assignment,
     AddAssignment,
-    SubtractAssigment,
+    SubtractAssignment,
     MultiplyAssignment,
     DivideAssignment,
 
@@ -146,7 +146,7 @@ impl AstNode {
             AstNode::Or => 40,
             AstNode::Assignment
             | AstNode::AddAssignment
-            | AstNode::SubtractAssigment
+            | AstNode::SubtractAssignment
             | AstNode::MultiplyAssignment
             | AstNode::DivideAssignment => ASSIGNMENT_PRECEDENCE,
             _ => 0,
@@ -173,11 +173,14 @@ pub enum TokenType {
     PlusPlus,
     PlusEquals,
     Dash,
+    DashEquals,
     Exclamation,
     Asterisk,
     AsteriskAsterisk,
+    AsteriskEquals,
     ForwardSlash,
     ForwardSlashForwardSlash,
+    ForwardSlashEquals,
     Equals,
     EqualsEquals,
     EqualsTilde,
@@ -266,6 +269,9 @@ impl Parser {
                     | TokenType::PipePipe
                     | TokenType::Equals
                     | TokenType::PlusEquals
+                    | TokenType::DashEquals
+                    | TokenType::AsteriskEquals
+                    | TokenType::ForwardSlashEquals
             ),
             _ => false,
         }
@@ -984,6 +990,18 @@ impl Parser {
                 TokenType::PlusEquals => {
                     self.next();
                     self.create_node(AstNode::AddAssignment, span_start, span_end)
+                }
+                TokenType::DashEquals => {
+                    self.next();
+                    self.create_node(AstNode::SubtractAssignment, span_start, span_end)
+                }
+                TokenType::AsteriskEquals => {
+                    self.next();
+                    self.create_node(AstNode::MultiplyAssignment, span_start, span_end)
+                }
+                TokenType::ForwardSlashEquals => {
+                    self.next();
+                    self.create_node(AstNode::DivideAssignment, span_start, span_end)
                 }
                 _ => self.error("expected: operator"),
             },
@@ -1778,6 +1796,14 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
+                } else if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b'='
+                {
+                    Token {
+                        token_type: TokenType::DashEquals,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
                 } else {
                     Token {
                         token_type: TokenType::Dash,
@@ -1795,6 +1821,14 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
+                } else if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b'='
+                {
+                    Token {
+                        token_type: TokenType::AsteriskEquals,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
                 } else {
                     Token {
                         token_type: TokenType::Asterisk,
@@ -1809,6 +1843,14 @@ impl Parser {
                 {
                     Token {
                         token_type: TokenType::ForwardSlashForwardSlash,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
+                } else if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b'='
+                {
+                    Token {
+                        token_type: TokenType::ForwardSlashEquals,
                         span_start,
                         span_end: span_start + 2,
                     }

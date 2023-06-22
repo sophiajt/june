@@ -463,7 +463,11 @@ impl Typechecker {
                         self.compiler.node_types[node_id.0] = lhs_ty;
                         lhs_ty
                     }
-                    AstNode::Assignment | AstNode::AddAssignment => {
+                    AstNode::Assignment
+                    | AstNode::AddAssignment
+                    | AstNode::SubtractAssignment
+                    | AstNode::MultiplyAssignment
+                    | AstNode::DivideAssignment => {
                         let var_id = self.compiler.var_resolution.get(&lhs);
 
                         if let Some(var_id) = var_id {
