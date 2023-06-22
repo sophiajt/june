@@ -464,6 +464,17 @@ impl Typechecker {
                         lhs_ty
                     }
                     AstNode::Assignment | AstNode::AddAssignment => {
+                        let var_id = self.compiler.var_resolution.get(&lhs);
+
+                        if let Some(var_id) = var_id {
+                            let var = &self.compiler.variables[var_id.0];
+                            if !var.is_mutable {
+                                self.error("variable is not mutable", lhs)
+                            }
+                        } else {
+                            self.error("expected variable on left-hand side of assignment", lhs)
+                        }
+
                         if lhs_ty != rhs_ty {
                             // FIXME: actually say the types
                             self.error("type mismatch during operation", op)
