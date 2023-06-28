@@ -57,6 +57,7 @@ pub struct Scope {
     variables: HashMap<Vec<u8>, VarId>,
     functions: HashMap<Vec<u8>, FunId>,
     types: HashMap<Vec<u8>, TypeId>,
+    expected_return_type: Option<TypeId>,
 }
 
 impl Scope {
@@ -65,6 +66,7 @@ impl Scope {
             variables: HashMap::new(),
             functions: HashMap::new(),
             types: HashMap::new(),
+            expected_return_type: None,
         }
     }
 }
@@ -197,9 +199,16 @@ impl Typechecker {
     }
 
     pub fn typecheck_fun(&mut self, fun_id: FunId) {
-        let Function { params, body, .. } = self.compiler.functions[fun_id.0].clone();
+        let Function {
+            params,
+            body,
+            return_type,
+            ..
+        } = self.compiler.functions[fun_id.0].clone();
 
         self.enter_scope();
+
+        self.set_expected_return_type(return_type);
 
         for Param { name, var_id } in &params {
             self.add_variable_to_scope(name.clone(), *var_id)
@@ -290,7 +299,7 @@ impl Typechecker {
                     // TODO: add name-checking
                     let arg = *arg;
 
-                    self.typecheck_node(arg);
+                    let arg_ty = self.typecheck_node(arg);
                 }
 
                 return VOID_TYPE_ID;
@@ -359,29 +368,17 @@ impl Typechecker {
     }
 
     pub fn typecheck_node(&mut self, node_id: NodeId) -> TypeId {
-        match &self.compiler.ast_nodes[node_id.0] {
+        let node_type = match &self.compiler.ast_nodes[node_id.0] {
             AstNode::Block(block) => {
                 // FIXME: probably could clean this up
                 let block = block.clone();
                 self.typecheck_block(node_id, &block);
                 VOID_TYPE_ID
             }
-            AstNode::Int => {
-                self.compiler.node_types[node_id.0] = I64_TYPE_ID;
-                I64_TYPE_ID
-            }
-            AstNode::Float => {
-                self.compiler.node_types[node_id.0] = F64_TYPE_ID;
-                F64_TYPE_ID
-            }
-            AstNode::True | AstNode::False => {
-                self.compiler.node_types[node_id.0] = BOOL_TYPE_ID;
-                BOOL_TYPE_ID
-            }
-            AstNode::String => {
-                self.compiler.node_types[node_id.0] = STRING_TYPE_ID;
-                STRING_TYPE_ID
-            }
+            AstNode::Int => I64_TYPE_ID,
+            AstNode::Float => F64_TYPE_ID,
+            AstNode::True | AstNode::False => BOOL_TYPE_ID,
+            AstNode::String => STRING_TYPE_ID,
             AstNode::Let {
                 variable_name,
                 initializer,
@@ -419,7 +416,6 @@ impl Typechecker {
                     self.compiler.var_resolution.insert(node_id, var_id);
 
                     let variable = &self.compiler.variables[var_id.0];
-                    self.compiler.node_types[node_id.0] = variable.ty;
                     variable.ty
                 } else {
                     self.error("can't find variable", node_id);
@@ -460,7 +456,6 @@ impl Typechecker {
                             // FIXME: actually say the types
                             self.error("type mismatch during operation", op)
                         }
-                        self.compiler.node_types[node_id.0] = lhs_ty;
                         lhs_ty
                     }
                     AstNode::Assignment
@@ -483,7 +478,6 @@ impl Typechecker {
                             // FIXME: actually say the types
                             self.error("type mismatch during operation", op)
                         }
-                        self.compiler.node_types[node_id.0] = VOID_TYPE_ID;
                         VOID_TYPE_ID
                     }
                     x => panic!("unsupported operator: {:?}", x),
@@ -498,9 +492,33 @@ impl Typechecker {
                 let allocation_type = *allocation_type;
                 let allocation_node_id = *allocation_node_id;
                 let output = self.typecheck_allocation(allocation_type, allocation_node_id);
-                self.compiler.node_types[node_id.0] = output;
 
                 output
+            }
+            AstNode::Return(return_expr) => {
+                if let Some(return_expr) = return_expr {
+                    let return_expr = *return_expr;
+                    let expr_type = self.typecheck_node(return_expr);
+
+                    let expected_type = self.find_expected_return_type();
+
+                    if let Some(expected_type) = expected_type {
+                        if !self.is_type_compatible(expected_type, expr_type) {
+                            // FIXME: actually print the types
+                            self.error("incompatible type at return", return_expr);
+                        }
+                    } else {
+                        self.error("return used outside of a function", return_expr);
+                    }
+                } else {
+                    let expected_type = self.find_expected_return_type();
+
+                    if expected_type.is_some() {
+                        self.error("return needs value", node_id)
+                    }
+                }
+
+                VOID_TYPE_ID
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore here, since we checked this in an earlier pass
@@ -513,7 +531,11 @@ impl Typechecker {
             x => {
                 panic!("unsupported node: {:?}", x)
             }
-        }
+        };
+
+        self.compiler.node_types[node_id.0] = node_type;
+
+        node_type
     }
 
     pub fn typecheck_allocation(
@@ -613,6 +635,24 @@ impl Typechecker {
         }
 
         None
+    }
+
+    pub fn find_expected_return_type(&self) -> Option<TypeId> {
+        for scope in self.scope.iter().rev() {
+            if let Some(ret_type) = scope.expected_return_type {
+                return Some(ret_type);
+            }
+        }
+
+        None
+    }
+
+    pub fn set_expected_return_type(&mut self, expected_type: TypeId) {
+        let frame = self
+            .scope
+            .last_mut()
+            .expect("internal error: missing expected scope frame");
+        frame.expected_return_type = Some(expected_type)
     }
 
     pub fn enter_scope(&mut self) {

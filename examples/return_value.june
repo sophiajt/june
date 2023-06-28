@@ -1,0 +1,5 @@
+fun foo() -> i64 {
+    return 3
+}
+
+println(foo())

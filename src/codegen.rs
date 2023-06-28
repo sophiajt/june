@@ -355,6 +355,16 @@ impl Codegen {
             AstNode::False => {
                 output.extend_from_slice(b"false");
             }
+            AstNode::Return(expr) => {
+                output.extend_from_slice(b"return");
+                if let Some(expr) = expr {
+                    output.extend_from_slice(b" (");
+                    self.codegen_node(*expr, output);
+                    output.push(b')');
+                }
+
+                output.extend_from_slice(b";\n");
+            }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore this, as we handle it elsewhere
             }

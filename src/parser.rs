@@ -71,6 +71,7 @@ pub enum AstNode {
         range: NodeId,
         block: NodeId,
     },
+    Return(Option<NodeId>),
 
     // Definitions
     Fun {
@@ -616,23 +617,19 @@ impl Parser {
                 self.next();
                 continue;
             } else if self.is_keyword(b"fun") {
-                let result = self.fun_definition();
-                code_body.push(result);
+                code_body.push(self.fun_definition());
             } else if self.is_keyword(b"struct") {
-                let result = self.struct_definition();
-                code_body.push(result);
+                code_body.push(self.struct_definition());
             } else if self.is_keyword(b"let") {
-                let result = self.let_statement();
-                code_body.push(result);
+                code_body.push(self.let_statement());
             } else if self.is_keyword(b"mut") {
-                let result = self.mut_statement();
-                code_body.push(result);
+                code_body.push(self.mut_statement());
             } else if self.is_keyword(b"while") {
-                let result = self.while_statement();
-                code_body.push(result);
+                code_body.push(self.while_statement());
             } else if self.is_keyword(b"for") {
-                let result = self.for_statement();
-                code_body.push(result);
+                code_body.push(self.for_statement());
+            } else if self.is_keyword(b"return") {
+                code_body.push(self.return_statement());
             } else {
                 let span_start = self.position();
                 let expression = self.expression_or_assignment();
@@ -1318,6 +1315,20 @@ impl Parser {
             span_start,
             span_end,
         )
+    }
+
+    pub fn return_statement(&mut self) -> NodeId {
+        let span_start = self.position();
+        self.keyword(b"return");
+
+        let ret_val = if self.is_simple_expression() {
+            Some(self.simple_expression())
+        } else {
+            None
+        };
+        let span_end = self.position();
+
+        self.create_node(AstNode::Return(ret_val), span_start, span_end)
     }
 
     pub fn variable(&mut self) -> NodeId {
