@@ -2,6 +2,7 @@ mod codegen;
 mod compiler;
 mod errors;
 mod parser;
+mod tests;
 mod typechecker;
 
 use compiler::Compiler;

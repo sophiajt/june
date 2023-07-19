@@ -141,9 +141,10 @@ impl Compiler {
                     self.print_helper(node, indent + 2);
                 }
             }
-            AstNode::New(allocation_type, node) => {
+            AstNode::New(allocation_lifetime, allocation_type, node) => {
                 println!(
-                    "New {:?} ({}, {}):[{}]",
+                    "New {:?} {:?} ({}, {}):[{}]",
+                    allocation_lifetime,
                     allocation_type,
                     self.span_start[node_id.0],
                     self.span_end[node_id.0],
@@ -309,9 +310,9 @@ impl Compiler {
         };
 
         for _ in 0..(max_number_width + 2) {
-            print!("─");
+            eprint!("─");
         }
-        println!(
+        eprintln!(
             "┬─ \x1b[0;36m{}:{}:{}\x1b[0m",
             filename,
             line_number,
@@ -325,10 +326,10 @@ impl Compiler {
             let prev_line_number_str = format!("{}", prev_line_number);
 
             for _ in 0..(max_number_width - prev_line_number_str.len()) {
-                print!(" ")
+                eprint!(" ")
             }
 
-            println!(
+            eprintln!(
                 " {} │ {}",
                 prev_line_number_str,
                 String::from_utf8_lossy(&self.source[prev_line_start..prev_line_end])
@@ -337,36 +338,36 @@ impl Compiler {
 
         // Line being highlighted
         for _ in 0..(max_number_width - line_number_width) {
-            print!(" ")
+            eprint!(" ")
         }
 
-        println!(
+        eprintln!(
             " {} │ {}",
             line_number,
             String::from_utf8_lossy(&self.source[line_start..line_end])
         );
 
         for _ in 0..(max_number_width + 2) {
-            print!(" ");
+            eprint!(" ");
         }
-        print!("│");
+        eprint!("│");
         for _ in 0..(span_start - line_start + 1) {
-            print!(" ");
+            eprint!(" ");
         }
 
-        print!("\x1b[0;31m");
+        eprint!("\x1b[0;31m");
         for _ in span_start..span_end {
-            print!("▰");
+            eprint!("▰");
         }
-        println!(" error: {}", message);
-        print!("\x1b[0m");
+        eprintln!(" error: {}", message);
+        eprint!("\x1b[0m");
 
         // Next line after error, for context
         if (line_end + 1) < file_span_end {
             let (next_line_number, next_line_start, next_line_end) =
                 self.line_extents(line_end + 1, file_span_start, file_span_end);
 
-            println!(
+            eprintln!(
                 " {} │ {}",
                 next_line_number,
                 String::from_utf8_lossy(&self.source[next_line_start..next_line_end])
@@ -374,9 +375,9 @@ impl Compiler {
         }
 
         for _ in 0..(max_number_width + 2) {
-            print!("─");
+            eprint!("─");
         }
-        println!("┴─");
+        eprintln!("┴─");
     }
 
     pub fn add_file(&mut self, fname: &str, contents: &[u8]) {

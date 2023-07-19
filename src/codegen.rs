@@ -309,7 +309,7 @@ impl Codegen {
                 self.codegen_node(*rhs, output);
                 output.push(b')');
             }
-            AstNode::New(_, allocation_call) => {
+            AstNode::New(_, _, allocation_call) => {
                 let type_id = self.compiler.node_types[node_id.0];
 
                 output.extend_from_slice(b"allocator_");
