@@ -1,3 +1,5 @@
+// output: 22
+
 fun main() {
     println(2 + 4 * 5)
 }

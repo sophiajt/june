@@ -24,14 +24,23 @@ fn test_example(test_name: &str) -> TestResult {
         test_filepath
     };
 
-    let test_compare_filepath = {
-        let mut test_output_filename = PathBuf::from(test_name);
-        test_output_filename.set_extension("out");
+    let (expected_output, expected_error) = {
+        let example_file_contents = std::fs::read_to_string(&test_filepath).unwrap();
+        let first_line = example_file_contents.lines().next().unwrap().to_string();
 
-        let mut test_compare_filepath = PathBuf::from("./examples");
-        test_compare_filepath.push(test_output_filename);
-
-        test_compare_filepath
+        if first_line.starts_with("// output: ") {
+            (
+                Some(first_line.strip_prefix("// output: ").unwrap().to_string()),
+                None,
+            )
+        } else if first_line.starts_with("// error: ") {
+            (
+                None,
+                Some(first_line.strip_prefix("// error: ").unwrap().to_string()),
+            )
+        } else {
+            panic!("missing output: or error: in test")
+        }
     };
 
     let c_output_filepath = {
@@ -52,50 +61,58 @@ fn test_example(test_name: &str) -> TestResult {
     };
 
     let command = Command::new("./target/debug/june")
-        .arg(test_filepath)
+        .arg(&test_filepath)
         .output();
     let command = command.unwrap();
-    if !command.status.success() {
+    if !command.status.success() && expected_error.is_none() {
         panic!("June did not compile successfully");
     }
 
-    // Now, output our C to a file
-    let mut output_file = File::create(&c_output_filepath).unwrap();
-    let _ = output_file.write_all(&command.stdout);
+    if let Some(expected_error) = &expected_error {
+        let command_err = String::from_utf8_lossy(&command.stderr);
 
-    // Next, compile the file
-    let compiler = Command::new("clang")
-        .arg(&c_output_filepath)
-        .arg("-o")
-        .arg(&app_filepath)
-        .output()
-        .unwrap();
+        println!("Checking:\n{} against: {}", command_err, expected_error);
 
-    if !compiler.status.success() {
-        let _ = stdout().write_all(&compiler.stdout);
-        let _ = stdout().write_all(&compiler.stderr);
-        panic!("Clang did not compile successfully");
+        assert!(command_err.contains(expected_error));
     }
 
-    let app = Command::new(app_filepath).output().unwrap();
-    if !app.status.success() {
-        panic!("App did not run successfully");
+    let app_output = if expected_error.is_none() {
+        // Now, output our C to a file
+        let mut output_file = File::create(&c_output_filepath).unwrap();
+        let _ = output_file.write_all(&command.stdout);
+
+        // Next, compile the file
+        let compiler = Command::new("clang")
+            .arg(&c_output_filepath)
+            .arg("-o")
+            .arg(&app_filepath)
+            .output()
+            .unwrap();
+
+        if !compiler.status.success() {
+            let _ = stdout().write_all(&compiler.stdout);
+            let _ = stdout().write_all(&compiler.stderr);
+            panic!("Clang did not compile successfully");
+        }
+
+        let app = Command::new(app_filepath).output().unwrap();
+        if !app.status.success() {
+            panic!("App did not run successfully");
+        }
+
+        // Lastly, compare the expected output
+        let app_output = app.stdout.to_vec();
+        let app_output = String::from_utf8_lossy(&app_output);
+
+        let app_output = app_output.replace("\r\n", "");
+        app_output.replace('\n', "")
+    } else {
+        String::new()
+    };
+
+    if let Some(expected_output) = expected_output {
+        assert_eq!(expected_output, app_output);
     }
-
-    // Lastly, compare the expected output
-    let app_output = app.stdout.to_vec();
-    let expected_output = std::fs::read(test_compare_filepath).unwrap();
-
-    let app_output = String::from_utf8_lossy(&app_output);
-    let expected_output = String::from_utf8_lossy(&expected_output);
-
-    let app_output = app_output.replace("\r\n", "");
-    let app_output = app_output.replace('\n', "");
-
-    let expected_output = expected_output.replace("\r\n", "");
-    let expected_output = expected_output.replace('\n', "");
-
-    assert_eq!(expected_output, app_output);
 
     Ok(())
 }
@@ -103,4 +120,59 @@ fn test_example(test_name: &str) -> TestResult {
 #[test]
 fn boolean() -> TestResult {
     test_example("boolean")
+}
+
+#[test]
+fn call_labeled_error() -> TestResult {
+    test_example("call_labeled_error")
+}
+
+#[test]
+fn double() -> TestResult {
+    test_example("double")
+}
+
+#[test]
+fn hello_fun_rev_order() -> TestResult {
+    test_example("hello_fun_rev_order")
+}
+
+#[test]
+fn hello_fun_rev_order2() -> TestResult {
+    test_example("hello_fun_rev_order2")
+}
+
+#[test]
+fn hello_fun() -> TestResult {
+    test_example("hello_fun")
+}
+
+#[test]
+fn hello_main() -> TestResult {
+    test_example("hello_main")
+}
+
+#[test]
+fn hello_world() -> TestResult {
+    test_example("hello_world")
+}
+
+#[test]
+fn int_math_main() -> TestResult {
+    test_example("int_math_main")
+}
+
+#[test]
+fn int_math() -> TestResult {
+    test_example("int_math")
+}
+
+#[test]
+fn int() -> TestResult {
+    test_example("int")
+}
+
+#[test]
+fn return_top_level_error() -> TestResult {
+    test_example("return_top_level_error")
 }

@@ -1,3 +1,5 @@
+// error: expected name 'x'
+
 fun foo(x: i64) {
     println(x)
 }
