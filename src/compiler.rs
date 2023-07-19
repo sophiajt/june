@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::errors::SourceError;
 use crate::parser::{AstNode, NodeId};
-use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable};
+use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, STRING_TYPE_ID};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -69,6 +69,10 @@ impl Compiler {
 
         for (fun_id, fun) in self.functions.iter().enumerate() {
             println!("{}: {:?}", fun_id, fun);
+        }
+
+        for (type_id, ty) in self.types.iter().skip(STRING_TYPE_ID.0 + 1).enumerate() {
+            println!("{}: {:?}", type_id + STRING_TYPE_ID.0 + 1, ty);
         }
     }
 

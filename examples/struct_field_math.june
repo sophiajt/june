@@ -1,3 +1,5 @@
+// output: 405
+
 struct Employee {
     name: string,
     age: i64,

@@ -176,3 +176,18 @@ fn int() -> TestResult {
 fn return_top_level_error() -> TestResult {
     test_example("return_top_level_error")
 }
+
+#[test]
+fn return_value() -> TestResult {
+    test_example("return_value")
+}
+
+#[test]
+fn struct_field_math_mainless() -> TestResult {
+    test_example("struct_field_math_mainless")
+}
+
+#[test]
+fn struct_field_math() -> TestResult {
+    test_example("struct_field_math")
+}
