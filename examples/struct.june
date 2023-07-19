@@ -1,3 +1,5 @@
+// output: 123
+
 struct Employee {
     name: string,
     age: i64,
@@ -5,4 +7,5 @@ struct Employee {
 
 fun main() {
     let employee = new Employee(name: "Bob", age: 123)
+    println(employee.age)
 }

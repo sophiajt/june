@@ -1,3 +1,5 @@
+// error: can't find variable
+
 let x = 123
 
 123 + (abc + 12)

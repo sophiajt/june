@@ -1,1 +1,3 @@
+// error: do not match
+
 let x: bool = 3

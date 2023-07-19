@@ -39,7 +39,7 @@ fn test_example(test_name: &str) -> TestResult {
                 Some(first_line.strip_prefix("// error: ").unwrap().to_string()),
             )
         } else {
-            panic!("missing output: or error: in test")
+            panic!("missing \"output:\" or \"error:\" in test")
         }
     };
 
@@ -190,4 +190,74 @@ fn struct_field_math_mainless() -> TestResult {
 #[test]
 fn struct_field_math() -> TestResult {
     test_example("struct_field_math")
+}
+
+#[test]
+fn struct_field() -> TestResult {
+    test_example("struct_field")
+}
+
+#[test]
+fn struct_helper() -> TestResult {
+    test_example("struct_helper")
+}
+
+#[test]
+fn struct_raw() -> TestResult {
+    test_example("struct_raw")
+}
+
+#[test]
+fn struct_() -> TestResult {
+    test_example("struct")
+}
+
+#[test]
+fn variable_and_function() -> TestResult {
+    test_example("variable_and_function")
+}
+
+#[test]
+fn variable_bad_optional_type() -> TestResult {
+    test_example("variable_bad_optional_type")
+}
+
+#[test]
+fn variable_mutation_error() -> TestResult {
+    test_example("variable_mutation_error")
+}
+
+#[test]
+fn variable_mutation() -> TestResult {
+    test_example("variable_mutation")
+}
+
+#[test]
+fn variable_mutation2() -> TestResult {
+    test_example("variable_mutation2")
+}
+
+#[test]
+fn variable_mutation3() -> TestResult {
+    test_example("variable_mutation3")
+}
+
+#[test]
+fn variable_simple_error() -> TestResult {
+    test_example("variable_simple_error")
+}
+
+#[test]
+fn variable_simple_error2() -> TestResult {
+    test_example("variable_simple_error2")
+}
+
+#[test]
+fn variable_simple() -> TestResult {
+    test_example("variable_simple")
+}
+
+#[test]
+fn variable() -> TestResult {
+    test_example("variable")
 }

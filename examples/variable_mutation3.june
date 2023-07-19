@@ -1,3 +1,5 @@
+// output: 20
+
 mut x = 5
 
 x += 7

@@ -1,5 +1,7 @@
+// output: 123
+
 fun main() {
     let x = 123
 
-    println("{x}")
+    println(x)
 }

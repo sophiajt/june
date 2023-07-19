@@ -1,3 +1,5 @@
+// error: is not mutable
+
 let x = 5
 
 // variable is not mutable, so this will error
