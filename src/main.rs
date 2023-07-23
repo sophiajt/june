@@ -1,6 +1,7 @@
 mod codegen;
 mod compiler;
 mod errors;
+mod lifetime_checker;
 mod parser;
 mod tests;
 mod typechecker;

@@ -145,10 +145,9 @@ impl Compiler {
                     self.print_helper(node, indent + 2);
                 }
             }
-            AstNode::New(allocation_lifetime, allocation_type, node) => {
+            AstNode::New(allocation_type, node) => {
                 println!(
-                    "New {:?} {:?} ({}, {}):[{}]",
-                    allocation_lifetime,
+                    "New {:?} ({}, {}):[{}]",
                     allocation_type,
                     self.span_start[node_id.0],
                     self.span_end[node_id.0],
@@ -403,5 +402,15 @@ impl Compiler {
 
     pub fn get_source(&self, node_id: NodeId) -> &[u8] {
         &self.source[self.span_start[node_id.0]..self.span_end[node_id.0]]
+    }
+
+    pub fn find_pointer_to(&self, type_id: TypeId) -> Option<TypeId> {
+        for (found_type_id, ty) in self.types.iter().enumerate() {
+            if matches!(ty, Type::Pointer(_, type_id2) if &type_id == type_id2) {
+                return Some(TypeId(found_type_id));
+            }
+        }
+
+        None
     }
 }

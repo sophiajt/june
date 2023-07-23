@@ -9,12 +9,6 @@ pub struct Parser {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum AllocationLifetime {
-    Local,
-    Caller,
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AllocationType {
     Normal,
     Raw,
@@ -129,7 +123,7 @@ pub enum AstNode {
         then_block: NodeId,
         else_expression: Option<NodeId>,
     },
-    New(AllocationLifetime, AllocationType, NodeId),
+    New(AllocationType, NodeId),
     Statement(NodeId),
     Garbage,
 }
@@ -1176,11 +1170,11 @@ impl Parser {
         let span_start = self.position();
         self.keyword(b"new");
 
-        let allocation_lifetime = if self.is_keyword(b"local") {
-            AllocationLifetime::Local
-        } else {
-            AllocationLifetime::Caller
-        };
+        // let allocation_lifetime = if self.is_keyword(b"local") {
+        //     AllocationLifetime::Local
+        // } else {
+        //     AllocationLifetime::Caller
+        // };
 
         let allocation_type = if self.is_keyword(b"raw") {
             self.next();
@@ -1193,7 +1187,7 @@ impl Parser {
         let span_end = self.position();
 
         self.create_node(
-            AstNode::New(allocation_lifetime, allocation_type, allocated),
+            AstNode::New(allocation_type, allocated),
             span_start,
             span_end,
         )

@@ -1,14 +1,18 @@
-use std::{
-    error::Error,
-    fs::{create_dir, File},
-    io::{stdout, Write},
-    path::PathBuf,
-    process::Command,
-};
+#[cfg(test)]
+use std::error::Error;
 
+#[cfg(test)]
 type TestResult = Result<(), Box<dyn Error>>;
 
+#[cfg(test)]
 fn test_example(test_name: &str) -> TestResult {
+    use std::{
+        fs::{create_dir, File},
+        io::{stdout, Write},
+        path::PathBuf,
+        process::Command,
+    };
+
     // Create it if it's not there
     let mut temp_dir = std::env::temp_dir();
     temp_dir.push("june_tests");

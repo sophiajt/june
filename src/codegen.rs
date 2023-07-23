@@ -16,23 +16,33 @@ impl Codegen {
         Codegen { compiler }
     }
 
-    pub fn codegen_typename(&self, ty: TypeId, output: &mut Vec<u8>) {
-        if ty == VOID_TYPE_ID {
-            output.extend_from_slice(b"void");
-        } else if ty == I64_TYPE_ID {
-            output.extend_from_slice(b"int64_t");
-        } else if ty == F64_TYPE_ID {
-            output.extend_from_slice(b"double");
-        } else if ty == STRING_TYPE_ID {
-            output.extend_from_slice(b"char*");
-        } else if ty == BOOL_TYPE_ID {
-            output.extend_from_slice(b"bool");
-        } else if ty == UNKNOWN_TYPE_ID {
-            panic!("unsupported type");
-        } else {
-            output.extend_from_slice(b"struct struct_");
-            output.extend_from_slice(ty.0.to_string().as_bytes());
-            output.push(b'*');
+    pub fn codegen_typename(&self, type_id: TypeId, output: &mut Vec<u8>) {
+        match &self.compiler.types[type_id.0] {
+            Type::Struct(..) => {
+                output.extend_from_slice(b"struct struct_");
+                output.extend_from_slice(type_id.0.to_string().as_bytes());
+            }
+            Type::Pointer(_, type_id) => {
+                self.codegen_typename(*type_id, output);
+                output.push(b'*');
+            }
+            _ => {
+                if type_id == VOID_TYPE_ID {
+                    output.extend_from_slice(b"void");
+                } else if type_id == I64_TYPE_ID {
+                    output.extend_from_slice(b"int64_t");
+                } else if type_id == F64_TYPE_ID {
+                    output.extend_from_slice(b"double");
+                } else if type_id == STRING_TYPE_ID {
+                    output.extend_from_slice(b"char*");
+                } else if type_id == BOOL_TYPE_ID {
+                    output.extend_from_slice(b"bool");
+                } else if type_id == UNKNOWN_TYPE_ID {
+                    panic!("(unknown) type should be resolved before codegen");
+                } else {
+                    panic!("unknown type")
+                }
+            }
         }
     }
 
@@ -42,10 +52,14 @@ impl Codegen {
         fields: &[(Vec<u8>, TypeId)],
         output: &mut Vec<u8>,
     ) {
+        let Type::Pointer(_, inner_type_id) = &self.compiler.types[type_id.0] else {
+            panic!("internal error: pointer to unknown type");
+        };
+
         output.extend_from_slice(b"struct struct_");
-        output.extend_from_slice(type_id.0.to_string().as_bytes());
+        output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
         output.extend_from_slice(b"* allocator_");
-        output.extend_from_slice(type_id.0.to_string().as_bytes());
+        output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
         output.push(b'(');
 
         let mut first = true;
@@ -65,7 +79,7 @@ impl Codegen {
         output.extend_from_slice(b" tmp = (");
         self.codegen_typename(type_id, output);
         output.extend_from_slice(b")malloc(sizeof(struct struct_");
-        output.extend_from_slice(type_id.0.to_string().as_bytes());
+        output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
         output.extend_from_slice(b"));\n");
 
         for field in fields {
@@ -94,7 +108,11 @@ impl Codegen {
 
                 output.extend_from_slice(b"};\n");
 
-                self.codegen_allocator_function(TypeId(idx), fields, output);
+                if let Some(ptr) = self.compiler.find_pointer_to(TypeId(idx)) {
+                    self.codegen_allocator_function(ptr, fields, output);
+                } else {
+                    panic!("internal error: can't find pointer to type")
+                }
             }
         }
     }
@@ -309,8 +327,13 @@ impl Codegen {
                 self.codegen_node(*rhs, output);
                 output.push(b')');
             }
-            AstNode::New(_, _, allocation_call) => {
+            AstNode::New(_, allocation_call) => {
                 let type_id = self.compiler.node_types[node_id.0];
+
+                let Type::Pointer(_, type_id) = &self.compiler.types[type_id.0] else {
+                    panic!("internal error: 'new' creating non-pointer type")
+                };
+                let type_id = *type_id;
 
                 output.extend_from_slice(b"allocator_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());

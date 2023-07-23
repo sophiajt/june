@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::Compiler,
     errors::SourceError,
-    parser::{AllocationLifetime, AllocationType, AstNode, NodeId},
+    parser::{AllocationType, AstNode, NodeId},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,7 +24,7 @@ pub enum Type {
     Bool,
     String,
     Struct(Vec<(Vec<u8>, TypeId)>),
-    // Pointer(AllocationLifetime, AllocationType, TypeId),
+    Pointer(AllocationType, TypeId),
 }
 
 #[derive(Debug)]
@@ -131,7 +131,8 @@ impl Typechecker {
             b"void" => VOID_TYPE_ID,
             _ => {
                 if let Some(type_id) = self.find_type_in_scope(ty) {
-                    *type_id
+                    // Assume custom types are pointers
+                    self.find_or_create_type(Type::Pointer(AllocationType::Normal, *type_id))
                 } else {
                     self.error(
                         &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
@@ -441,23 +442,23 @@ impl Typechecker {
                         self.error("unknown field", field);
                         UNKNOWN_TYPE_ID
                     }
-                    // Type::Pointer(_, _, type_id) => match &self.compiler.types[type_id.0] {
-                    //     Type::Struct(fields) => {
-                    //         let field_name = self.compiler.get_source(field);
-                    //         for known_field in fields {
-                    //             if known_field.0 == field_name {
-                    //                 self.compiler.node_types[node_id.0] = known_field.1;
-                    //                 return known_field.1;
-                    //             }
-                    //         }
-                    //         self.error("unknown field", field);
-                    //         UNKNOWN_TYPE_ID
-                    //     }
-                    //     _ => {
-                    //         self.error("field access on non-struct type", target);
-                    //         UNKNOWN_TYPE_ID
-                    //     }
-                    // },
+                    Type::Pointer(_, type_id) => match &self.compiler.types[type_id.0] {
+                        Type::Struct(fields) => {
+                            let field_name = self.compiler.get_source(field);
+                            for known_field in fields {
+                                if known_field.0 == field_name {
+                                    self.compiler.node_types[node_id.0] = known_field.1;
+                                    return known_field.1;
+                                }
+                            }
+                            self.error("unknown field", field);
+                            UNKNOWN_TYPE_ID
+                        }
+                        _ => {
+                            self.error("field access on non-struct type", target);
+                            UNKNOWN_TYPE_ID
+                        }
+                    },
                     _ => {
                         self.error("field access on non-struct type", target);
                         UNKNOWN_TYPE_ID
@@ -509,11 +510,10 @@ impl Typechecker {
                 let args = args.clone();
                 self.typecheck_call(head, &args)
             }
-            AstNode::New(allocation_lifetime, allocation_type, allocation_node_id) => {
-                let allocation_lifetime = *allocation_lifetime;
+            AstNode::New(allocation_type, allocation_node_id) => {
                 let allocation_type = *allocation_type;
                 let allocation_node_id = *allocation_node_id;
-                self.typecheck_allocation(allocation_lifetime, allocation_type, allocation_node_id)
+                self.typecheck_allocation(allocation_type, allocation_node_id)
             }
             AstNode::Return(return_expr) => {
                 let return_expr = *return_expr;
@@ -558,19 +558,13 @@ impl Typechecker {
 
     pub fn typecheck_allocation(
         &mut self,
-        allocation_lifetime: AllocationLifetime,
         allocation_type: AllocationType,
         node_id: NodeId,
     ) -> TypeId {
         if let AstNode::Call { head, .. } = &self.compiler.ast_nodes[node_id.0] {
             if let Some(type_id) = self.find_type_in_scope(*head) {
-                // let type_id = *type_id;
-                // self.find_or_create_type(Type::Pointer(
-                //     allocation_lifetime,
-                //     allocation_type,
-                //     type_id,
-                // ))
-                *type_id
+                let type_id = *type_id;
+                self.find_or_create_type(Type::Pointer(allocation_type, type_id))
             } else {
                 self.error("unknown type in allocation", *head);
                 UNKNOWN_TYPE_ID
@@ -598,12 +592,12 @@ impl Typechecker {
             .insert(variable_name, var_id);
     }
 
-    pub fn add_type_to_scope(&mut self, variable_name: Vec<u8>, type_id: TypeId) {
+    pub fn add_type_to_scope(&mut self, type_name: Vec<u8>, type_id: TypeId) {
         self.scope
             .last_mut()
             .expect("internal error: missing typechecking scope")
             .types
-            .insert(variable_name, type_id);
+            .insert(type_name, type_id);
     }
 
     pub fn define_variable(
