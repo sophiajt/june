@@ -237,6 +237,11 @@ fn struct_in_struct() -> TestResult {
 }
 
 #[test]
+fn struct_new_field_error() -> TestResult {
+    test_example("struct_new_field_error")
+}
+
+#[test]
 fn struct_raw() -> TestResult {
     test_example("struct_raw")
 }

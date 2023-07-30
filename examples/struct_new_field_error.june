@@ -1,0 +1,11 @@
+// error: unknown field
+
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun main() {
+    let employee = new Employee(name: "Bob", height: 123)
+    println(employee.age)
+}

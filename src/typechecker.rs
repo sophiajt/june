@@ -568,18 +568,61 @@ impl Typechecker {
     ) -> TypeId {
         if let AstNode::Call { head, args } = &self.compiler.ast_nodes[node_id.0] {
             // FIXME: remove clone
+            let head = *head;
             let args = args.clone();
 
-            let output_type = if let Some(type_id) = self.find_type_in_scope(*head) {
-                let type_id = *type_id;
-                self.find_or_create_type(Type::Pointer(allocation_type, type_id))
-            } else {
-                self.error("unknown type in allocation", *head);
-                UNKNOWN_TYPE_ID
+            let Some(type_id) = self.find_type_in_scope(head) else {
+                self.error("unknown type in allocation", head);
+                return UNKNOWN_TYPE_ID
             };
 
-            for arg in args {
-                self.typecheck_node(arg);
+            let type_id = *type_id;
+            let output_type = self.find_or_create_type(Type::Pointer(allocation_type, type_id));
+
+            'arg: for arg in args {
+                let AstNode::NamedValue { name, value } = &self.compiler.ast_nodes[arg.0] else {
+                    self.error("unexpected argument in allocation", arg);
+                    return UNKNOWN_TYPE_ID
+                };
+
+                let name = *name;
+
+                self.typecheck_node(*value);
+
+                match &self.compiler.types[type_id.0] {
+                    Type::Struct(fields) => {
+                        let field_name = self.compiler.get_source(name);
+                        for known_field in fields {
+                            if known_field.0 == field_name {
+                                self.compiler.node_types[node_id.0] = known_field.1;
+                                continue 'arg;
+                            }
+                        }
+                        self.error("unknown field", name);
+                        return UNKNOWN_TYPE_ID;
+                    }
+                    Type::Pointer(_, type_id) => match &self.compiler.types[type_id.0] {
+                        Type::Struct(fields) => {
+                            let field_name = self.compiler.get_source(name);
+                            for known_field in fields {
+                                if known_field.0 == field_name {
+                                    self.compiler.node_types[node_id.0] = known_field.1;
+                                    continue 'arg;
+                                }
+                            }
+                            self.error("unknown field", name);
+                            return UNKNOWN_TYPE_ID;
+                        }
+                        _ => {
+                            self.error("internal error: allocation of non-struct type", node_id);
+                            return UNKNOWN_TYPE_ID;
+                        }
+                    },
+                    _ => {
+                        self.error("internal error: allocation of non-struct type", node_id);
+                        return UNKNOWN_TYPE_ID;
+                    }
+                }
             }
 
             output_type
