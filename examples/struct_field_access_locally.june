@@ -1,0 +1,16 @@
+// output: 123
+
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun helper() -> i64 {
+    let employee = new Employee(name: "Bob", age: 123)
+
+    return employee.age
+}
+
+fun main() {
+    println(helper())
+}

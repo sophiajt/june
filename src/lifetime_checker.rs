@@ -58,8 +58,17 @@ impl LifetimeChecker {
                         self.compiler.node_lifetimes[node_id.0];
                 }
             }
-            AstNode::MemberAccess { .. } => {
-                // TODO: ignore for now
+            AstNode::MemberAccess { target, .. } => {
+                // Check the type of the access. If it isn't something that can
+                // affect lifetimes, we don't need to push the lifetime
+                // requirement deeper
+
+                let field_type = self.compiler.node_types[node_id.0];
+                if !self.compiler.is_copyable_type(field_type) {
+                    self.compiler.node_lifetimes[target.0] =
+                        self.compiler.node_lifetimes[node_id.0];
+                }
+                self.check_node_lifetime(*target);
             }
             AstNode::BinaryOp { lhs, rhs, .. } => {
                 let lhs = *lhs;
@@ -83,6 +92,8 @@ impl LifetimeChecker {
             AstNode::New(_, allocation_node_id) => {
                 self.compiler.node_lifetimes[allocation_node_id.0] =
                     self.compiler.node_lifetimes[node_id.0];
+
+                self.check_node_lifetime(*allocation_node_id)
             }
             AstNode::Return(return_expr) => {
                 if let Some(return_expr) = return_expr {
@@ -90,6 +101,11 @@ impl LifetimeChecker {
 
                     self.check_node_lifetime(*return_expr);
                 }
+            }
+            AstNode::NamedValue { value, .. } => {
+                self.compiler.node_lifetimes[value.0] = self.compiler.node_lifetimes[node_id.0];
+
+                self.check_node_lifetime(*value)
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore

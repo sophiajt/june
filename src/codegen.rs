@@ -338,17 +338,19 @@ impl Codegen {
                 let type_id = self.compiler.node_types[node_id.0];
 
                 let Type::Pointer(_, type_id) = &self.compiler.types[type_id.0] else {
-                    panic!("internal error: 'new' creating non-pointer type")
+                    panic!("internal error: 'new' creating non-pointer type: {:?}", &self.compiler.types[type_id.0])
                 };
                 let type_id = *type_id;
 
-                if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Caller {
-                    output.extend_from_slice(b"/* caller */ ");
-                }
                 output.extend_from_slice(b"allocator_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
                 output.push(b'(');
                 let mut first = true;
+
+                match self.compiler.node_lifetimes[node_id.0] {
+                    AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
+                    AllocationLifetime::Local => output.extend_from_slice(b"/* local, */ "),
+                }
 
                 if let AstNode::Call { args, .. } = &self.compiler.ast_nodes[allocation_call.0] {
                     for arg in args {

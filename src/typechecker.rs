@@ -519,6 +519,7 @@ impl Typechecker {
                 let allocation_node_id = *allocation_node_id;
                 self.typecheck_allocation(allocation_type, allocation_node_id)
             }
+            AstNode::NamedValue { value, .. } => self.typecheck_node(*value),
             AstNode::Return(return_expr) => {
                 let return_expr = *return_expr;
                 let expected_type = self.find_expected_return_type();
@@ -565,14 +566,23 @@ impl Typechecker {
         allocation_type: AllocationType,
         node_id: NodeId,
     ) -> TypeId {
-        if let AstNode::Call { head, .. } = &self.compiler.ast_nodes[node_id.0] {
-            if let Some(type_id) = self.find_type_in_scope(*head) {
+        if let AstNode::Call { head, args } = &self.compiler.ast_nodes[node_id.0] {
+            // FIXME: remove clone
+            let args = args.clone();
+
+            let output_type = if let Some(type_id) = self.find_type_in_scope(*head) {
                 let type_id = *type_id;
                 self.find_or_create_type(Type::Pointer(allocation_type, type_id))
             } else {
                 self.error("unknown type in allocation", *head);
                 UNKNOWN_TYPE_ID
+            };
+
+            for arg in args {
+                self.typecheck_node(arg);
             }
+
+            output_type
         } else {
             self.error("expected an allocation call", node_id);
             UNKNOWN_TYPE_ID

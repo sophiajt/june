@@ -1,0 +1,21 @@
+// output: 22
+
+struct Stats {
+    age: i64
+}
+
+struct Employee {
+    name: string,
+    stats: Stats,
+}
+
+fun helper() -> Stats {
+    let stats = new Stats(age: 22)
+    let employee = new Employee(name: "Sally", stats: stats)
+
+    return employee.stats
+}
+
+fun main() {
+    println(helper().age)
+}

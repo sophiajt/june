@@ -424,4 +424,9 @@ impl Compiler {
 
         None
     }
+
+    pub fn is_copyable_type(&self, type_id: TypeId) -> bool {
+        // FIXME: we should probably clean up the struct/pointer thing a bit
+        !matches!(self.types[type_id.0], Type::Struct(..) | Type::Pointer(..))
+    }
 }

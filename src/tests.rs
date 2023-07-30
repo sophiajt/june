@@ -187,6 +187,21 @@ fn return_value() -> TestResult {
 }
 
 #[test]
+fn struct_field_access_caller() -> TestResult {
+    test_example("struct_field_access_caller")
+}
+
+#[test]
+fn struct_field_access_caller2() -> TestResult {
+    test_example("struct_field_access_caller2")
+}
+
+#[test]
+fn struct_field_access_locally() -> TestResult {
+    test_example("struct_field_access_locally")
+}
+
+#[test]
 fn struct_field_math_mainless() -> TestResult {
     test_example("struct_field_math_mainless")
 }
@@ -214,6 +229,11 @@ fn struct_helper() -> TestResult {
 #[test]
 fn struct_helper_deep() -> TestResult {
     test_example("struct_helper_deep")
+}
+
+#[test]
+fn struct_in_struct() -> TestResult {
+    test_example("struct_in_struct")
 }
 
 #[test]
