@@ -1,5 +1,6 @@
 use crate::{
     compiler::Compiler,
+    lifetime_checker::AllocationLifetime,
     parser::{AstNode, NodeId},
     typechecker::{
         FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
@@ -239,6 +240,12 @@ impl Codegen {
                 output.extend_from_slice(b"function_");
                 output.extend_from_slice(fun_id.0.to_string().as_bytes());
                 output.push(b'(');
+
+                match self.compiler.node_lifetimes[node_id.0] {
+                    AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
+                    AllocationLifetime::Local => output.extend_from_slice(b"/* local, */ "),
+                }
+
                 let mut first = true;
 
                 for arg in args {
@@ -335,6 +342,9 @@ impl Codegen {
                 };
                 let type_id = *type_id;
 
+                if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Caller {
+                    output.extend_from_slice(b"/* caller */ ");
+                }
                 output.extend_from_slice(b"allocator_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
                 output.push(b'(');

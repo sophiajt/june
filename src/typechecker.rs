@@ -212,7 +212,7 @@ impl Typechecker {
 
         self.set_expected_return_type(return_type);
 
-        for Param { name, var_id } in &params {
+        for Param { name, var_id, .. } in &params {
             self.add_variable_to_scope(name.clone(), *var_id)
         }
 
@@ -238,6 +238,10 @@ impl Typechecker {
         self.compiler.types.push(Type::Struct(output_fields));
 
         let type_id = TypeId(self.compiler.types.len() - 1);
+
+        self.compiler
+            .types
+            .push(Type::Pointer(AllocationType::Normal, type_id));
 
         self.add_type_to_scope(struct_name, type_id);
 

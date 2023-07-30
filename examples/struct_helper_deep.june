@@ -1,0 +1,21 @@
+// output: 123
+
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun helper2() -> Employee {
+    let employee = new Employee(name: "Bob", age: 123)
+
+    return employee
+}
+
+fun helper1() -> Employee {
+    return helper2()
+}
+
+fun main() {
+    let employee = helper1()
+    println(employee.age)
+}

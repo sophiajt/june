@@ -202,8 +202,18 @@ fn struct_field() -> TestResult {
 }
 
 #[test]
+fn struct_field_helper() -> TestResult {
+    test_example("struct_field_helper")
+}
+
+#[test]
 fn struct_helper() -> TestResult {
     test_example("struct_helper")
+}
+
+#[test]
+fn struct_helper_deep() -> TestResult {
+    test_example("struct_helper_deep")
 }
 
 #[test]

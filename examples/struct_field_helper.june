@@ -1,0 +1,18 @@
+// output: 123
+
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun get_field(employee: Employee) -> i64 {
+    return employee.age
+}
+
+fun main() {
+    let employee = new Employee(name: "Bob", age: 123)
+
+    let age = get_field(employee)
+
+    println(age)
+}

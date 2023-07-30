@@ -7,6 +7,7 @@ mod tests;
 mod typechecker;
 
 use compiler::Compiler;
+use lifetime_checker::LifetimeChecker;
 use parser::Parser;
 use typechecker::Typechecker;
 
@@ -41,6 +42,10 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     if !compiler.errors.is_empty() {
         std::process::exit(1);
     }
+
+    let lifetime_checker = LifetimeChecker::new(compiler);
+
+    let compiler = lifetime_checker.check_lifetimes();
 
     if debug_output {
         println!();

@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 
 use crate::errors::SourceError;
+use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, NodeId};
 use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, STRING_TYPE_ID};
 
 #[derive(Debug)]
 pub struct Compiler {
+    // Core information, indexed by NodeId
     pub span_start: Vec<usize>,
     pub span_end: Vec<usize>,
     pub ast_nodes: Vec<AstNode>,
     pub node_types: Vec<TypeId>,
+    pub node_lifetimes: Vec<AllocationLifetime>,
 
     pub source: Vec<u8>,
 
@@ -35,6 +38,7 @@ impl Compiler {
             span_end: vec![],
             ast_nodes: vec![],
             node_types: vec![],
+            node_lifetimes: vec![],
 
             source: vec![],
 
@@ -59,20 +63,27 @@ impl Compiler {
             self.print_helper(&NodeId(self.ast_nodes.len() - 1), 0)
         }
 
+        println!("Nodes:");
         for (node_id, node) in self.ast_nodes.iter().enumerate() {
-            println!("{}: {:?} ({:?})", node_id, node, self.node_types[node_id]);
+            println!(
+                "  {}: {:?} ({:?}) @ ({:?})",
+                node_id, node, self.node_types[node_id], self.node_lifetimes[node_id]
+            );
         }
 
+        println!("Variables:");
         for (var_id, var) in self.variables.iter().enumerate() {
-            println!("{}: {:?}", var_id, var);
+            println!("  {}: {:?}", var_id, var);
         }
 
+        println!("Functions:");
         for (fun_id, fun) in self.functions.iter().enumerate() {
-            println!("{}: {:?}", fun_id, fun);
+            println!("  {}: {:?}", fun_id, fun);
         }
 
+        println!("Types:");
         for (type_id, ty) in self.types.iter().skip(STRING_TYPE_ID.0 + 1).enumerate() {
-            println!("{}: {:?}", type_id + STRING_TYPE_ID.0 + 1, ty);
+            println!("  {}: {:?}", type_id + STRING_TYPE_ID.0 + 1, ty);
         }
     }
 
