@@ -1,12 +1,14 @@
 use crate::{
     compiler::Compiler,
     parser::{AstNode, NodeId},
+    typechecker::VarId,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AllocationLifetime {
     Local,
     Caller,
+    Param(VarId),
 }
 
 pub struct LifetimeChecker {
@@ -131,7 +133,8 @@ impl LifetimeChecker {
             for param in &fun.params {
                 let param_node_id = self.compiler.variables[param.var_id.0].where_defined;
 
-                self.compiler.node_lifetimes[param_node_id.0] = AllocationLifetime::Caller;
+                self.compiler.node_lifetimes[param_node_id.0] =
+                    AllocationLifetime::Param(param.var_id);
             }
 
             let body = fun.body;

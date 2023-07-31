@@ -244,6 +244,9 @@ impl Codegen {
                 match self.compiler.node_lifetimes[node_id.0] {
                     AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
                     AllocationLifetime::Local => output.extend_from_slice(b"/* local, */ "),
+                    AllocationLifetime::Param(var_id) => {
+                        output.extend_from_slice(format!("/* param({:?}), */ ", var_id).as_bytes())
+                    }
                 }
 
                 let mut first = true;
@@ -350,6 +353,9 @@ impl Codegen {
                 match self.compiler.node_lifetimes[node_id.0] {
                     AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
                     AllocationLifetime::Local => output.extend_from_slice(b"/* local, */ "),
+                    AllocationLifetime::Param(var_id) => {
+                        output.extend_from_slice(format!("/* param({:?}), */ ", var_id).as_bytes())
+                    }
                 }
 
                 if let AstNode::Call { args, .. } = &self.compiler.ast_nodes[allocation_call.0] {
