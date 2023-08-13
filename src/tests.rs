@@ -177,6 +177,16 @@ fn int() -> TestResult {
 }
 
 #[test]
+fn loop_() -> TestResult {
+    test_example("loop")
+}
+
+#[test]
+fn loop_with_temporary() -> TestResult {
+    test_example("loop_with_temporary")
+}
+
+#[test]
 fn return_top_level_error() -> TestResult {
     test_example("return_top_level_error")
 }

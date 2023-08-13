@@ -326,6 +326,24 @@ impl Codegen {
             AstNode::Assignment => {
                 output.push(b'=');
             }
+            AstNode::LessThan => {
+                output.push(b'<');
+            }
+            AstNode::LessThanOrEqual => {
+                output.extend_from_slice(b"<=");
+            }
+            AstNode::Equal => {
+                output.extend_from_slice(b"==");
+            }
+            AstNode::NotEqual => {
+                output.extend_from_slice(b"!=");
+            }
+            AstNode::GreaterThan => {
+                output.push(b'>');
+            }
+            AstNode::GreaterThanOrEqual => {
+                output.extend_from_slice(b">=");
+            }
             AstNode::AddAssignment => {
                 output.extend_from_slice(b"+=");
             }
@@ -393,6 +411,29 @@ impl Codegen {
                 self.codegen_node(*node_id, output);
                 output.extend_from_slice(b";\n");
             }
+            AstNode::If {
+                condition,
+                then_block,
+                else_expression,
+            } => {
+                output.extend_from_slice(b"if (");
+                self.codegen_node(*condition, output);
+                output.extend_from_slice(b") {");
+                self.codegen_node(*then_block, output);
+
+                if let Some(else_expression) = else_expression {
+                    output.extend_from_slice(b"} else {");
+                    self.codegen_node(*else_expression, output);
+                }
+                output.extend_from_slice(b"}");
+            }
+            AstNode::While { condition, block } => {
+                output.extend_from_slice(b"while (");
+                self.codegen_node(*condition, output);
+                output.extend_from_slice(b") {");
+                self.codegen_node(*block, output);
+                output.extend_from_slice(b"}");
+            }
             AstNode::Block(..) => {
                 self.codegen_block(node_id, output);
             }
@@ -414,22 +455,6 @@ impl Codegen {
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore this, as we handle it elsewhere
-            }
-            AstNode::If {
-                condition,
-                then_block,
-                else_expression,
-            } => {
-                output.extend_from_slice(b"if (");
-                self.codegen_node(*condition, output);
-                output.extend_from_slice(b") {");
-                self.codegen_node(*then_block, output);
-
-                if let Some(else_expression) = else_expression {
-                    output.extend_from_slice(b"} else {");
-                    self.codegen_node(*else_expression, output);
-                }
-                output.extend_from_slice(b"}");
             }
             x => {
                 panic!("unsupported node: {:?}", x)

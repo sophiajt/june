@@ -100,6 +100,10 @@ impl LifetimeChecker {
 
                 self.expand_lifetime_with_node(initializer, node_id);
                 self.check_node_lifetime(initializer, scope_level);
+
+                // If the assignment is under-constrained, we'll see if we can get our lifetime
+                // from the initializer
+                self.expand_lifetime_with_node(node_id, initializer);
             }
             AstNode::Variable => {
                 // We're seeing a use of a variable at this point, so make sure the variable
@@ -168,6 +172,16 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(else_expression, node_id);
                     self.check_node_lifetime(else_expression, scope_level);
                 }
+            }
+            AstNode::While { condition, block } => {
+                let condition = *condition;
+                let block = *block;
+
+                self.expand_lifetime_with_node(condition, node_id);
+                self.expand_lifetime_with_node(block, node_id);
+
+                self.check_node_lifetime(condition, scope_level);
+                self.check_node_lifetime(block, scope_level);
             }
             AstNode::Call { args, .. } => {
                 // If the call is not constrained, use the local scope level

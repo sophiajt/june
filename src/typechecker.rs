@@ -484,6 +484,18 @@ impl Typechecker {
                         }
                         lhs_ty
                     }
+                    AstNode::LessThan
+                    | AstNode::LessThanOrEqual
+                    | AstNode::Equal
+                    | AstNode::NotEqual
+                    | AstNode::GreaterThan
+                    | AstNode::GreaterThanOrEqual => {
+                        if lhs_ty != rhs_ty {
+                            // FIXME: actually say the types
+                            self.error("type mismatch during operation", op)
+                        }
+                        BOOL_TYPE_ID
+                    }
                     AstNode::Assignment
                     | AstNode::AddAssignment
                     | AstNode::SubtractAssignment
@@ -571,6 +583,19 @@ impl Typechecker {
                 }
 
                 self.compiler.node_types[then_block.0]
+            }
+            AstNode::While { condition, block } => {
+                let condition = *condition;
+                let block = *block;
+
+                self.typecheck_node(condition);
+                self.typecheck_node(block);
+
+                if self.compiler.node_types[condition.0] != BOOL_TYPE_ID {
+                    self.error("condition not a boolean expression", condition);
+                }
+
+                self.compiler.node_types[block.0]
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore here, since we checked this in an earlier pass
