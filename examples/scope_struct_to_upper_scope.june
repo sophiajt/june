@@ -1,0 +1,15 @@
+// output: 456
+
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun main() {
+    mut employee = new Employee(name: "Bob", age: 123)
+    if true {
+        let employee2 = new Employee(name: "Sam", age: 456)
+        employee = employee2
+    }
+    println(employee.age)
+}
