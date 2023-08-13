@@ -182,6 +182,22 @@ impl Codegen {
         }
     }
 
+    pub fn codegen_annotation(&self, node_id: NodeId, output: &mut Vec<u8>) {
+        match self.compiler.node_lifetimes[node_id.0] {
+            AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
+            AllocationLifetime::Param { var_id } => {
+                output.extend_from_slice(format!("/* param({:?}), */ ", var_id).as_bytes())
+            }
+            AllocationLifetime::Scope { level } => {
+                output.extend_from_slice(format!("/* scope({:?}), */ ", level).as_bytes())
+            }
+            AllocationLifetime::Unknown => {
+                // panic!("found 'unknown' lifetime during codegen")
+                output.extend_from_slice(b"/* UNKNOWN, */ ")
+            }
+        }
+    }
+
     pub fn codegen_node(&self, node_id: NodeId, output: &mut Vec<u8>) {
         match &self.compiler.ast_nodes[node_id.0] {
             AstNode::String => {
@@ -241,13 +257,7 @@ impl Codegen {
                 output.extend_from_slice(fun_id.0.to_string().as_bytes());
                 output.push(b'(');
 
-                match self.compiler.node_lifetimes[node_id.0] {
-                    AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
-                    AllocationLifetime::Local => output.extend_from_slice(b"/* local, */ "),
-                    AllocationLifetime::Param(var_id) => {
-                        output.extend_from_slice(format!("/* param({:?}), */ ", var_id).as_bytes())
-                    }
-                }
+                self.codegen_annotation(node_id, output);
 
                 let mut first = true;
 
@@ -295,6 +305,8 @@ impl Codegen {
 
                 output.extend_from_slice(b" variable_");
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
+
+                self.codegen_annotation(node_id, output);
 
                 output.extend_from_slice(b" = ");
                 self.codegen_node(*initializer, output);
@@ -350,13 +362,7 @@ impl Codegen {
                 output.push(b'(');
                 let mut first = true;
 
-                match self.compiler.node_lifetimes[node_id.0] {
-                    AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
-                    AllocationLifetime::Local => output.extend_from_slice(b"/* local, */ "),
-                    AllocationLifetime::Param(var_id) => {
-                        output.extend_from_slice(format!("/* param({:?}), */ ", var_id).as_bytes())
-                    }
-                }
+                self.codegen_annotation(node_id, output);
 
                 if let AstNode::Call { args, .. } = &self.compiler.ast_nodes[allocation_call.0] {
                     for arg in args {
@@ -408,6 +414,22 @@ impl Codegen {
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore this, as we handle it elsewhere
+            }
+            AstNode::If {
+                condition,
+                then_block,
+                else_expression,
+            } => {
+                output.extend_from_slice(b"if (");
+                self.codegen_node(*condition, output);
+                output.extend_from_slice(b") {");
+                self.codegen_node(*then_block, output);
+
+                if let Some(else_expression) = else_expression {
+                    output.extend_from_slice(b"} else {");
+                    self.codegen_node(*else_expression, output);
+                }
+                output.extend_from_slice(b"}");
             }
             x => {
                 panic!("unsupported node: {:?}", x)

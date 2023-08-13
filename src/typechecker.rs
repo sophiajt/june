@@ -543,6 +543,35 @@ impl Typechecker {
 
                 VOID_TYPE_ID
             }
+            AstNode::If {
+                condition,
+                then_block,
+                else_expression,
+            } => {
+                let condition = *condition;
+                let then_block = *then_block;
+                let else_expression = *else_expression;
+
+                self.typecheck_node(condition);
+                self.typecheck_node(then_block);
+
+                if self.compiler.node_types[condition.0] != BOOL_TYPE_ID {
+                    self.error("condition not a boolean expression", condition);
+                }
+
+                if let Some(else_expression) = else_expression {
+                    self.typecheck_node(else_expression);
+
+                    // FIXME: add type compatibility
+                    if self.compiler.node_types[then_block.0]
+                        != self.compiler.node_types[else_expression.0]
+                    {
+                        self.error("return used outside of a function", else_expression);
+                    }
+                }
+
+                self.compiler.node_types[then_block.0]
+            }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore here, since we checked this in an earlier pass
                 VOID_TYPE_ID

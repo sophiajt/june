@@ -750,7 +750,6 @@ impl Parser {
                 let op_prec = self.operator_precedence(op);
 
                 if op_prec == ASSIGNMENT_PRECEDENCE && !allow_assignment {
-                    println!("assignment precedence");
                     self.error_on_node("assignment found in expression", op);
                 }
 

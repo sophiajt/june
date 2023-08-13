@@ -187,6 +187,20 @@ fn return_value() -> TestResult {
 }
 
 #[test]
+fn scope_struct() -> TestResult {
+    test_example("scope_struct")
+}
+
+#[test]
+fn scope_struct_to_upper_scope() -> TestResult {
+    test_example("scope_struct_to_upper_scope")
+}
+#[test]
+fn scope_struct_to_upper_scope2() -> TestResult {
+    test_example("scope_struct_to_upper_scope2")
+}
+
+#[test]
 fn struct_field_access_caller() -> TestResult {
     test_example("struct_field_access_caller")
 }
