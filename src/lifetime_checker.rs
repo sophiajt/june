@@ -2,7 +2,7 @@ use crate::{
     compiler::Compiler,
     errors::SourceError,
     parser::{AstNode, BlockId, NodeId},
-    typechecker::VarId,
+    typechecker::{FunId, VarId},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -204,7 +204,8 @@ impl LifetimeChecker {
                 self.check_node_lifetime(condition, scope_level);
                 self.check_node_lifetime(block, scope_level);
             }
-            AstNode::Call { args, .. } => {
+            AstNode::Call { head, args } => {
+                let head = *head;
                 // If the call is not constrained, use the local scope level
                 if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Unknown {
                     self.compiler.node_lifetimes[node_id.0] =
@@ -221,7 +222,10 @@ impl LifetimeChecker {
 
                 if let AllocationLifetime::Scope { level } = self.compiler.node_lifetimes[node_id.0]
                 {
-                    if level == scope_level {
+                    let fun_id = self.compiler.fun_resolution.get(&head);
+
+                    // note: fun_id 0 is currently the built-in print
+                    if level == scope_level && !matches!(fun_id, Some(FunId(0))) {
                         self.current_block_may_allocate(level);
                     }
                 }

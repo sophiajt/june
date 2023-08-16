@@ -1,0 +1,9 @@
+// error: assignment found in expression
+
+let x = 0
+
+if x = 1 {
+    println("true")
+} else {
+    println("false")
+}

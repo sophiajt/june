@@ -213,51 +213,6 @@ impl Codegen {
 
                 output.extend_from_slice(src);
             }
-            AstNode::Call { head, args } => {
-                let fun_id = self
-                    .compiler
-                    .fun_resolution
-                    .get(head)
-                    .expect("internal error: missing call resolution in codegen");
-
-                if fun_id.0 == 0 {
-                    // special case for println
-                    if self.compiler.node_types[args[0].0] == STRING_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%s\\n\", ");
-                        self.codegen_node(args[0], output);
-                    } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%lli\\n\", ");
-                        self.codegen_node(args[0], output);
-                    } else if self.compiler.node_types[args[0].0] == F64_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%lf\\n\", ");
-                        self.codegen_node(args[0], output);
-                    } else if self.compiler.node_types[args[0].0] == BOOL_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%s\\n\", (");
-                        self.codegen_node(args[0], output);
-                        output.extend_from_slice(br#")?"true":"false""#);
-                    } else {
-                        panic!(
-                            "unknown type for printf: {}",
-                            self.compiler.node_types[args[0].0].0
-                        );
-                    }
-                    output.extend_from_slice(b");\n");
-                    return;
-                }
-
-                output.extend_from_slice(b"function_");
-                output.extend_from_slice(fun_id.0.to_string().as_bytes());
-                output.push(b'(');
-
-                self.codegen_annotation(node_id, output);
-
-                for arg in args {
-                    output.extend_from_slice(b", ");
-
-                    self.codegen_node(*arg, output)
-                }
-                output.push(b')');
-            }
             AstNode::Variable => {
                 //let src = self.compiler.get_source(node_id);
                 let var_id = self
@@ -349,6 +304,51 @@ impl Codegen {
 
                 output.push(b'(');
                 self.codegen_node(*rhs, output);
+                output.push(b')');
+            }
+            AstNode::Call { head, args } => {
+                let fun_id = self
+                    .compiler
+                    .fun_resolution
+                    .get(head)
+                    .expect("internal error: missing call resolution in codegen");
+
+                if fun_id.0 == 0 {
+                    // special case for println
+                    if self.compiler.node_types[args[0].0] == STRING_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%s\\n\", ");
+                        self.codegen_node(args[0], output);
+                    } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                        self.codegen_node(args[0], output);
+                    } else if self.compiler.node_types[args[0].0] == F64_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%lf\\n\", ");
+                        self.codegen_node(args[0], output);
+                    } else if self.compiler.node_types[args[0].0] == BOOL_TYPE_ID {
+                        output.extend_from_slice(b"printf(\"%s\\n\", (");
+                        self.codegen_node(args[0], output);
+                        output.extend_from_slice(br#")?"true":"false""#);
+                    } else {
+                        panic!(
+                            "unknown type for printf: {}",
+                            self.compiler.node_types[args[0].0].0
+                        );
+                    }
+                    output.extend_from_slice(b");\n");
+                    return;
+                }
+
+                output.extend_from_slice(b"function_");
+                output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                output.push(b'(');
+
+                self.codegen_annotation(node_id, output);
+
+                for arg in args {
+                    output.extend_from_slice(b", ");
+
+                    self.codegen_node(*arg, output)
+                }
                 output.push(b')');
             }
             AstNode::New(_, allocation_call) => {

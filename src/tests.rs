@@ -122,6 +122,11 @@ fn test_example(test_name: &str) -> TestResult {
 }
 
 #[test]
+fn bad_condition() -> TestResult {
+    test_example("bad_condition")
+}
+
+#[test]
 fn boolean() -> TestResult {
     test_example("boolean")
 }
