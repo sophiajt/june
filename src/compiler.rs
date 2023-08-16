@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::errors::SourceError;
 use crate::lifetime_checker::AllocationLifetime;
-use crate::parser::{AstNode, NodeId};
+use crate::parser::{AstNode, Block, NodeId};
 use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, STRING_TYPE_ID};
 
 #[derive(Debug)]
@@ -13,6 +13,9 @@ pub struct Compiler {
     pub ast_nodes: Vec<AstNode>,
     pub node_types: Vec<TypeId>,
     pub node_lifetimes: Vec<AllocationLifetime>,
+
+    // Blocks, indexed by BlockId
+    pub blocks: Vec<Block>,
 
     pub source: Vec<u8>,
 
@@ -39,6 +42,8 @@ impl Compiler {
             ast_nodes: vec![],
             node_types: vec![],
             node_lifetimes: vec![],
+
+            blocks: vec![],
 
             source: vec![],
 
@@ -147,12 +152,12 @@ impl Compiler {
                     self.print_helper(&field.1, indent + 2);
                 }
             }
-            AstNode::Block(nodes) => {
+            AstNode::Block(block_id) => {
                 println!(
                     "Block ({}, {}):[{}]",
                     self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
                 );
-                for node in nodes {
+                for node in &self.blocks[block_id.0].nodes {
                     self.print_helper(node, indent + 2);
                 }
             }
@@ -258,6 +263,18 @@ impl Compiler {
                 )
             }
         }
+    }
+
+    pub fn has_main(&self) -> bool {
+        for f in &self.functions {
+            let name = self.get_source(f.name);
+
+            if name == b"main" {
+                return true;
+            }
+        }
+
+        false
     }
 
     // line number, line start, line_end

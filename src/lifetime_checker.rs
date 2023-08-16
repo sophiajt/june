@@ -1,7 +1,7 @@
 use crate::{
     compiler::Compiler,
     errors::SourceError,
-    parser::{AstNode, NodeId},
+    parser::{AstNode, BlockId, NodeId},
     typechecker::VarId,
 };
 
@@ -15,17 +15,28 @@ pub enum AllocationLifetime {
 
 pub struct LifetimeChecker {
     compiler: Compiler,
+    current_block: Vec<BlockId>,
 }
 
 impl LifetimeChecker {
     pub fn new(compiler: Compiler) -> Self {
-        Self { compiler }
+        Self {
+            compiler,
+            current_block: vec![],
+        }
     }
 
-    pub fn check_block_lifetime(&mut self, block: &[NodeId], scope_level: usize) {
-        for node_id in block.iter().rev() {
+    pub fn check_block_lifetime(&mut self, block_id: BlockId, scope_level: usize) {
+        self.current_block.push(block_id);
+
+        // FIXME: remove clone
+        let block = self.compiler.blocks[block_id.0].clone();
+
+        for node_id in block.nodes.iter().rev() {
             self.check_node_lifetime(*node_id, scope_level);
         }
+
+        self.current_block.pop();
     }
 
     pub fn error(&mut self, message: impl Into<String>, node_id: NodeId) {
@@ -86,12 +97,19 @@ impl LifetimeChecker {
         }
     }
 
+    pub fn current_block_may_allocate(&mut self, scope_level: usize) {
+        let block_id = *self
+            .current_block
+            .last()
+            .expect("internal error: lifetime checker missing block");
+
+        self.compiler.blocks[block_id.0].allocates_at = Some(scope_level);
+    }
+
     pub fn check_node_lifetime(&mut self, node_id: NodeId, scope_level: usize) {
         match &self.compiler.ast_nodes[node_id.0] {
-            AstNode::Block(block) => {
-                // FIXME: probably could clean this up
-                let block = block.clone();
-                self.check_block_lifetime(&block, scope_level + 1);
+            AstNode::Block(block_id) => {
+                self.check_block_lifetime(*block_id, scope_level + 1);
             }
             AstNode::Int | AstNode::Float | AstNode::True | AstNode::False | AstNode::String => {}
             AstNode::Let { initializer, .. } => {
@@ -145,6 +163,9 @@ impl LifetimeChecker {
 
                     self.expand_lifetime_with_node(rhs, lhs);
                     self.check_node_lifetime(rhs, scope_level);
+
+                    self.expand_lifetime_with_node(lhs, rhs);
+                    self.check_node_lifetime(lhs, scope_level);
                 } else {
                     self.expand_lifetime_with_node(lhs, node_id);
                     self.expand_lifetime_with_node(rhs, node_id);
@@ -197,6 +218,13 @@ impl LifetimeChecker {
 
                     self.check_node_lifetime(arg, scope_level)
                 }
+
+                if let AllocationLifetime::Scope { level } = self.compiler.node_lifetimes[node_id.0]
+                {
+                    if level == scope_level {
+                        self.current_block_may_allocate(level);
+                    }
+                }
             }
             AstNode::New(_, allocation_node_id) => {
                 let allocation_node_id = *allocation_node_id;
@@ -212,7 +240,14 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(allocation_node_id, node_id);
                 }
 
-                self.check_node_lifetime(allocation_node_id, scope_level)
+                self.check_node_lifetime(allocation_node_id, scope_level);
+
+                if let AllocationLifetime::Scope { level } = self.compiler.node_lifetimes[node_id.0]
+                {
+                    if level == scope_level {
+                        self.current_block_may_allocate(level);
+                    }
+                }
             }
             AstNode::Return(return_expr) => {
                 if let Some(return_expr) = return_expr {

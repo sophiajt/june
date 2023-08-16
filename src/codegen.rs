@@ -62,14 +62,10 @@ impl Codegen {
         output.extend_from_slice(b"* allocator_");
         output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
         output.push(b'(');
+        output.extend_from_slice(b"long allocation_id");
 
-        let mut first = true;
         for field in fields {
-            if !first {
-                output.extend_from_slice(b", ");
-            } else {
-                first = false;
-            }
+            output.extend_from_slice(b", ");
             self.codegen_typename(field.1, output);
             output.push(b' ');
             output.extend_from_slice(&field.0);
@@ -79,9 +75,9 @@ impl Codegen {
         self.codegen_typename(type_id, output);
         output.extend_from_slice(b" tmp = (");
         self.codegen_typename(type_id, output);
-        output.extend_from_slice(b")malloc(sizeof(struct struct_");
+        output.extend_from_slice(b")allocate(allocator, sizeof(struct struct_");
         output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
-        output.extend_from_slice(b"));\n");
+        output.extend_from_slice(b"), allocation_id);\n");
 
         for field in fields {
             output.extend_from_slice(b"tmp->");
@@ -131,13 +127,9 @@ impl Codegen {
         output.extend_from_slice(fun_id.0.to_string().as_bytes());
         output.push(b'(');
 
-        let mut first = true;
+        output.extend_from_slice(b"long allocation_id");
         for param in params {
-            if !first {
-                output.extend_from_slice(b", ");
-            } else {
-                first = false;
-            }
+            output.extend_from_slice(b", ");
 
             let variable = &self.compiler.variables[param.var_id.0];
             self.codegen_typename(variable.ty, output);
@@ -184,12 +176,12 @@ impl Codegen {
 
     pub fn codegen_annotation(&self, node_id: NodeId, output: &mut Vec<u8>) {
         match self.compiler.node_lifetimes[node_id.0] {
-            AllocationLifetime::Caller => output.extend_from_slice(b"/* caller, */ "),
+            AllocationLifetime::Caller => output.extend_from_slice(b"allocation_id"),
             AllocationLifetime::Param { var_id } => {
                 output.extend_from_slice(format!("/* param({:?}), */ ", var_id).as_bytes())
             }
             AllocationLifetime::Scope { level } => {
-                output.extend_from_slice(format!("/* scope({:?}), */ ", level).as_bytes())
+                output.extend_from_slice(format!("allocation_id + {} ", level).as_bytes())
             }
             AllocationLifetime::Unknown => {
                 // panic!("found 'unknown' lifetime during codegen")
@@ -259,14 +251,8 @@ impl Codegen {
 
                 self.codegen_annotation(node_id, output);
 
-                let mut first = true;
-
                 for arg in args {
-                    if !first {
-                        output.extend_from_slice(b", ");
-                    } else {
-                        first = false;
-                    }
+                    output.extend_from_slice(b", ");
 
                     self.codegen_node(*arg, output)
                 }
@@ -305,8 +291,6 @@ impl Codegen {
 
                 output.extend_from_slice(b" variable_");
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
-
-                self.codegen_annotation(node_id, output);
 
                 output.extend_from_slice(b" = ");
                 self.codegen_node(*initializer, output);
@@ -378,17 +362,12 @@ impl Codegen {
                 output.extend_from_slice(b"allocator_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
                 output.push(b'(');
-                let mut first = true;
 
                 self.codegen_annotation(node_id, output);
 
                 if let AstNode::Call { args, .. } = &self.compiler.ast_nodes[allocation_call.0] {
                     for arg in args {
-                        if !first {
-                            output.extend_from_slice(b", ");
-                        } else {
-                            first = false;
-                        }
+                        output.extend_from_slice(b", ");
 
                         self.codegen_node(*arg, output)
                     }
@@ -463,10 +442,15 @@ impl Codegen {
     }
 
     pub fn codegen_block(&self, block: NodeId, output: &mut Vec<u8>) {
-        if let AstNode::Block(nodes) = &self.compiler.ast_nodes[block.0] {
-            for node_id in nodes {
+        if let AstNode::Block(block_id) = &self.compiler.ast_nodes[block.0] {
+            for node_id in &self.compiler.blocks[block_id.0].nodes {
                 self.codegen_node(*node_id, output);
                 output.extend_from_slice(b";\n");
+            }
+            if let Some(scope_level) = self.compiler.blocks[block_id.0].allocates_at {
+                output.extend_from_slice(
+                    format!("deallocate(allocator, allocation_id + {});\n", scope_level).as_bytes(),
+                );
             }
         } else {
             panic!("codegen of a block that isn't a block")
@@ -476,31 +460,25 @@ impl Codegen {
     pub fn codegen(self) -> Vec<u8> {
         let mut output = vec![];
 
-        output.extend_from_slice(
-            b"#include <stdio.h>\n#include <stdint.h>\n#include <stdbool.h>\n#include <stdlib.h>\n",
-        );
+        let allocator = include_str!("../allocator/allocator.c");
+
+        output.extend_from_slice(allocator.as_bytes());
+
+        output.extend_from_slice(b"struct Allocator *allocator;\n");
 
         self.codegen_structs(&mut output);
         self.codegen_fun_decls(&mut output);
 
-        let mut main_was_output = false;
         for (idx, fun) in self.compiler.functions.iter().enumerate().skip(1) {
             let name = self.compiler.get_source(fun.name);
 
             if name == b"main" {
                 output.extend_from_slice(b"int main() {\n");
-                self.codegen_node(NodeId(self.compiler.ast_nodes.len() - 1), &mut output);
+                output.extend_from_slice(b"allocator = create_allocator(DEFAULT_PAGE_SIZE);\n");
                 output.extend_from_slice(b"function_");
                 output.extend_from_slice(idx.to_string().as_bytes());
-                output.extend_from_slice(b"();\n}\n");
-                main_was_output = true;
+                output.extend_from_slice(b"(0);\n}\n");
             }
-        }
-
-        if !main_was_output {
-            output.extend_from_slice(b"int main() {\n");
-            self.codegen_block(NodeId(self.compiler.ast_nodes.len() - 1), &mut output);
-            output.extend_from_slice(b"}\n");
         }
 
         output

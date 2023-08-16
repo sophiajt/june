@@ -117,7 +117,7 @@ pub enum AstNode {
         target: NodeId,
         field: NodeId,
     },
-    Block(Vec<NodeId>),
+    Block(BlockId),
     If {
         condition: NodeId,
         then_block: NodeId,
@@ -157,6 +157,9 @@ impl AstNode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeId(pub usize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BlockId(pub usize);
 
 #[derive(Debug)]
 pub enum TokenType {
@@ -208,6 +211,21 @@ pub struct Token {
     pub token_type: TokenType,
     pub span_start: usize,
     pub span_end: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct Block {
+    pub nodes: Vec<NodeId>,
+    pub allocates_at: Option<usize>,
+}
+
+impl Block {
+    pub fn new(nodes: Vec<NodeId>) -> Block {
+        Block {
+            nodes,
+            allocates_at: None,
+        }
+    }
 }
 
 fn is_symbol(b: u8) -> bool {
@@ -650,7 +668,13 @@ impl Parser {
         }
         let span_end = self.position();
 
-        self.create_node(AstNode::Block(code_body), span_start, span_end)
+        self.compiler.blocks.push(Block::new(code_body));
+
+        self.create_node(
+            AstNode::Block(BlockId(self.compiler.blocks.len() - 1)),
+            span_start,
+            span_end,
+        )
     }
 
     pub fn fun_definition(&mut self) -> NodeId {

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::Compiler,
     errors::SourceError,
-    parser::{AllocationType, AstNode, NodeId},
+    parser::{AllocationType, AstNode, BlockId, NodeId},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -248,12 +248,15 @@ impl Typechecker {
         type_id
     }
 
-    pub fn typecheck_block(&mut self, node_id: NodeId, nodes: &[NodeId]) {
+    pub fn typecheck_block(&mut self, node_id: NodeId, block_id: BlockId) {
         let mut funs = vec![];
 
         self.enter_scope();
 
-        for node_id in nodes {
+        // FIXME: sad we have to clone here
+        let block = self.compiler.blocks[block_id.0].clone();
+
+        for node_id in &block.nodes {
             match &self.compiler.ast_nodes[node_id.0] {
                 AstNode::Fun {
                     name,
@@ -275,7 +278,7 @@ impl Typechecker {
             self.typecheck_fun(fun);
         }
 
-        for node_id in nodes {
+        for node_id in &block.nodes {
             self.typecheck_node(*node_id);
         }
         self.compiler.node_types[node_id.0] = VOID_TYPE_ID;
@@ -375,10 +378,8 @@ impl Typechecker {
 
     pub fn typecheck_node(&mut self, node_id: NodeId) -> TypeId {
         let node_type = match &self.compiler.ast_nodes[node_id.0] {
-            AstNode::Block(block) => {
-                // FIXME: probably could clean this up
-                let block = block.clone();
-                self.typecheck_block(node_id, &block);
+            AstNode::Block(block_id) => {
+                self.typecheck_block(node_id, *block_id);
                 VOID_TYPE_ID
             }
             AstNode::Int => I64_TYPE_ID,
@@ -690,7 +691,29 @@ impl Typechecker {
         let num_nodes = self.compiler.ast_nodes.len();
         self.compiler.node_types.resize(num_nodes, UNKNOWN_TYPE_ID);
 
-        self.typecheck_node(NodeId(self.compiler.ast_nodes.len() - 1));
+        let top_level = NodeId(self.compiler.ast_nodes.len() - 1);
+        self.typecheck_node(top_level);
+
+        let top_level_type = self.compiler.node_types[top_level.0];
+
+        // If we haven't seen a main, create one from the top-level node
+        if !self.compiler.has_main() {
+            // Synthesis of a fake 'main' node
+            self.compiler.source.extend_from_slice(b"main");
+            self.compiler.ast_nodes.push(AstNode::Name);
+            self.compiler
+                .span_start
+                .push(self.compiler.source.len() - 4);
+            self.compiler.span_end.push(self.compiler.source.len());
+            let main_node = NodeId(self.compiler.ast_nodes.len() - 1);
+
+            self.compiler.functions.push(Function {
+                name: main_node,
+                params: vec![],
+                return_type: top_level_type,
+                body: top_level,
+            })
+        }
 
         self.compiler
     }
