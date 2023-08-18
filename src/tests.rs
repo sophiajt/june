@@ -222,6 +222,11 @@ fn method_simple() -> TestResult {
 }
 
 #[test]
+fn method_simple_error() -> TestResult {
+    test_example("method_simple_error")
+}
+
+#[test]
 fn return_top_level_error() -> TestResult {
     test_example("return_top_level_error")
 }

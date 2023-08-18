@@ -493,7 +493,14 @@ impl Typechecker {
                     let variable = &self.compiler.variables[var_id.0];
                     variable.ty
                 } else {
-                    self.error("can't find variable", node_id);
+                    let name = self.compiler.get_source(node_id);
+
+                    // Reserved name for synthetic self variables
+                    if name == b"." {
+                        self.error("can't find 'self' variable", node_id);
+                    } else {
+                        self.error("can't find variable", node_id);
+                    }
                     UNKNOWN_TYPE_ID
                 }
             }
