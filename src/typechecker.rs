@@ -290,19 +290,19 @@ impl Typechecker {
                 fun_ids.push(self.typecheck_fun_predecl(name, params, return_ty, block));
             }
 
-            for fun_id in &fun_ids {
-                self.typecheck_fun(*fun_id);
-            }
-
-            self.exit_scope();
-
             let Type::Struct {
                 methods, ..
             } = &mut self.compiler.types[type_id.0] else {
                 panic!("internal error: previously inserted struct can't be found");
             };
 
-            *methods = fun_ids;
+            *methods = fun_ids.clone();
+
+            for fun_id in &fun_ids {
+                self.typecheck_fun(*fun_id);
+            }
+
+            self.exit_scope();
         }
 
         type_id
@@ -559,6 +559,7 @@ impl Typechecker {
                             let method_name = self
                                 .compiler
                                 .get_source(self.compiler.functions[method.0].name);
+
                             if method_name == name {
                                 let type_id = self.typecheck_call_with_fun_id(head, *method, &args);
                                 self.compiler.node_types[node_id.0] = type_id;

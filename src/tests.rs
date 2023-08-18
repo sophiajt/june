@@ -212,6 +212,11 @@ fn method_and_struct_allocator() -> TestResult {
 }
 
 #[test]
+fn method_in_method() -> TestResult {
+    test_example("method_in_method")
+}
+
+#[test]
 fn method_mutation() -> TestResult {
     test_example("method_mutation")
 }
