@@ -182,6 +182,11 @@ fn int() -> TestResult {
 }
 
 #[test]
+fn lifetime_alloc_infer_error() -> TestResult {
+    test_example("lifetime_alloc_infer_error")
+}
+
+#[test]
 fn lifetime_alloc_infer_success() -> TestResult {
     test_example("lifetime_alloc_infer_success")
 }
