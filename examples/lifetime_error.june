@@ -1,0 +1,22 @@
+// error: can't find compatible lifetime between param 'stats' and param 'employee'
+
+struct Stats {
+    age: i64
+}
+
+struct Employee {
+    name: string,
+    stats: Stats,
+}
+
+fun helper(mut employee: Employee, stats: Stats) {
+    employee.stats = stats
+}
+
+fun main() {
+    mut employee = new Employee(name: "Sophia", stats: new Stats(age: 22))
+
+    helper(employee, new Stats(age: 33))
+
+    println(employee.stats.age)
+}

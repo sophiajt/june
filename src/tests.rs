@@ -75,7 +75,7 @@ fn test_example(test_name: &str) -> TestResult {
     if let Some(expected_error) = &expected_error {
         let command_err = String::from_utf8_lossy(&command.stderr);
 
-        println!("Checking:\n{} against: {}", command_err, expected_error);
+        println!("Checking:\n{}expected: {}\n", command_err, expected_error);
 
         assert!(command_err.contains(expected_error));
     }
@@ -189,6 +189,11 @@ fn lifetime_alloc_infer_error() -> TestResult {
 #[test]
 fn lifetime_alloc_infer_success() -> TestResult {
     test_example("lifetime_alloc_infer_success")
+}
+
+#[test]
+fn lifetime_error() -> TestResult {
+    test_example("lifetime_error")
 }
 
 #[test]
