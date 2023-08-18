@@ -50,26 +50,51 @@ impl LifetimeChecker {
     pub fn expand_lifetime_with_node(&mut self, node_id: NodeId, lifetime_from_node: NodeId) {
         let lifetime = self.compiler.node_lifetimes[lifetime_from_node.0];
 
-        self.expand_lifetime(node_id, lifetime)
+        self.expand_lifetime(node_id, lifetime_from_node, lifetime)
     }
 
-    pub fn expand_lifetime(&mut self, node_id: NodeId, lifetime: AllocationLifetime) {
+    pub fn expand_lifetime(
+        &mut self,
+        node_id: NodeId,
+        lifetime_from_node: NodeId,
+        lifetime: AllocationLifetime,
+    ) {
         let current_lifetime = self.compiler.node_lifetimes[node_id.0];
 
         match current_lifetime {
             AllocationLifetime::Unknown => {
                 self.compiler.node_lifetimes[node_id.0] = lifetime;
             }
-            AllocationLifetime::Param { var_id } => match lifetime {
-                AllocationLifetime::Param {
-                    var_id: incoming_var_id,
-                } => {
-                    if incoming_var_id != var_id {
-                        self.error("can't find compatible lifetime", node_id)
+            AllocationLifetime::Param { var_id } => {
+                match lifetime {
+                    AllocationLifetime::Param {
+                        var_id: incoming_var_id,
+                    } => {
+                        let param_name1 =
+                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+                        let param_name2 = String::from_utf8_lossy(
+                            self.compiler.get_variable_name(incoming_var_id),
+                        );
+                        if incoming_var_id != var_id {
+                            self.error(format!("can't find compatible lifetime between param '{}' and param '{}'", param_name1, param_name2), node_id)
+                        }
+                    }
+                    AllocationLifetime::Scope { .. } => {
+                        // Params outlive all scopes
+                    }
+                    AllocationLifetime::Caller => {
+                        // For now, allow params to compatible with caller if needed
+                    }
+                    _ => {
+                        let param_name =
+                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+                        self.error(
+                            format!("can't find compatible lifetime for param '{}'", param_name),
+                            lifetime_from_node,
+                        );
                     }
                 }
-                _ => self.error("can't find compatible lifetime", node_id),
-            },
+            }
             AllocationLifetime::Caller => {
                 // TODO: add fix to check for raw and custom lifetimes
             }
@@ -82,9 +107,17 @@ impl LifetimeChecker {
                             self.compiler.node_lifetimes[node_id.0] = lifetime;
                         }
                     }
-                    AllocationLifetime::Param { .. } => {
+                    AllocationLifetime::Param { var_id } => {
                         // FIXME: add logic
-                        self.error("can't find compatible lifetime", node_id);
+                        let param_name =
+                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+                        self.error(
+                            format!(
+                                "can't find compatible lifetime to match param '{}'",
+                                param_name
+                            ),
+                            node_id,
+                        );
                     }
                     AllocationLifetime::Caller => {
                         self.compiler.node_lifetimes[node_id.0] = lifetime;
@@ -104,6 +137,36 @@ impl LifetimeChecker {
             .expect("internal error: lifetime checker missing block");
 
         self.compiler.blocks[block_id.0].allocates_at = Some(scope_level);
+    }
+
+    pub fn check_lvalue_lifetime(&mut self, lvalue: NodeId) {
+        match &self.compiler.ast_nodes[lvalue.0] {
+            AstNode::Variable => {
+                let var_id = self.compiler.var_resolution.get(&lvalue);
+
+                if let Some(var_id) = var_id {
+                    let definition_node_id = self.compiler.variables[var_id.0].where_defined;
+
+                    self.compiler.node_lifetimes[lvalue.0] =
+                        self.compiler.node_lifetimes[definition_node_id.0];
+                } else {
+                    self.error(
+                        "internal error: variable unresolved when checking lifetimes",
+                        lvalue,
+                    );
+                }
+            }
+            AstNode::MemberAccess { target, .. } => {
+                let target = *target;
+
+                self.check_lvalue_lifetime(target);
+
+                self.compiler.node_lifetimes[lvalue.0] = self.compiler.node_lifetimes[target.0];
+            }
+            _ => {
+                self.error("unsupported lvalue, needs variable or field", lvalue);
+            }
+        }
     }
 
     pub fn check_node_lifetime(&mut self, node_id: NodeId, scope_level: usize) {
@@ -126,7 +189,11 @@ impl LifetimeChecker {
             AstNode::Variable => {
                 // We're seeing a use of a variable at this point, so make sure the variable
                 // lives long enough to get here
-                self.expand_lifetime(node_id, AllocationLifetime::Scope { level: scope_level });
+                self.expand_lifetime(
+                    node_id,
+                    node_id,
+                    AllocationLifetime::Scope { level: scope_level },
+                );
 
                 let var_id =
                     self.compiler.var_resolution.get(&node_id).expect(
@@ -159,13 +226,15 @@ impl LifetimeChecker {
                 let op = *op;
 
                 if matches!(self.compiler.ast_nodes[op.0], AstNode::Assignment) {
-                    self.check_node_lifetime(lhs, scope_level);
+                    self.check_lvalue_lifetime(lhs);
 
-                    self.expand_lifetime_with_node(rhs, lhs);
                     self.check_node_lifetime(rhs, scope_level);
 
-                    self.expand_lifetime_with_node(lhs, rhs);
-                    self.check_node_lifetime(lhs, scope_level);
+                    self.expand_lifetime_with_node(rhs, lhs);
+
+                    if self.compiler.node_lifetimes[lhs.0] != self.compiler.node_lifetimes[rhs.0] {
+                        self.error("assignment has incompatible lifetimes", lhs)
+                    }
                 } else {
                     self.expand_lifetime_with_node(lhs, node_id);
                     self.expand_lifetime_with_node(rhs, node_id);
@@ -237,9 +306,14 @@ impl LifetimeChecker {
                     // If we don't have enough constraints, then allocate at the current local scope level
                     self.expand_lifetime(
                         allocation_node_id,
+                        node_id,
                         AllocationLifetime::Scope { level: scope_level },
                     );
-                    self.expand_lifetime(node_id, AllocationLifetime::Scope { level: scope_level });
+                    self.expand_lifetime(
+                        node_id,
+                        node_id,
+                        AllocationLifetime::Scope { level: scope_level },
+                    );
                 } else {
                     self.expand_lifetime_with_node(allocation_node_id, node_id);
                 }
@@ -257,7 +331,7 @@ impl LifetimeChecker {
                 if let Some(return_expr) = return_expr {
                     let return_expr = *return_expr;
 
-                    self.expand_lifetime(return_expr, AllocationLifetime::Caller);
+                    self.expand_lifetime(return_expr, node_id, AllocationLifetime::Caller);
                     self.check_node_lifetime(return_expr, scope_level);
                 }
             }

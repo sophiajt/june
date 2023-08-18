@@ -32,7 +32,6 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     }
 
     let typechecker = Typechecker::new(compiler);
-
     let compiler = typechecker.typecheck();
 
     for error in &compiler.errors.first() {
@@ -44,8 +43,15 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     }
 
     let lifetime_checker = LifetimeChecker::new(compiler);
-
     let compiler = lifetime_checker.check_lifetimes();
+
+    for error in &compiler.errors.first() {
+        compiler.print_error(error)
+    }
+
+    if !compiler.errors.is_empty() {
+        std::process::exit(1);
+    }
 
     if debug_output {
         println!();

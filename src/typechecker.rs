@@ -29,6 +29,7 @@ pub enum Type {
 
 #[derive(Debug)]
 pub struct Variable {
+    pub name: NodeId,
     pub ty: TypeId,
     pub is_mutable: bool,
     pub where_defined: NodeId,
@@ -88,6 +89,7 @@ impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
         // temporarily - let's add `println` for now, to get examples to typecheck
         compiler.variables.push(Variable {
+            name: NodeId(0),
             ty: UNKNOWN_TYPE_ID,
             is_mutable: false,
             where_defined: NodeId(0),
@@ -171,7 +173,7 @@ impl Typechecker {
                     let is_mutable = *is_mutable;
                     let ty = self.typecheck_typename(ty);
 
-                    let var_id = self.define_variable(param_name.clone(), ty, is_mutable, name);
+                    let var_id = self.define_variable(name, ty, is_mutable, name);
                     fun_params.push(Param::new(param_name, var_id));
                 } else {
                     self.error("expected function parameter", unchecked_param);
@@ -403,8 +405,6 @@ impl Typechecker {
                 let is_mutable = *is_mutable;
                 let ty = *ty;
 
-                let name = self.compiler.get_source(variable_name).to_vec();
-
                 let initializer_ty = self.typecheck_node(initializer);
 
                 if let Some(ty) = ty {
@@ -415,7 +415,7 @@ impl Typechecker {
                 }
 
                 let var_id =
-                    self.define_variable(name.to_vec(), initializer_ty, is_mutable, node_id);
+                    self.define_variable(variable_name, initializer_ty, is_mutable, node_id);
 
                 self.compiler.var_resolution.insert(variable_name, var_id);
 
@@ -792,12 +792,14 @@ impl Typechecker {
 
     pub fn define_variable(
         &mut self,
-        variable_name: Vec<u8>,
+        name: NodeId,
         ty: TypeId,
         is_mutable: bool,
         where_defined: NodeId,
     ) -> VarId {
+        let variable_name = self.compiler.get_source(name).to_vec();
         self.compiler.variables.push(Variable {
+            name,
             ty,
             is_mutable,
             where_defined,

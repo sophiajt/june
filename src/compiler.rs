@@ -436,6 +436,10 @@ impl Compiler {
         &self.source[self.span_start[node_id.0]..self.span_end[node_id.0]]
     }
 
+    pub fn get_variable_name(&self, var_id: VarId) -> &[u8] {
+        self.get_source(self.variables[var_id.0].name)
+    }
+
     pub fn find_pointer_to(&self, type_id: TypeId) -> Option<TypeId> {
         for (found_type_id, ty) in self.types.iter().enumerate() {
             if matches!(ty, Type::Pointer(_, type_id2) if &type_id == type_id2) {

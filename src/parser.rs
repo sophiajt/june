@@ -566,6 +566,11 @@ impl Parser {
             }) if &self.compiler.source[span_start..span_end] == b"false" => true,
             Some(Token {
                 token_type: TokenType::Name,
+                span_start,
+                span_end,
+            }) if &self.compiler.source[span_start..span_end] == b"new" => true,
+            Some(Token {
+                token_type: TokenType::Name,
                 ..
             }) => true,
             _ => false,
@@ -858,6 +863,8 @@ impl Parser {
             output
         } else if self.is_keyword(b"true") || self.is_keyword(b"false") {
             self.boolean()
+        } else if self.is_keyword(b"new") {
+            self.new_allocation()
         } else if self.is_string() {
             self.string()
         } else if self.is_number() {
@@ -1209,12 +1216,6 @@ impl Parser {
     pub fn new_allocation(&mut self) -> NodeId {
         let span_start = self.position();
         self.keyword(b"new");
-
-        // let allocation_lifetime = if self.is_keyword(b"local") {
-        //     AllocationLifetime::Local
-        // } else {
-        //     AllocationLifetime::Caller
-        // };
 
         let allocation_type = if self.is_keyword(b"raw") {
             self.next();
