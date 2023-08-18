@@ -89,6 +89,7 @@ pub enum AstNode {
     Struct {
         name: NodeId,
         fields: Vec<(NodeId, NodeId)>,
+        is_allocator: bool,
     },
 
     // Closure {
@@ -719,6 +720,13 @@ impl Parser {
         let span_start = self.position();
         self.keyword(b"struct");
 
+        let is_allocator = if self.is_keyword(b"allocator") {
+            self.next();
+            true
+        } else {
+            false
+        };
+
         let name = self.typename();
         self.lcurly();
 
@@ -742,7 +750,15 @@ impl Parser {
 
         let span_end = self.position();
 
-        self.create_node(AstNode::Struct { name, fields }, span_start, span_end)
+        self.create_node(
+            AstNode::Struct {
+                name,
+                fields,
+                is_allocator,
+            },
+            span_start,
+            span_end,
+        )
     }
 
     pub fn expression_or_assignment(&mut self) -> NodeId {

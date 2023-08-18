@@ -182,6 +182,11 @@ fn int() -> TestResult {
 }
 
 #[test]
+fn lifetime_alloc_infer_success() -> TestResult {
+    test_example("lifetime_alloc_infer_success")
+}
+
+#[test]
 fn loop_() -> TestResult {
     test_example("loop")
 }
@@ -213,6 +218,11 @@ fn scope_struct_to_upper_scope() -> TestResult {
 #[test]
 fn scope_struct_to_upper_scope2() -> TestResult {
     test_example("scope_struct_to_upper_scope2")
+}
+
+#[test]
+fn struct_allocator() -> TestResult {
+    test_example("struct_allocator")
 }
 
 #[test]

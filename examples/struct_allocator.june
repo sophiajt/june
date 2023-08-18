@@ -1,0 +1,11 @@
+// output: 10
+
+struct allocator Box {
+    width: i64
+}
+
+fun main() {
+    let box = new Box(width: 10)
+
+    println(box.width)
+}

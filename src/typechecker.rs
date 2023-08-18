@@ -23,7 +23,10 @@ pub enum Type {
     F64,
     Bool,
     String,
-    Struct(Vec<(Vec<u8>, TypeId)>),
+    Struct {
+        fields: Vec<(Vec<u8>, TypeId)>,
+        is_allocator: bool,
+    },
     Pointer(AllocationType, TypeId),
 }
 
@@ -231,7 +234,12 @@ impl Typechecker {
         self.exit_scope();
     }
 
-    pub fn typecheck_struct(&mut self, name: NodeId, fields: Vec<(NodeId, NodeId)>) -> TypeId {
+    pub fn typecheck_struct(
+        &mut self,
+        name: NodeId,
+        fields: Vec<(NodeId, NodeId)>,
+        is_allocator: bool,
+    ) -> TypeId {
         let struct_name = self.compiler.get_source(name).to_vec();
 
         let mut output_fields = vec![];
@@ -243,7 +251,10 @@ impl Typechecker {
             output_fields.push((field_name, field_type));
         }
 
-        self.compiler.types.push(Type::Struct(output_fields));
+        self.compiler.types.push(Type::Struct {
+            fields: output_fields,
+            is_allocator,
+        });
 
         let type_id = TypeId(self.compiler.types.len() - 1);
 
@@ -275,8 +286,12 @@ impl Typechecker {
                     funs.push(self.typecheck_fun_predecl(*name, *params, *return_ty, *block));
                 }
 
-                AstNode::Struct { name, fields } => {
-                    self.typecheck_struct(*name, fields.clone());
+                AstNode::Struct {
+                    name,
+                    fields,
+                    is_allocator,
+                } => {
+                    self.typecheck_struct(*name, fields.clone(), *is_allocator);
                 }
                 _ => {}
             }
@@ -442,7 +457,7 @@ impl Typechecker {
                 let type_id = self.typecheck_node(target);
 
                 match &self.compiler.types[type_id.0] {
-                    Type::Struct(fields) => {
+                    Type::Struct { fields, .. } => {
                         let field_name = self.compiler.get_source(field);
                         for known_field in fields {
                             if known_field.0 == field_name {
@@ -454,7 +469,7 @@ impl Typechecker {
                         UNKNOWN_TYPE_ID
                     }
                     Type::Pointer(_, type_id) => match &self.compiler.types[type_id.0] {
-                        Type::Struct(fields) => {
+                        Type::Struct { fields, .. } => {
                             let field_name = self.compiler.get_source(field);
                             for known_field in fields {
                                 if known_field.0 == field_name {
@@ -647,7 +662,7 @@ impl Typechecker {
                 };
 
                 match &self.compiler.types[target_type_id.0] {
-                    Type::Struct(fields) => {
+                    Type::Struct { fields, .. } => {
                         for f in fields {
                             if f.0 == field_name {
                                 return f.1;
@@ -701,7 +716,7 @@ impl Typechecker {
                 self.typecheck_node(*value);
 
                 match &self.compiler.types[type_id.0] {
-                    Type::Struct(fields) => {
+                    Type::Struct { fields, .. } => {
                         let field_name = self.compiler.get_source(name);
                         for known_field in fields {
                             if known_field.0 == field_name {
@@ -713,7 +728,7 @@ impl Typechecker {
                         return UNKNOWN_TYPE_ID;
                     }
                     Type::Pointer(_, type_id) => match &self.compiler.types[type_id.0] {
-                        Type::Struct(fields) => {
+                        Type::Struct { fields, .. } => {
                             let field_name = self.compiler.get_source(name);
                             for known_field in fields {
                                 if known_field.0 == field_name {

@@ -148,8 +148,12 @@ impl Compiler {
                 }
                 self.print_helper(block, indent + 2);
             }
-            AstNode::Struct { name, fields } => {
-                println!("Struct:[{}]", node_id.0);
+            AstNode::Struct {
+                name,
+                fields,
+                is_allocator,
+            } => {
+                println!("Struct:[{}] allocator: {}", node_id.0, is_allocator);
                 self.print_helper(name, indent + 2);
                 for field in fields {
                     self.print_helper(&field.0, indent + 2);
@@ -450,8 +454,19 @@ impl Compiler {
         None
     }
 
+    pub fn is_allocator_type(&self, type_id: TypeId) -> bool {
+        match &self.types[type_id.0] {
+            Type::Pointer(_, pointer_type_id) => self.is_allocator_type(*pointer_type_id),
+            Type::Struct { is_allocator, .. } => *is_allocator,
+            _ => false,
+        }
+    }
+
     pub fn is_copyable_type(&self, type_id: TypeId) -> bool {
         // FIXME: we should probably clean up the struct/pointer thing a bit
-        !matches!(self.types[type_id.0], Type::Struct(..) | Type::Pointer(..))
+        !matches!(
+            self.types[type_id.0],
+            Type::Struct { .. } | Type::Pointer(..)
+        )
     }
 }

@@ -1,0 +1,22 @@
+// output: 33
+
+struct Stats {
+    age: i64
+}
+
+struct allocator Employee {
+    name: string,
+    stats: Stats,
+}
+
+fun helper(mut employee: Employee) {
+    employee.stats = new Stats(age: 33)
+}
+
+fun main() {
+    mut employee = new Employee(name: "Sophia", stats: new Stats(age: 22))
+
+    helper(employee)
+
+    println(employee.stats.age)
+}

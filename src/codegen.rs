@@ -19,7 +19,7 @@ impl Codegen {
 
     pub fn codegen_typename(&self, type_id: TypeId, output: &mut Vec<u8>) {
         match &self.compiler.types[type_id.0] {
-            Type::Struct(..) => {
+            Type::Struct { .. } => {
                 output.extend_from_slice(b"struct struct_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
             }
@@ -51,6 +51,7 @@ impl Codegen {
         &self,
         type_id: TypeId,
         fields: &[(Vec<u8>, TypeId)],
+        is_allocator: bool,
         output: &mut Vec<u8>,
     ) {
         let Type::Pointer(_, inner_type_id) = &self.compiler.types[type_id.0] else {
@@ -79,6 +80,10 @@ impl Codegen {
         output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
         output.extend_from_slice(b"), allocation_id);\n");
 
+        if is_allocator {
+            output.extend_from_slice(b"tmp->__allocation_id__ = allocation_id;\n");
+        }
+
         for field in fields {
             output.extend_from_slice(b"tmp->");
             output.extend_from_slice(&field.0);
@@ -92,10 +97,19 @@ impl Codegen {
 
     pub fn codegen_structs(&self, output: &mut Vec<u8>) {
         for (idx, ty) in self.compiler.types.iter().enumerate() {
-            if let Type::Struct(fields) = ty {
+            if let Type::Struct {
+                fields,
+                is_allocator,
+            } = ty
+            {
                 output.extend_from_slice(b"struct struct_");
                 output.extend_from_slice(idx.to_string().as_bytes());
                 output.extend_from_slice(b"{\n");
+                if *is_allocator {
+                    self.codegen_typename(I64_TYPE_ID, output);
+                    output.push(b' ');
+                    output.extend_from_slice(b"__allocation_id__;\n");
+                }
                 for field in fields {
                     self.codegen_typename(field.1, output);
                     output.push(b' ');
@@ -106,7 +120,7 @@ impl Codegen {
                 output.extend_from_slice(b"};\n");
 
                 if let Some(ptr) = self.compiler.find_pointer_to(TypeId(idx)) {
-                    self.codegen_allocator_function(ptr, fields, output);
+                    self.codegen_allocator_function(ptr, fields, *is_allocator, output);
                 } else {
                     panic!("internal error: can't find pointer to type")
                 }
@@ -177,9 +191,8 @@ impl Codegen {
     pub fn codegen_annotation(&self, node_id: NodeId, output: &mut Vec<u8>) {
         match self.compiler.node_lifetimes[node_id.0] {
             AllocationLifetime::Caller => output.extend_from_slice(b"allocation_id"),
-            AllocationLifetime::Param { var_id } => {
-                output.extend_from_slice(format!("/* param({:?}), */ ", var_id).as_bytes())
-            }
+            AllocationLifetime::Param { var_id } => output
+                .extend_from_slice(format!("variable_{}->__allocation_id__", var_id.0).as_bytes()),
             AllocationLifetime::Scope { level } => {
                 output.extend_from_slice(format!("allocation_id + {} ", level).as_bytes())
             }

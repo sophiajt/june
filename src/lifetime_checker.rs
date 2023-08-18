@@ -100,33 +100,36 @@ impl LifetimeChecker {
             }
             AllocationLifetime::Scope {
                 level: current_level,
-            } => {
-                match lifetime {
-                    AllocationLifetime::Scope { level: new_level } => {
-                        if new_level < current_level {
-                            self.compiler.node_lifetimes[node_id.0] = lifetime;
-                        }
+            } => match lifetime {
+                AllocationLifetime::Scope { level: new_level } => {
+                    if new_level < current_level {
+                        self.compiler.node_lifetimes[node_id.0] = lifetime;
                     }
-                    AllocationLifetime::Param { var_id } => {
-                        // FIXME: add logic
+                }
+                AllocationLifetime::Param { var_id } => {
+                    let var_type = self.compiler.variables[var_id.0].ty;
+
+                    if !self.compiler.is_allocator_type(var_type) {
                         let param_name =
                             String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
                         self.error(
                             format!(
-                                "can't find compatible lifetime to match param '{}'",
+                                "param '{}' is not an allocator, so we can't infer a safe lifetime",
                                 param_name
                             ),
                             node_id,
                         );
-                    }
-                    AllocationLifetime::Caller => {
+                    } else {
                         self.compiler.node_lifetimes[node_id.0] = lifetime;
                     }
-                    _ => {
-                        self.error("can't expand lifetime to unknown", node_id);
-                    }
                 }
-            }
+                AllocationLifetime::Caller => {
+                    self.compiler.node_lifetimes[node_id.0] = lifetime;
+                }
+                _ => {
+                    self.error("can't expand lifetime to unknown", node_id);
+                }
+            },
         }
     }
 
