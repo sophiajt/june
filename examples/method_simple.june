@@ -1,0 +1,15 @@
+// output: 100
+
+struct Box {
+    width: i64
+
+    fun get_area(self) -> i64 {
+        return .width * .width
+    }
+}
+
+fun main() {
+    let box = new Box(width: 10)
+
+    println(box.get_area())
+}

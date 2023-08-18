@@ -207,6 +207,11 @@ fn loop_with_temporary() -> TestResult {
 }
 
 #[test]
+fn method_simple() -> TestResult {
+    test_example("method_simple")
+}
+
+#[test]
 fn return_top_level_error() -> TestResult {
     test_example("return_top_level_error")
 }

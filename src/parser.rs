@@ -89,6 +89,7 @@ pub enum AstNode {
     Struct {
         name: NodeId,
         fields: Vec<(NodeId, NodeId)>,
+        methods: Vec<NodeId>,
         is_allocator: bool,
     },
 
@@ -118,6 +119,10 @@ pub enum AstNode {
     MemberAccess {
         target: NodeId,
         field: NodeId,
+    },
+    MethodCall {
+        target: NodeId,
+        call: NodeId,
     },
     Block(BlockId),
     If {
@@ -560,6 +565,10 @@ impl Parser {
                 ..
             }) => true,
             Some(Token {
+                token_type: TokenType::Dot,
+                ..
+            }) => true,
+            Some(Token {
                 token_type: TokenType::Name,
                 span_start,
                 span_end,
@@ -723,6 +732,7 @@ impl Parser {
 
     pub fn struct_definition(&mut self) -> NodeId {
         let mut fields = vec![];
+        let mut methods = vec![];
 
         let span_start = self.position();
         let mut span_end = self.position();
@@ -747,21 +757,28 @@ impl Parser {
                 break;
             }
 
-            // field
-            let field_name = self.name();
-            self.colon();
-            let field_type = self.typename();
-            if self.is_comma() {
-                self.comma();
-            }
+            if self.is_keyword(b"fun") {
+                let fun = self.fun_definition();
 
-            fields.push((field_name, field_type));
+                methods.push(fun);
+            } else {
+                // field
+                let field_name = self.name();
+                self.colon();
+                let field_type = self.typename();
+                if self.is_comma() {
+                    self.comma();
+                }
+
+                fields.push((field_name, field_type));
+            }
         }
 
         self.create_node(
             AstNode::Struct {
                 name,
                 fields,
+                methods,
                 is_allocator,
             },
             span_start,
@@ -895,6 +912,11 @@ impl Parser {
             self.number()
         } else if self.is_name() {
             self.variable_or_call()
+        } else if self.is_dot() {
+            let span_start = self.position();
+            let span_end = self.position() + 1;
+
+            self.create_node(AstNode::Variable, span_start, span_end)
         } else {
             self.error("incomplete expression")
         };
@@ -912,17 +934,44 @@ impl Parser {
                 // Member access
                 self.next();
 
-                let field = self.name();
-                let span_end = self.get_span_end(field);
+                let prev_offset = self.span_offset;
 
-                expr = self.create_node(
-                    AstNode::MemberAccess {
-                        target: expr,
-                        field,
-                    },
-                    span_start,
-                    span_end,
-                );
+                let name = self.name();
+
+                let field_or_call = if self.is_lparen() {
+                    self.span_offset = prev_offset;
+                    self.variable_or_call()
+                } else {
+                    name
+                };
+                let span_end = self.get_span_end(field_or_call);
+
+                match &mut self.compiler.ast_nodes[field_or_call.0] {
+                    AstNode::Variable | AstNode::Name => {
+                        expr = self.create_node(
+                            AstNode::MemberAccess {
+                                target: expr,
+                                field: field_or_call,
+                            },
+                            span_start,
+                            span_end,
+                        );
+                    }
+                    AstNode::Call { args, .. } => {
+                        args.insert(0, expr);
+                        expr = self.create_node(
+                            AstNode::MethodCall {
+                                target: expr,
+                                call: field_or_call,
+                            },
+                            span_start,
+                            span_end,
+                        )
+                    }
+                    _ => {
+                        self.error("expected field or method call");
+                    }
+                }
             } else {
                 return expr;
             }
@@ -1231,7 +1280,23 @@ impl Parser {
                     span_end,
                 ))
             } else {
-                params.push(self.error("parameter missing type"))
+                let name_contents = self.compiler.get_source(name);
+
+                if name_contents == b"self" {
+                    let span_end = self.get_span_end(name);
+
+                    params.push(self.create_node(
+                        AstNode::Param {
+                            name,
+                            ty: name,
+                            is_mutable,
+                        },
+                        span_start,
+                        span_end,
+                    ))
+                } else {
+                    params.push(self.error("parameter missing type"))
+                }
             }
         }
 

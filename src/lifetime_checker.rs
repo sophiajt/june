@@ -223,6 +223,22 @@ impl LifetimeChecker {
                 }
                 self.check_node_lifetime(target, scope_level);
             }
+            AstNode::MethodCall { target, call } => {
+                // Check the type of the access. If it isn't something that can
+                // affect lifetimes, we don't need to push the lifetime
+                // requirement deeper
+
+                let target = *target;
+                let call = *call;
+
+                let field_type = self.compiler.node_types[node_id.0];
+                if !self.compiler.is_copyable_type(field_type) {
+                    self.expand_lifetime_with_node(target, node_id);
+                }
+                self.check_node_lifetime(target, scope_level);
+
+                self.check_node_lifetime(call, scope_level);
+            }
             AstNode::BinaryOp { lhs, rhs, op } => {
                 let lhs = *lhs;
                 let rhs = *rhs;

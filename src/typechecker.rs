@@ -15,6 +15,9 @@ pub struct VarId(pub usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FunId(pub usize);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ScopeId(pub usize);
+
 #[derive(Debug, PartialEq)]
 pub enum Type {
     Unknown,
@@ -25,6 +28,7 @@ pub enum Type {
     String,
     Struct {
         fields: Vec<(Vec<u8>, TypeId)>,
+        methods: Vec<FunId>,
         is_allocator: bool,
     },
     Pointer(AllocationType, TypeId),
@@ -238,6 +242,7 @@ impl Typechecker {
         &mut self,
         name: NodeId,
         fields: Vec<(NodeId, NodeId)>,
+        methods: Vec<NodeId>,
         is_allocator: bool,
     ) -> TypeId {
         let struct_name = self.compiler.get_source(name).to_vec();
@@ -253,6 +258,7 @@ impl Typechecker {
 
         self.compiler.types.push(Type::Struct {
             fields: output_fields,
+            methods: vec![],
             is_allocator,
         });
 
@@ -263,6 +269,41 @@ impl Typechecker {
             .push(Type::Pointer(AllocationType::Normal, type_id));
 
         self.add_type_to_scope(struct_name, type_id);
+
+        if !methods.is_empty() {
+            self.enter_scope();
+
+            self.add_type_to_scope(b"self".to_vec(), type_id);
+
+            let mut fun_ids = vec![];
+
+            for method in methods {
+                let AstNode::Fun { name, params, return_ty, block } = &self.compiler.ast_nodes[method.0] else {
+                    self.error("internal error: can't find method definition during typecheck", method);
+                    return VOID_TYPE_ID;
+                };
+                let name = *name;
+                let params = *params;
+                let return_ty = *return_ty;
+                let block = *block;
+
+                fun_ids.push(self.typecheck_fun_predecl(name, params, return_ty, block));
+            }
+
+            for fun_id in &fun_ids {
+                self.typecheck_fun(*fun_id);
+            }
+
+            self.exit_scope();
+
+            let Type::Struct {
+                methods, ..
+            } = &mut self.compiler.types[type_id.0] else {
+                panic!("internal error: previously inserted struct can't be found");
+            };
+
+            *methods = fun_ids;
+        }
 
         type_id
     }
@@ -289,9 +330,10 @@ impl Typechecker {
                 AstNode::Struct {
                     name,
                     fields,
+                    methods,
                     is_allocator,
                 } => {
-                    self.typecheck_struct(*name, fields.clone(), *is_allocator);
+                    self.typecheck_struct(*name, fields.clone(), methods.clone(), *is_allocator);
                 }
                 _ => {}
             }
@@ -313,86 +355,91 @@ impl Typechecker {
         lhs == rhs
     }
 
-    pub fn typecheck_call(&mut self, head: NodeId, args: &[NodeId]) -> TypeId {
-        if let Some(fun_id) = self.find_function_in_scope(head) {
-            let Function {
-                params,
-                return_type,
-                ..
-            } = &self.compiler.functions[fun_id.0];
+    pub fn typecheck_call_with_fun_id(
+        &mut self,
+        name: NodeId,
+        fun_id: FunId,
+        args: &[NodeId],
+    ) -> TypeId {
+        let Function {
+            params,
+            return_type,
+            ..
+        } = &self.compiler.functions[fun_id.0];
 
-            let params = params.clone();
-            let return_type = *return_type;
+        let params = params.clone();
+        let return_type = *return_type;
 
-            if fun_id.0 == 0 {
-                // Just for now, special-case println
-                self.compiler.fun_resolution.insert(head, *fun_id);
-                for arg in args {
-                    // TODO: add name-checking
-                    let arg = *arg;
-
-                    self.typecheck_node(arg);
-                }
-
-                return VOID_TYPE_ID;
-            }
-
-            if args.len() != params.len() {
-                self.error(
-                    &format!("expected {} args, found {}", params.len(), args.len()),
-                    head,
-                );
-                return return_type;
-            }
-
-            // TODO: do we want to wait until all params are checked
-            // before we mark this as resolved?
-            self.compiler.fun_resolution.insert(head, *fun_id);
-
-            for (arg, param) in args.iter().zip(params) {
+        if fun_id.0 == 0 {
+            // Just for now, special-case println
+            self.compiler.fun_resolution.insert(name, fun_id);
+            for arg in args {
                 // TODO: add name-checking
                 let arg = *arg;
 
-                match &self.compiler.ast_nodes[arg.0] {
-                    AstNode::NamedValue { name, value } => {
-                        let name = *name;
-                        let value = *value;
+                self.typecheck_node(arg);
+            }
 
-                        let arg_ty = self.typecheck_node(value);
+            return VOID_TYPE_ID;
+        }
 
-                        if !self
-                            .is_type_compatible(arg_ty, self.compiler.variables[param.var_id.0].ty)
-                        {
-                            // FIXME: make this a better error
-                            self.error("types incompatible with function", value);
-                        }
+        if args.len() != params.len() {
+            self.error(
+                &format!("expected {} args, found {}", params.len(), args.len()),
+                name,
+            );
+            return return_type;
+        }
 
-                        let arg_name = self.compiler.get_source(name);
+        // TODO: do we want to wait until all params are checked
+        // before we mark this as resolved?
+        self.compiler.fun_resolution.insert(name, fun_id);
 
-                        if arg_name != param.name {
-                            self.error(
-                                &format!(
-                                    "expected name '{}'",
-                                    String::from_utf8_lossy(&param.name)
-                                ),
-                                name,
-                            )
-                        }
+        for (arg, param) in args.iter().zip(params) {
+            // TODO: add name-checking
+            let arg = *arg;
+
+            match &self.compiler.ast_nodes[arg.0] {
+                AstNode::NamedValue { name, value } => {
+                    let name = *name;
+                    let value = *value;
+
+                    let arg_ty = self.typecheck_node(value);
+
+                    if !self.is_type_compatible(arg_ty, self.compiler.variables[param.var_id.0].ty)
+                    {
+                        // FIXME: make this a better error
+                        self.error("types incompatible with function", value);
                     }
-                    _ => {
-                        let arg_type = self.typecheck_node(arg);
-                        let variable = &self.compiler.variables[param.var_id.0];
 
-                        if !self.is_type_compatible(arg_type, variable.ty) {
-                            // FIXME: make this a better type error
-                            self.error("type mismatch for arg", arg);
-                            return return_type;
-                        }
+                    let arg_name = self.compiler.get_source(name);
+
+                    if arg_name != param.name {
+                        self.error(
+                            &format!("expected name '{}'", String::from_utf8_lossy(&param.name)),
+                            name,
+                        )
+                    }
+                }
+                _ => {
+                    let arg_type = self.typecheck_node(arg);
+                    let variable = &self.compiler.variables[param.var_id.0];
+
+                    if !self.is_type_compatible(arg_type, variable.ty) {
+                        // FIXME: make this a better type error
+                        self.error("type mismatch for arg", arg);
+                        return return_type;
                     }
                 }
             }
+        }
 
-            return_type
+        return_type
+    }
+
+    pub fn typecheck_call(&mut self, head: NodeId, args: &[NodeId]) -> TypeId {
+        if let Some(fun_id) = self.find_function_in_scope(head) {
+            self.typecheck_call_with_fun_id(head, *fun_id, args)
         } else {
             self.error("unknown function", head);
             UNKNOWN_TYPE_ID
@@ -456,6 +503,11 @@ impl Typechecker {
 
                 let type_id = self.typecheck_node(target);
 
+                let type_id = match &self.compiler.types[type_id.0] {
+                    Type::Pointer(_, type_id) => *type_id,
+                    _ => type_id,
+                };
+
                 match &self.compiler.types[type_id.0] {
                     Type::Struct { fields, .. } => {
                         let field_name = self.compiler.get_source(field);
@@ -468,28 +520,50 @@ impl Typechecker {
                         self.error("unknown field", field);
                         UNKNOWN_TYPE_ID
                     }
-                    Type::Pointer(_, type_id) => match &self.compiler.types[type_id.0] {
-                        Type::Struct { fields, .. } => {
-                            let field_name = self.compiler.get_source(field);
-                            for known_field in fields {
-                                if known_field.0 == field_name {
-                                    self.compiler.node_types[node_id.0] = known_field.1;
-                                    return known_field.1;
-                                }
-                            }
-                            self.error("unknown field", field);
-                            UNKNOWN_TYPE_ID
-                        }
-                        _ => {
-                            self.error("field access on non-struct type", target);
-                            UNKNOWN_TYPE_ID
-                        }
-                    },
                     _ => {
                         self.error("field access on non-struct type", target);
                         UNKNOWN_TYPE_ID
                     }
                 }
+            }
+            AstNode::MethodCall { target, call } => {
+                let target = *target;
+                let call = *call;
+
+                let AstNode::Call { head, args } = &self.compiler.ast_nodes[call.0] else {
+                    panic!("Internal error: method call using a non-call")
+                };
+
+                let head = *head;
+                // FIXME: fix clone
+                let args = args.clone();
+
+                let name = self.compiler.get_source(head).to_vec();
+                let type_id = self.typecheck_node(target);
+
+                let type_id = match &self.compiler.types[type_id.0] {
+                    Type::Pointer(_, type_id) => *type_id,
+                    _ => type_id,
+                };
+
+                match &self.compiler.types[type_id.0] {
+                    Type::Struct { methods, .. } => {
+                        for method in methods {
+                            let method_name = self
+                                .compiler
+                                .get_source(self.compiler.functions[method.0].name);
+                            if method_name == name {
+                                let type_id = self.typecheck_call_with_fun_id(head, *method, &args);
+                                self.compiler.node_types[node_id.0] = type_id;
+                                return type_id;
+                            }
+                        }
+                        self.error("can't find method in struct", head);
+                    }
+                    _ => self.error("expected struct type for method call", target),
+                }
+
+                VOID_TYPE_ID
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 let lhs = *lhs;
@@ -555,7 +629,14 @@ impl Typechecker {
                     if let Some(expected_type) = expected_type {
                         if !self.is_type_compatible(expected_type, expr_type) {
                             // FIXME: actually print the types
-                            self.error("incompatible type at return", return_expr);
+
+                            self.error(
+                                format!(
+                                    "incompatible type at return, found: {:?} expected: {:?}",
+                                    expr_type, expected_type
+                                ),
+                                return_expr,
+                            );
                         }
                     } else {
                         self.error("return used outside of a function", return_expr);
@@ -830,6 +911,10 @@ impl Typechecker {
     pub fn find_variable_in_scope(&self, variable_name: NodeId) -> Option<&VarId> {
         let name = &self.compiler.source
             [self.compiler.span_start[variable_name.0]..self.compiler.span_end[variable_name.0]];
+
+        // Expand the shorthand, and look for 'self' instead
+        let name = if name == b"." { b"self" } else { name };
+
         for scope in self.scope.iter().rev() {
             if let Some(value) = scope.variables.get(name) {
                 return Some(value);

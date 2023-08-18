@@ -100,6 +100,7 @@ impl Codegen {
             if let Type::Struct {
                 fields,
                 is_allocator,
+                ..
             } = ty
             {
                 output.extend_from_slice(b"struct struct_");
@@ -227,12 +228,14 @@ impl Codegen {
                 output.extend_from_slice(src);
             }
             AstNode::Variable => {
-                //let src = self.compiler.get_source(node_id);
+                let src = self.compiler.get_source(node_id);
+
                 let var_id = self
                     .compiler
                     .var_resolution
                     .get(&node_id)
                     .unwrap_or_else(|| {
+                        println!("{:?}", String::from_utf8_lossy(src));
                         panic!(
                             "internal error: unresolved variable in codegen: {}",
                             node_id.0
@@ -398,6 +401,9 @@ impl Codegen {
                 self.codegen_node(*target, output);
                 output.extend_from_slice(b"->");
                 self.codegen_node(*field, output);
+            }
+            AstNode::MethodCall { call, .. } => {
+                self.codegen_node(*call, output);
             }
             AstNode::Statement(node_id) => {
                 self.codegen_node(*node_id, output);

@@ -151,6 +151,7 @@ impl Compiler {
             AstNode::Struct {
                 name,
                 fields,
+                methods,
                 is_allocator,
             } => {
                 println!("Struct:[{}] allocator: {}", node_id.0, is_allocator);
@@ -158,6 +159,9 @@ impl Compiler {
                 for field in fields {
                     self.print_helper(&field.0, indent + 2);
                     self.print_helper(&field.1, indent + 2);
+                }
+                for method in methods {
+                    self.print_helper(method, indent + 2);
                 }
             }
             AstNode::Block(block_id) => {
@@ -212,6 +216,14 @@ impl Compiler {
                 for arg in args {
                     self.print_helper(arg, indent + 2);
                 }
+            }
+            AstNode::MethodCall { target, call } => {
+                println!(
+                    "MethodCall ({}, {}):[{}]",
+                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
+                );
+                self.print_helper(target, indent + 2);
+                self.print_helper(call, indent + 2);
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 println!(
