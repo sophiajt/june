@@ -726,7 +726,11 @@ impl Typechecker {
                     let var = &self.compiler.variables[var_id.0];
                     let ty = var.ty;
                     if !var.is_mutable {
-                        self.error("variable is not mutable", lvalue);
+                        if self.compiler.get_source(lvalue) == b"." {
+                            self.error("'self' variable is not mutable", lvalue);
+                        } else {
+                            self.error("variable is not mutable", lvalue);
+                        }
                     }
                     ty
                 } else {

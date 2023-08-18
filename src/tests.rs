@@ -212,6 +212,11 @@ fn method_and_struct_allocator() -> TestResult {
 }
 
 #[test]
+fn method_immutable_self_error() -> TestResult {
+    test_example("method_immutable_self_error")
+}
+
+#[test]
 fn method_in_method() -> TestResult {
     test_example("method_in_method")
 }
