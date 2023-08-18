@@ -84,6 +84,7 @@ pub enum AstNode {
     Param {
         name: NodeId,
         ty: NodeId,
+        is_mutable: bool,
     },
     Struct {
         name: NodeId,
@@ -1172,6 +1173,14 @@ impl Parser {
 
             // Parse param
             let span_start = self.position();
+
+            let is_mutable = if self.is_keyword(b"mut") {
+                self.next();
+                true
+            } else {
+                false
+            };
+
             let name = self.name();
             if self.is_colon() {
                 self.colon();
@@ -1180,7 +1189,15 @@ impl Parser {
 
                 let span_end = self.position();
 
-                params.push(self.create_node(AstNode::Param { name, ty }, span_start, span_end))
+                params.push(self.create_node(
+                    AstNode::Param {
+                        name,
+                        ty,
+                        is_mutable,
+                    },
+                    span_start,
+                    span_end,
+                ))
             } else {
                 params.push(self.error("parameter missing type"))
             }

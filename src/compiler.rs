@@ -114,10 +114,14 @@ impl Compiler {
                 }
                 self.print_helper(initializer, indent + 2);
             }
-            AstNode::Param { name, ty } => {
+            AstNode::Param {
+                name,
+                ty,
+                is_mutable,
+            } => {
                 println!(
-                    "Param ({}, {})[{}]:",
-                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
+                    "Param ({}, {}, mut: {})[{}]:",
+                    self.span_start[node_id.0], self.span_end[node_id.0], is_mutable, node_id.0
                 );
                 self.print_helper(name, indent + 2);
                 self.print_helper(ty, indent + 2);

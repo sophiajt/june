@@ -159,13 +159,19 @@ impl Typechecker {
         //FIXME: remove clone?
         if let AstNode::Params(unchecked_params) = self.compiler.ast_nodes[params.0].clone() {
             for unchecked_param in unchecked_params {
-                if let AstNode::Param { name, ty } = &self.compiler.ast_nodes[unchecked_param.0] {
+                if let AstNode::Param {
+                    name,
+                    ty,
+                    is_mutable,
+                } = &self.compiler.ast_nodes[unchecked_param.0]
+                {
                     let name = *name;
                     let param_name = self.compiler.get_source(name).to_vec();
                     let ty = *ty;
+                    let is_mutable = *is_mutable;
                     let ty = self.typecheck_typename(ty);
 
-                    let var_id = self.define_variable(param_name.clone(), ty, false, name);
+                    let var_id = self.define_variable(param_name.clone(), ty, is_mutable, name);
                     fun_params.push(Param::new(param_name, var_id));
                 } else {
                     self.error("expected function parameter", unchecked_param);

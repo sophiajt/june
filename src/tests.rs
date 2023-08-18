@@ -251,6 +251,11 @@ fn struct_field_helper() -> TestResult {
 }
 
 #[test]
+fn struct_field_mutable_param() -> TestResult {
+    test_example("struct_field_mutable_param")
+}
+
+#[test]
 fn struct_field_update() -> TestResult {
     test_example("struct_field_update")
 }
