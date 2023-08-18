@@ -207,6 +207,11 @@ fn loop_with_temporary() -> TestResult {
 }
 
 #[test]
+fn method_and_struct_allocator() -> TestResult {
+    test_example("method_and_struct_allocator")
+}
+
+#[test]
 fn method_mutation() -> TestResult {
     test_example("method_mutation")
 }

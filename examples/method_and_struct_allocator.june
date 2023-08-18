@@ -1,0 +1,20 @@
+// output: 99
+
+struct Stat {
+    width: i64
+}
+
+struct allocator Box {
+    stat: Stat
+
+    fun recreate_stat(mut self) {
+        .stat = new Stat(width: 99)
+    }
+}
+
+fun main() {
+    let box = new Box(stat: new Stat(width: 22))
+    box.recreate_stat()
+
+    println(box.stat.width)
+}
