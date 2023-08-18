@@ -251,6 +251,11 @@ fn struct_field_helper() -> TestResult {
 }
 
 #[test]
+fn struct_field_update() -> TestResult {
+    test_example("struct_field_update")
+}
+
+#[test]
 fn struct_helper() -> TestResult {
     test_example("struct_helper")
 }

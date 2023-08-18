@@ -1,0 +1,12 @@
+// output: 200
+
+struct Employee {
+    name: string,
+    age: i64,
+}
+
+fun main() {
+    mut employee = new Employee(name: "Bob", age: 123)
+    employee.age = 200;
+    println(employee.age)
+}

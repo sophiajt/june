@@ -502,16 +502,7 @@ impl Typechecker {
                     | AstNode::SubtractAssignment
                     | AstNode::MultiplyAssignment
                     | AstNode::DivideAssignment => {
-                        let var_id = self.compiler.var_resolution.get(&lhs);
-
-                        if let Some(var_id) = var_id {
-                            let var = &self.compiler.variables[var_id.0];
-                            if !var.is_mutable {
-                                self.error("variable is not mutable", lhs)
-                            }
-                        } else {
-                            self.error("expected variable on left-hand side of assignment", lhs)
-                        }
+                        let lhs_ty = self.typecheck_lvalue(lhs);
 
                         if lhs_ty != rhs_ty {
                             // FIXME: actually say the types
@@ -614,6 +605,65 @@ impl Typechecker {
         self.compiler.node_types[node_id.0] = node_type;
 
         node_type
+    }
+
+    pub fn typecheck_lvalue(&mut self, lvalue: NodeId) -> TypeId {
+        match &self.compiler.ast_nodes[lvalue.0] {
+            AstNode::Variable => {
+                let var_id = self.compiler.var_resolution.get(&lvalue);
+
+                if let Some(var_id) = var_id {
+                    let var = &self.compiler.variables[var_id.0];
+                    let ty = var.ty;
+                    if !var.is_mutable {
+                        self.error("variable is not mutable", lvalue);
+                    }
+                    ty
+                } else {
+                    self.error(
+                        "internal error: variable unresolved when checking lvalue",
+                        lvalue,
+                    );
+                    VOID_TYPE_ID
+                }
+            }
+            AstNode::MemberAccess { target, field } => {
+                let target = *target;
+                let field = *field;
+
+                let head_type_id = self.typecheck_lvalue(target);
+
+                let field_name = self.compiler.get_source(field);
+
+                let target_type_id = match &self.compiler.types[head_type_id.0] {
+                    Type::Pointer(_, inner_type_id) => *inner_type_id,
+                    _ => head_type_id,
+                };
+
+                match &self.compiler.types[target_type_id.0] {
+                    Type::Struct(fields) => {
+                        for f in fields {
+                            if f.0 == field_name {
+                                return f.1;
+                            }
+                        }
+                        self.error("could not find field", field);
+                        VOID_TYPE_ID
+                    }
+                    x => {
+                        self.error(
+                            format!("field access only supported on structs, not {:?}", x),
+                            field,
+                        );
+                        VOID_TYPE_ID
+                    }
+                }
+            }
+            _ => {
+                self.error("unsupported lvalue, needs variable or field", lvalue);
+                VOID_TYPE_ID
+            }
+        }
     }
 
     pub fn typecheck_allocation(
