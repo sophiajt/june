@@ -1,0 +1,16 @@
+// output: 15
+
+struct Box {
+    width: i64
+
+    fun grow_width(mut self, amount: i64) {
+        .width += amount
+    }
+}
+
+fun main() {
+    let box = new Box(width: 10)
+    box.grow_width(5)
+
+    println(box.width)
+}

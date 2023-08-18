@@ -207,6 +207,11 @@ fn loop_with_temporary() -> TestResult {
 }
 
 #[test]
+fn method_mutation() -> TestResult {
+    test_example("method_mutation")
+}
+
+#[test]
 fn method_simple() -> TestResult {
     test_example("method_simple")
 }
