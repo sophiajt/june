@@ -197,6 +197,11 @@ fn lifetime_error() -> TestResult {
 }
 
 #[test]
+fn lifetime_infer_helper_function() -> TestResult {
+    test_example("lifetime_infer_helper_function")
+}
+
+#[test]
 fn loop_() -> TestResult {
     test_example("loop")
 }

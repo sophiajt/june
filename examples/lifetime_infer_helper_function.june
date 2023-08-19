@@ -1,0 +1,22 @@
+// output: 33
+
+struct Stats {
+    age: i64
+}
+
+struct Employee {
+    name: string,
+    stats: Stats,
+}
+
+fun helper() -> Stats {
+    return new Stats(age: 33)
+}
+
+fun main() {
+    mut employee = new Employee(name: "Sophia", stats: new Stats(age: 22))
+
+    employee.stats = helper()
+
+    println(employee.stats.age)
+}
