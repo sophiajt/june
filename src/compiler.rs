@@ -21,9 +21,12 @@ pub struct Compiler {
 
     pub file_offsets: Vec<(String, usize, usize)>, // fname, start, end
 
-    // Definitions
+    // Definitions:
+    // indexed by VarId
     pub variables: Vec<Variable>,
+    // indexed by FunId
     pub functions: Vec<Function>,
+    // indexed by TypeId
     pub types: Vec<Type>,
 
     // Use/def

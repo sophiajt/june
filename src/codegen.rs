@@ -466,7 +466,7 @@ impl Codegen {
                 self.codegen_node(*node_id, output);
                 output.extend_from_slice(b";\n");
             }
-            if let Some(scope_level) = self.compiler.blocks[block_id.0].allocates_at {
+            if let Some(scope_level) = self.compiler.blocks[block_id.0].may_locally_allocate {
                 output.extend_from_slice(
                     format!("deallocate(allocator, allocation_id + {});\n", scope_level).as_bytes(),
                 );

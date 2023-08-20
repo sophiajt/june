@@ -15,19 +15,21 @@ pub enum AllocationLifetime {
 
 pub struct LifetimeChecker {
     compiler: Compiler,
-    current_block: Vec<BlockId>,
+    current_blocks: Vec<BlockId>,
+    possible_allocation_sites: Vec<(Vec<BlockId>, usize, NodeId)>,
 }
 
 impl LifetimeChecker {
     pub fn new(compiler: Compiler) -> Self {
         Self {
             compiler,
-            current_block: vec![],
+            current_blocks: vec![],
+            possible_allocation_sites: vec![],
         }
     }
 
     pub fn check_block_lifetime(&mut self, block_id: BlockId, scope_level: usize) {
-        self.current_block.push(block_id);
+        self.current_blocks.push(block_id);
 
         // FIXME: remove clone
         let block = self.compiler.blocks[block_id.0].clone();
@@ -36,7 +38,7 @@ impl LifetimeChecker {
             self.check_node_lifetime(*node_id, scope_level);
         }
 
-        self.current_block.pop();
+        self.current_blocks.pop();
     }
 
     pub fn error(&mut self, message: impl Into<String>, node_id: NodeId) {
@@ -133,13 +135,9 @@ impl LifetimeChecker {
         }
     }
 
-    pub fn current_block_may_allocate(&mut self, scope_level: usize) {
-        let block_id = *self
-            .current_block
-            .last()
-            .expect("internal error: lifetime checker missing block");
-
-        self.compiler.blocks[block_id.0].allocates_at = Some(scope_level);
+    pub fn current_block_may_allocate(&mut self, scope_level: usize, node_id: NodeId) {
+        self.possible_allocation_sites
+            .push((self.current_blocks.clone(), scope_level, node_id))
     }
 
     pub fn check_lvalue_lifetime(&mut self, lvalue: NodeId) {
@@ -308,14 +306,11 @@ impl LifetimeChecker {
                     self.check_node_lifetime(arg, scope_level)
                 }
 
-                if let AllocationLifetime::Scope { level } = self.compiler.node_lifetimes[node_id.0]
-                {
-                    let fun_id = self.compiler.fun_resolution.get(&head);
+                let fun_id = self.compiler.fun_resolution.get(&head);
 
-                    // note: fun_id 0 is currently the built-in print
-                    if level == scope_level && !matches!(fun_id, Some(FunId(0))) {
-                        self.current_block_may_allocate(level);
-                    }
+                // note: fun_id 0 is currently the built-in print
+                if !matches!(fun_id, Some(FunId(0))) {
+                    self.current_block_may_allocate(scope_level, node_id);
                 }
             }
             AstNode::New(_, allocation_node_id) => {
@@ -339,12 +334,7 @@ impl LifetimeChecker {
 
                 self.check_node_lifetime(allocation_node_id, scope_level);
 
-                if let AllocationLifetime::Scope { level } = self.compiler.node_lifetimes[node_id.0]
-                {
-                    if level == scope_level {
-                        self.current_block_may_allocate(level);
-                    }
-                }
+                self.current_block_may_allocate(scope_level, node_id);
             }
             AstNode::Return(return_expr) => {
                 if let Some(return_expr) = return_expr {
@@ -392,6 +382,17 @@ impl LifetimeChecker {
 
             let body = fun.body;
             self.check_node_lifetime(body, 0);
+        }
+
+        // Before we leave, go through our possible allocation sites and see
+        // which local scopes allocate for themselves. If they do, mark their
+        // blocks so we can properly deallocate these resources
+        for (block_ids, scope_level, node_id) in self.possible_allocation_sites {
+            if let AllocationLifetime::Scope { level } = &self.compiler.node_lifetimes[node_id.0] {
+                if let Some(block_id) = block_ids.into_iter().rev().nth(scope_level - level) {
+                    self.compiler.blocks[block_id.0].may_locally_allocate = Some(*level);
+                }
+            }
         }
 
         self.compiler

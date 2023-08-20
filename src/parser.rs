@@ -223,14 +223,14 @@ pub struct Token {
 #[derive(Debug, Clone)]
 pub struct Block {
     pub nodes: Vec<NodeId>,
-    pub allocates_at: Option<usize>,
+    pub may_locally_allocate: Option<usize>,
 }
 
 impl Block {
     pub fn new(nodes: Vec<NodeId>) -> Block {
         Block {
             nodes,
-            allocates_at: None,
+            may_locally_allocate: None,
         }
     }
 }
