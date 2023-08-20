@@ -249,6 +249,9 @@ impl LifetimeChecker {
 
                     self.expand_lifetime_with_node(rhs, lhs);
 
+                    // Make sure any new lifetimes get back to the variable declaration
+                    self.check_node_lifetime(rhs, scope_level);
+
                     if self.compiler.node_lifetimes[lhs.0] != self.compiler.node_lifetimes[rhs.0] {
                         self.error("assignment has incompatible lifetimes", lhs)
                     }
@@ -332,7 +335,20 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(allocation_node_id, node_id);
                 }
 
-                self.check_node_lifetime(allocation_node_id, scope_level);
+                match &self.compiler.ast_nodes[allocation_node_id.0] {
+                    AstNode::Call { args, .. } => {
+                        // FIXME: remove clone
+                        let args = args.clone();
+                        for arg in args {
+                            self.expand_lifetime_with_node(arg, node_id);
+
+                            self.check_node_lifetime(arg, scope_level)
+                        }
+                    }
+                    _ => {
+                        self.error("expected call as part of allocation", allocation_node_id);
+                    }
+                }
 
                 self.current_block_may_allocate(scope_level, node_id);
             }

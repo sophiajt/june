@@ -166,9 +166,9 @@ void deallocate(struct Allocator *allocator, long id)
 
             if (current_id == id)
             {
-                // *(long *)(current->contents + offset) = 0;
+                *(long *)(current->contents + offset) = 0;
                 // For debug purposes, totally clear the memory
-                memset((current->contents + offset), 0, current_size + sizeof(id) + sizeof(current_size));
+                memset((current->contents + offset + sizeof(id) + sizeof(current_size)), 0, current_size);
 
                 if (prev_empty_offset != offset)
                 {
