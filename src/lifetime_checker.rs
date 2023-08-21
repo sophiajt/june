@@ -234,7 +234,6 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(target, node_id);
                 }
                 self.check_node_lifetime(target, scope_level);
-
                 self.check_node_lifetime(call, scope_level);
             }
             AstNode::BinaryOp { lhs, rhs, op } => {
@@ -305,7 +304,6 @@ impl LifetimeChecker {
                 let args = args.clone();
                 for arg in args {
                     self.expand_lifetime_with_node(arg, node_id);
-
                     self.check_node_lifetime(arg, scope_level)
                 }
 
@@ -341,7 +339,6 @@ impl LifetimeChecker {
                         let args = args.clone();
                         for arg in args {
                             self.expand_lifetime_with_node(arg, node_id);
-
                             self.check_node_lifetime(arg, scope_level)
                         }
                     }
@@ -364,7 +361,6 @@ impl LifetimeChecker {
                 let value = *value;
 
                 self.expand_lifetime_with_node(value, node_id);
-
                 self.check_node_lifetime(value, scope_level)
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {

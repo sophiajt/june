@@ -441,16 +441,6 @@ impl Codegen {
             AstNode::False => {
                 output.extend_from_slice(b"false");
             }
-            AstNode::Return(expr) => {
-                output.extend_from_slice(b"return");
-                if let Some(expr) = expr {
-                    output.extend_from_slice(b" (");
-                    self.codegen_node(*expr, output);
-                    output.push(b')');
-                }
-
-                output.extend_from_slice(b";\n");
-            }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore this, as we handle it elsewhere
             }
@@ -463,6 +453,28 @@ impl Codegen {
     pub fn codegen_block(&self, block: NodeId, output: &mut Vec<u8>) {
         if let AstNode::Block(block_id) = &self.compiler.ast_nodes[block.0] {
             for node_id in &self.compiler.blocks[block_id.0].nodes {
+                if let AstNode::Return(return_expr) = &self.compiler.ast_nodes[node_id.0] {
+                    if let Some(return_expr) = return_expr {
+                        self.codegen_typename(self.compiler.node_types[return_expr.0], output);
+                        output.extend_from_slice(b" return_expr = ");
+                        self.codegen_node(*return_expr, output);
+                        output.extend_from_slice(b";\n");
+                    }
+                    if let Some(scope_level) = self.compiler.blocks[block_id.0].may_locally_allocate
+                    {
+                        output.extend_from_slice(
+                            format!("deallocate(allocator, allocation_id + {});\n", scope_level)
+                                .as_bytes(),
+                        );
+                    }
+                    if return_expr.is_some() {
+                        output.extend_from_slice(b"return return_expr;\n");
+                    } else {
+                        output.extend_from_slice(b"return;\n");
+                    }
+
+                    return;
+                }
                 self.codegen_node(*node_id, output);
                 output.extend_from_slice(b";\n");
             }
