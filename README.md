@@ -2,4 +2,4 @@
 
 TODO:
 
-- [ ] Extend testing system to ensure proper allocation lifetimes are followed
+- [x] Extend testing system to ensure proper allocation lifetimes are followed
