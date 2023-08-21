@@ -142,6 +142,11 @@ fn double() -> TestResult {
 }
 
 #[test]
+fn function_in_function() -> TestResult {
+    test_example("function_in_function")
+}
+
+#[test]
 fn hello_fun_rev_order() -> TestResult {
     test_example("hello_fun_rev_order")
 }
