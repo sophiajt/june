@@ -85,7 +85,15 @@ impl LifetimeChecker {
                         // Params outlive all scopes
                     }
                     AllocationLifetime::Caller => {
-                        // For now, allow params to compatible with caller if needed
+                        let param_name1 =
+                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+                        self.error(
+                            format!(
+                                "can't find compatible lifetime between param '{}' and caller",
+                                param_name1
+                            ),
+                            node_id,
+                        )
                     }
                     _ => {
                         let param_name =
@@ -99,6 +107,33 @@ impl LifetimeChecker {
             }
             AllocationLifetime::Caller => {
                 // TODO: add fix to check for raw and custom lifetimes
+
+                match lifetime {
+                    AllocationLifetime::Param { var_id } => {
+                        let param_name =
+                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+
+                        self.error(
+                            format!("can't find compatible lifetime for param '{}'", param_name),
+                            lifetime_from_node,
+                        );
+                    }
+                    AllocationLifetime::Scope { .. } => {
+                        // Caller is larger than scope, so ignore
+                    }
+                    AllocationLifetime::Caller => {
+                        // Already caller
+                    }
+                    _ => {
+                        self.error(
+                            format!(
+                                "can't find compatible lifetime for caller, found {:?}",
+                                lifetime
+                            ),
+                            lifetime_from_node,
+                        );
+                    }
+                }
             }
             AllocationLifetime::Scope {
                 level: current_level,
