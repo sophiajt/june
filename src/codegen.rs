@@ -138,6 +138,13 @@ impl Codegen {
     ) {
         self.codegen_typename(return_type, output);
         output.push(b' ');
+        output.extend_from_slice(b"/* ");
+        output.extend_from_slice(
+            self.compiler
+                .get_source(self.compiler.functions[fun_id.0].name),
+        );
+        output.extend_from_slice(b" */ ");
+
         output.extend_from_slice(b"function_");
         output.extend_from_slice(fun_id.0.to_string().as_bytes());
         output.push(b'(');
@@ -353,6 +360,13 @@ impl Codegen {
                     output.extend_from_slice(b");\n");
                     return;
                 }
+
+                output.extend_from_slice(b"/* ");
+                output.extend_from_slice(
+                    self.compiler
+                        .get_source(self.compiler.functions[fun_id.0].name),
+                );
+                output.extend_from_slice(b" */ ");
 
                 output.extend_from_slice(b"function_");
                 output.extend_from_slice(fun_id.0.to_string().as_bytes());
