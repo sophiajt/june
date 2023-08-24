@@ -279,6 +279,17 @@ impl LifetimeChecker {
                 if matches!(self.compiler.ast_nodes[op.0], AstNode::Assignment) {
                     self.check_lvalue_lifetime(lhs);
 
+                    if matches!(
+                        self.compiler.node_lifetimes[lhs.0],
+                        AllocationLifetime::Unknown
+                    ) {
+                        self.expand_lifetime(
+                            lhs,
+                            lhs,
+                            AllocationLifetime::Scope { level: scope_level },
+                        )
+                    }
+
                     self.check_node_lifetime(rhs, scope_level);
 
                     self.expand_lifetime_with_node(rhs, lhs);

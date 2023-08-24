@@ -187,6 +187,11 @@ fn int() -> TestResult {
 }
 
 #[test]
+fn jason() -> TestResult {
+    test_example("jason")
+}
+
+#[test]
 fn lifetime_alloc_infer_error() -> TestResult {
     test_example("lifetime_alloc_infer_error")
 }

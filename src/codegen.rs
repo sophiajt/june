@@ -249,6 +249,13 @@ impl Codegen {
                         )
                     });
 
+                output.extend_from_slice(b"/* ");
+                output.extend_from_slice(
+                    self.compiler
+                        .get_source(self.compiler.variables[var_id.0].name),
+                );
+                output.extend_from_slice(b" */ ");
+
                 output.extend_from_slice(b"variable_");
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
             }
