@@ -147,6 +147,11 @@ fn for_range() -> TestResult {
 }
 
 #[test]
+fn for_range_var() -> TestResult {
+    test_example("for_range_var")
+}
+
+#[test]
 fn function_in_function() -> TestResult {
     test_example("function_in_function")
 }

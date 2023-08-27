@@ -1,0 +1,10 @@
+// output: 45
+
+mut total = 0
+
+let j = 5
+for i in j..10 {
+    total += i
+}
+
+println(total)
