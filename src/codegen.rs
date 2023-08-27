@@ -453,6 +453,44 @@ impl Codegen {
                 self.codegen_node(*block, output);
                 output.extend_from_slice(b"}");
             }
+            AstNode::For {
+                variable,
+                range,
+                block,
+            } => {
+                output.extend_from_slice(b"for (");
+
+                let AstNode::Range { lhs, rhs } = &self.compiler.ast_nodes[range.0] else {
+                    panic!("internal error: range not found for 'for'");
+                };
+
+                let var_id = self
+                    .compiler
+                    .var_resolution
+                    .get(variable)
+                    .expect("internal error: unresolved variable in codegen");
+
+                let ty = self.compiler.variables[var_id.0].ty;
+
+                self.codegen_typename(ty, output);
+
+                output.extend_from_slice(b" variable_");
+                output.extend_from_slice(var_id.0.to_string().as_bytes());
+
+                output.extend_from_slice(b" = ");
+                self.codegen_node(*lhs, output);
+
+                output.extend_from_slice(b"; variable_");
+                output.extend_from_slice(var_id.0.to_string().as_bytes());
+                output.extend_from_slice(b" <= ");
+                self.codegen_node(*rhs, output);
+
+                output.extend_from_slice(b"; ++variable_");
+                output.extend_from_slice(var_id.0.to_string().as_bytes());
+                output.extend_from_slice(b") {");
+                self.codegen_node(*block, output);
+                output.extend_from_slice(b"}");
+            }
             AstNode::Block(..) => {
                 self.codegen_block(node_id, output);
             }

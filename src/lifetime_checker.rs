@@ -338,6 +338,11 @@ impl LifetimeChecker {
                 self.check_node_lifetime(condition, scope_level);
                 self.check_node_lifetime(block, scope_level);
             }
+            AstNode::For { block, .. } => {
+                let block = *block;
+                self.expand_lifetime_with_node(block, node_id);
+                self.check_node_lifetime(block, scope_level);
+            }
             AstNode::Call { head, args } => {
                 let head = *head;
                 // If the call is not constrained, use the local scope level

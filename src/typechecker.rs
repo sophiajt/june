@@ -25,6 +25,7 @@ pub enum Type {
     I64,
     F64,
     Bool,
+    Range(TypeId),
     String,
     Struct {
         fields: Vec<(Vec<u8>, TypeId)>,
@@ -90,7 +91,8 @@ pub const VOID_TYPE_ID: TypeId = TypeId(1);
 pub const I64_TYPE_ID: TypeId = TypeId(2);
 pub const F64_TYPE_ID: TypeId = TypeId(3);
 pub const BOOL_TYPE_ID: TypeId = TypeId(4);
-pub const STRING_TYPE_ID: TypeId = TypeId(5);
+pub const RANGE_I64_TYPE_ID: TypeId = TypeId(5);
+pub const STRING_TYPE_ID: TypeId = TypeId(6);
 
 impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
@@ -115,6 +117,7 @@ impl Typechecker {
             Type::I64,
             Type::F64,
             Type::Bool,
+            Type::Range(I64_TYPE_ID),
             Type::String,
         ];
 
@@ -616,6 +619,23 @@ impl Typechecker {
                     x => panic!("unsupported operator: {:?}", x),
                 }
             }
+            AstNode::Range { lhs, rhs } => {
+                let lhs = *lhs;
+                let rhs = *rhs;
+
+                let lhs_type = self.typecheck_node(lhs);
+                let rhs_type = self.typecheck_node(rhs);
+
+                if lhs_type != I64_TYPE_ID {
+                    self.error("expected i64 in range", lhs);
+                }
+
+                if rhs_type != I64_TYPE_ID {
+                    self.error("expected i64 in range", rhs);
+                }
+
+                RANGE_I64_TYPE_ID
+            }
             AstNode::Call { head, args } => {
                 let head = *head;
                 let args = args.clone();
@@ -698,6 +718,32 @@ impl Typechecker {
                 }
 
                 self.compiler.node_types[block.0]
+            }
+            AstNode::For {
+                variable,
+                range,
+                block,
+            } => {
+                let variable = *variable;
+                let range = *range;
+                let block = *block;
+
+                let range_type = self.typecheck_node(range);
+
+                if matches!(self.compiler.types[range_type.0], Type::Range(I64_TYPE_ID)) {
+                    self.enter_scope();
+
+                    let var_id = self.define_variable(variable, I64_TYPE_ID, true, variable);
+                    self.compiler.var_resolution.insert(variable, var_id);
+
+                    self.typecheck_node(block);
+
+                    self.exit_scope();
+                } else {
+                    self.error("expected range in for loop", range);
+                }
+
+                VOID_TYPE_ID
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } => {
                 // ignore here, since we checked this in an earlier pass

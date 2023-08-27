@@ -1,0 +1,17 @@
+struct Stats {
+    age: i64
+}
+
+fun foo(a: Stats, b: Stats) -> Stats {
+    if true {
+        return a
+    } else {
+        return b
+    }
+}
+
+fun main() {
+    let f = foo(new Stats(age: 22), new Stats(age: 33))
+
+    println(f.age)
+}

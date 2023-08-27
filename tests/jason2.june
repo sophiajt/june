@@ -1,0 +1,12 @@
+struct Stats {
+    age: i64
+}
+
+struct Employee {
+    stats: Stats
+}
+
+fun main() {
+    mut employee = new Employee(stats: new Stats(age: 100));
+    let employee2 = new Employee(stats: employee.stats);
+}

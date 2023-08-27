@@ -22,7 +22,7 @@ fn test_example(test_name: &str) -> TestResult {
         let mut test_filename = PathBuf::from(test_name);
         test_filename.set_extension("june");
 
-        let mut test_filepath = PathBuf::from("./examples");
+        let mut test_filepath = PathBuf::from("./tests");
         test_filepath.push(test_filename);
 
         test_filepath
@@ -139,6 +139,11 @@ fn call_labeled_error() -> TestResult {
 #[test]
 fn double() -> TestResult {
     test_example("double")
+}
+
+#[test]
+fn for_range() -> TestResult {
+    test_example("for_range")
 }
 
 #[test]
