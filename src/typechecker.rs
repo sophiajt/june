@@ -786,6 +786,60 @@ impl Typechecker {
 
                 RANGE_I64_TYPE_ID
             }
+            AstNode::NamedLookup { namespace, item } => {
+                let namespace = *namespace;
+                let item = *item;
+
+                let type_id = self.find_type_in_scope(namespace);
+
+                let Some(type_id) = type_id else {
+                    self.error("could not find namespace", namespace);
+                    return VOID_TYPE_ID;
+                };
+
+                match &self.compiler.types[type_id.0] {
+                    Type::Struct { methods, .. } => {
+                        let AstNode::Call { head, args } = &self.compiler.ast_nodes[item.0] else {
+                            self.error("expected static method call on struct", item);
+                            return VOID_TYPE_ID;
+                        };
+
+                        let head = *head;
+                        let args = args.clone();
+
+                        let call_name = self.compiler.get_source(head);
+
+                        for method in methods {
+                            let method_name = self
+                                .compiler
+                                .get_source(self.compiler.functions[method.0].name);
+                            if method_name == call_name {
+                                return self.typecheck_call_with_fun_id(head, *method, &args);
+                            }
+                        }
+                    }
+                    Type::Enum { cases, methods } => match &self.compiler.ast_nodes[item.0] {
+                        AstNode::Call { head, args } => {}
+                        AstNode::Name => {
+                            let case_name = self.compiler.get_source(item);
+
+                            for case in cases {
+                                match case {
+                                    EnumCase::Simple { name } => if name == case_name {},
+                                }
+                            }
+                        }
+                        _ => {
+                            self.error("expected enum case when created enum value", item);
+                        }
+                    },
+                    _ => {
+                        self.error("expected struct or enum", namespace);
+                    }
+                }
+
+                VOID_TYPE_ID
+            }
             AstNode::Call { head, args } => {
                 let head = *head;
                 let args = args.clone();

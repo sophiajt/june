@@ -73,6 +73,11 @@ pub enum AstNode {
     },
     Return(Option<NodeId>),
 
+    NamedLookup {
+        namespace: NodeId,
+        item: NodeId,
+    },
+
     // Definitions
     Fun {
         name: NodeId,
@@ -189,6 +194,7 @@ pub enum TokenType {
     Pipe,
     PipePipe,
     Colon,
+    ColonColon,
     Semicolon,
     Plus,
     PlusPlus,
@@ -502,6 +508,16 @@ impl Parser {
             self.peek(),
             Some(Token {
                 token_type: TokenType::DotDot,
+                ..
+            })
+        )
+    }
+
+    pub fn is_coloncolon(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::ColonColon,
                 ..
             })
         )
@@ -1071,6 +1087,20 @@ impl Parser {
                         self.error("expected field or method call");
                     }
                 }
+            } else if self.is_coloncolon() {
+                self.next();
+
+                let item = self.simple_expression();
+                let span_end = self.get_span_end(item);
+
+                expr = self.create_node(
+                    AstNode::NamedLookup {
+                        namespace: expr,
+                        item,
+                    },
+                    span_start,
+                    span_end,
+                );
             } else {
                 return expr;
             }
@@ -2142,11 +2172,23 @@ impl Parser {
                     }
                 }
             }
-            b':' => Token {
-                token_type: TokenType::Colon,
-                span_start,
-                span_end: span_start + 1,
-            },
+            b':' => {
+                if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b':'
+                {
+                    Token {
+                        token_type: TokenType::ColonColon,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
+                } else {
+                    Token {
+                        token_type: TokenType::Colon,
+                        span_start,
+                        span_end: span_start + 1,
+                    }
+                }
+            }
             b';' => Token {
                 token_type: TokenType::Semicolon,
                 span_start,
