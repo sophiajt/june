@@ -32,7 +32,26 @@ pub enum Type {
         methods: Vec<FunId>,
         is_allocator: bool,
     },
+    Enum {
+        cases: Vec<EnumCase>,
+        methods: Vec<FunId>,
+    },
     Pointer(AllocationType, TypeId),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum EnumCase {
+    Simple {
+        name: Vec<u8>,
+    },
+    Single {
+        name: Vec<u8>,
+        arg: TypeId,
+    },
+    Struct {
+        name: Vec<u8>,
+        args: Vec<(Vec<u8>, TypeId)>,
+    },
 }
 
 #[derive(Debug)]
@@ -241,6 +260,129 @@ impl Typechecker {
         self.exit_scope();
     }
 
+    pub fn typecheck_enum(
+        &mut self,
+        name: NodeId,
+        cases: Vec<NodeId>,
+        methods: Vec<NodeId>,
+    ) -> TypeId {
+        let enum_name = self.compiler.get_source(name).to_vec();
+
+        let mut output_cases = vec![];
+
+        for enum_case in cases {
+            if let AstNode::EnumCase { name, payload } = &self.compiler.ast_nodes[enum_case.0] {
+                let case_name = self.compiler.get_source(*name).to_vec();
+
+                match payload {
+                    Some(payload) => {
+                        if payload.is_empty() {
+                            self.error("missing payload in enum case", *name);
+                            break;
+                        }
+
+                        match &self.compiler.ast_nodes[payload[0].0] {
+                            AstNode::NamedValue { .. } => {
+                                let mut fields = vec![];
+                                let payload = payload.clone();
+                                for item in payload {
+                                    if let AstNode::NamedValue { name, value } =
+                                        &self.compiler.ast_nodes[item.0]
+                                    {
+                                        let name = *name;
+                                        let value = *value;
+
+                                        let field_name = self.compiler.get_source(name).to_vec();
+
+                                        let type_id = self.typecheck_typename(value);
+
+                                        fields.push((field_name, type_id));
+                                    } else {
+                                        self.error(
+                                            "expected 'name: type' for each field in enum case",
+                                            item,
+                                        );
+                                    }
+                                }
+
+                                output_cases.push(EnumCase::Struct {
+                                    name: case_name,
+                                    args: fields,
+                                });
+                            }
+                            AstNode::Type { .. } => {
+                                let type_id = self.typecheck_typename(payload[0]);
+
+                                output_cases.push(EnumCase::Single {
+                                    name: case_name,
+                                    arg: type_id,
+                                });
+                            }
+                            _ => {
+                                self.error("unexpected node in enum cases", payload[0]);
+                            }
+                        }
+                    }
+                    None => {
+                        output_cases.push(EnumCase::Simple { name: case_name });
+                    }
+                }
+            } else {
+                self.error("expect enum case inside of enum", enum_case)
+            }
+        }
+
+        self.compiler.types.push(Type::Enum {
+            cases: output_cases,
+            methods: vec![],
+        });
+
+        let type_id = TypeId(self.compiler.types.len() - 1);
+
+        self.compiler
+            .types
+            .push(Type::Pointer(AllocationType::Normal, type_id));
+
+        self.add_type_to_scope(enum_name, type_id);
+
+        if !methods.is_empty() {
+            self.enter_scope();
+
+            self.add_type_to_scope(b"self".to_vec(), type_id);
+
+            let mut fun_ids = vec![];
+
+            for method in methods {
+                let AstNode::Fun { name, params, return_ty, block } = &self.compiler.ast_nodes[method.0] else {
+                    self.error("internal error: can't find method definition during typecheck", method);
+                    return VOID_TYPE_ID;
+                };
+                let name = *name;
+                let params = *params;
+                let return_ty = *return_ty;
+                let block = *block;
+
+                fun_ids.push(self.typecheck_fun_predecl(name, params, return_ty, block));
+            }
+
+            let Type::Struct {
+                methods, ..
+            } = &mut self.compiler.types[type_id.0] else {
+                panic!("internal error: previously inserted struct can't be found");
+            };
+
+            *methods = fun_ids.clone();
+
+            for fun_id in &fun_ids {
+                self.typecheck_fun(*fun_id);
+            }
+
+            self.exit_scope();
+        }
+
+        type_id
+    }
+
     pub fn typecheck_struct(
         &mut self,
         name: NodeId,
@@ -337,6 +479,14 @@ impl Typechecker {
                     is_allocator,
                 } => {
                     self.typecheck_struct(*name, fields.clone(), methods.clone(), *is_allocator);
+                }
+
+                AstNode::Enum {
+                    name,
+                    cases,
+                    methods,
+                } => {
+                    self.typecheck_enum(*name, cases.clone(), methods.clone());
                 }
                 _ => {}
             }
@@ -745,7 +895,7 @@ impl Typechecker {
 
                 VOID_TYPE_ID
             }
-            AstNode::Fun { .. } | AstNode::Struct { .. } => {
+            AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
                 // ignore here, since we checked this in an earlier pass
                 VOID_TYPE_ID
             }

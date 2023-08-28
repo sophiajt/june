@@ -3,7 +3,7 @@ use crate::{
     lifetime_checker::AllocationLifetime,
     parser::{AstNode, NodeId},
     typechecker::{
-        FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
+        EnumCase, FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
         STRING_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
     },
 };
@@ -95,36 +95,76 @@ impl Codegen {
         output.extend_from_slice(b"return tmp;\n}\n");
     }
 
-    pub fn codegen_structs(&self, output: &mut Vec<u8>) {
+    pub fn codegen_structs_and_enums(&self, output: &mut Vec<u8>) {
         for (idx, ty) in self.compiler.types.iter().enumerate() {
-            if let Type::Struct {
-                fields,
-                is_allocator,
-                ..
-            } = ty
-            {
-                output.extend_from_slice(b"struct struct_");
-                output.extend_from_slice(idx.to_string().as_bytes());
-                output.extend_from_slice(b"{\n");
-                if *is_allocator {
-                    self.codegen_typename(I64_TYPE_ID, output);
-                    output.push(b' ');
-                    output.extend_from_slice(b"__allocation_id__;\n");
-                }
-                for field in fields {
-                    self.codegen_typename(field.1, output);
-                    output.push(b' ');
-                    output.extend_from_slice(&field.0);
-                    output.extend_from_slice(b";\n");
-                }
+            match ty {
+                Type::Struct {
+                    fields,
+                    is_allocator,
+                    ..
+                } => {
+                    output.extend_from_slice(b"struct struct_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    output.extend_from_slice(b"{\n");
+                    if *is_allocator {
+                        self.codegen_typename(I64_TYPE_ID, output);
+                        output.push(b' ');
+                        output.extend_from_slice(b"__allocation_id__;\n");
+                    }
+                    for field in fields {
+                        self.codegen_typename(field.1, output);
+                        output.push(b' ');
+                        output.extend_from_slice(&field.0);
+                        output.extend_from_slice(b";\n");
+                    }
 
-                output.extend_from_slice(b"};\n");
+                    output.extend_from_slice(b"};\n");
 
-                if let Some(ptr) = self.compiler.find_pointer_to(TypeId(idx)) {
-                    self.codegen_allocator_function(ptr, fields, *is_allocator, output);
-                } else {
-                    panic!("internal error: can't find pointer to type")
+                    if let Some(ptr) = self.compiler.find_pointer_to(TypeId(idx)) {
+                        self.codegen_allocator_function(ptr, fields, *is_allocator, output);
+                    } else {
+                        panic!("internal error: can't find pointer to type")
+                    }
                 }
+                Type::Enum { cases, .. } => {
+                    output.extend_from_slice(b"struct enum_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    output.extend_from_slice(b"{\n");
+                    output.extend_from_slice(b"int case_id;\n");
+                    output.extend_from_slice(b"union {\n");
+                    for case in cases {
+                        match case {
+                            EnumCase::Single { name, arg } => {
+                                self.codegen_typename(*arg, output);
+                                output.push(b' ');
+                                output.extend_from_slice(name);
+                                output.extend_from_slice(b";\n");
+                            }
+                            EnumCase::Struct { name, args } => {
+                                // FIXME!! This will name collide because of C naming resolution
+                                output.extend_from_slice(b"struct /*");
+                                output.extend_from_slice(name);
+                                output.extend_from_slice(b"*/ {\n");
+
+                                for arg in args {
+                                    self.codegen_typename(arg.1, output);
+                                    output.push(b' ');
+                                    output.extend_from_slice(&arg.0);
+                                    output.extend_from_slice(b";\n");
+                                }
+
+                                output.extend_from_slice(b"};\n");
+                            }
+                            EnumCase::Simple { .. } => {
+                                // ignore because it is encoded into the case_id above
+                            }
+                        }
+                    }
+                    output.extend_from_slice(b"};\n");
+
+                    output.extend_from_slice(b"};\n");
+                }
+                _ => {}
             }
         }
     }
@@ -500,7 +540,7 @@ impl Codegen {
             AstNode::False => {
                 output.extend_from_slice(b"false");
             }
-            AstNode::Fun { .. } | AstNode::Struct { .. } => {
+            AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
                 // ignore this, as we handle it elsewhere
             }
             x => {
@@ -556,7 +596,7 @@ impl Codegen {
 
         output.extend_from_slice(b"struct Allocator *allocator;\n");
 
-        self.codegen_structs(&mut output);
+        self.codegen_structs_and_enums(&mut output);
         self.codegen_fun_decls(&mut output);
 
         for (idx, fun) in self.compiler.functions.iter().enumerate().skip(1) {

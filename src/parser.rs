@@ -93,6 +93,16 @@ pub enum AstNode {
         is_allocator: bool,
     },
 
+    Enum {
+        name: NodeId,
+        cases: Vec<NodeId>,
+        methods: Vec<NodeId>,
+    },
+    EnumCase {
+        name: NodeId,
+        payload: Option<Vec<NodeId>>,
+    },
+
     // Closure {
     //     params: NodeId,
     //     block: NodeId,
@@ -627,15 +637,10 @@ impl Parser {
         }
     }
 
-    pub fn create_node(
-        &mut self,
-        node_type: AstNode,
-        span_start: usize,
-        span_end: usize,
-    ) -> NodeId {
+    pub fn create_node(&mut self, ast_node: AstNode, span_start: usize, span_end: usize) -> NodeId {
         self.compiler.span_start.push(span_start);
         self.compiler.span_end.push(span_end);
-        self.compiler.ast_nodes.push(node_type);
+        self.compiler.ast_nodes.push(ast_node);
 
         NodeId(self.compiler.span_start.len() - 1 + self.node_id_offset)
     }
@@ -661,6 +666,8 @@ impl Parser {
                 code_body.push(self.fun_definition());
             } else if self.is_keyword(b"struct") {
                 code_body.push(self.struct_definition());
+            } else if self.is_keyword(b"enum") {
+                code_body.push(self.enum_definition());
             } else if self.is_keyword(b"let") {
                 code_body.push(self.let_statement());
             } else if self.is_keyword(b"mut") {
@@ -784,6 +791,98 @@ impl Parser {
             span_start,
             span_end,
         )
+    }
+
+    pub fn enum_definition(&mut self) -> NodeId {
+        let mut cases = vec![];
+        let mut methods = vec![];
+
+        let span_start = self.position();
+        let mut span_end = self.position();
+
+        self.keyword(b"enum");
+
+        let name = self.typename();
+        self.lcurly();
+
+        // parse fields
+        while self.has_tokens() {
+            if self.is_rcurly() {
+                span_end = self.position() + 1;
+                self.rcurly();
+                break;
+            }
+
+            if self.is_keyword(b"fun") {
+                let fun = self.fun_definition();
+
+                methods.push(fun);
+            } else {
+                // enum case
+                let case = self.enum_case();
+
+                cases.push(case);
+            }
+        }
+
+        self.create_node(
+            AstNode::Enum {
+                name,
+                cases,
+                methods,
+            },
+            span_start,
+            span_end,
+        )
+    }
+
+    pub fn enum_case(&mut self) -> NodeId {
+        let span_start = self.position();
+        let name = self.name();
+        let mut span_end = self.get_span_end(name);
+        let payload = if self.is_lparen() {
+            self.next();
+            let payload = self.typename();
+            if !self.is_rparen() {
+                self.error("expected right paren ')'");
+            } else {
+                self.next();
+            }
+            Some(vec![payload])
+        } else if self.is_lcurly() {
+            let mut payload = vec![];
+            while self.has_tokens() {
+                if self.is_rcurly() {
+                    span_end = self.position() + 1;
+                    self.rcurly();
+                    break;
+                }
+
+                // field
+                let span_start = self.position();
+                let field_name = self.name();
+                self.colon();
+                let field_type = self.typename();
+                if self.is_comma() {
+                    self.comma();
+                }
+
+                let named_field = self.create_node(
+                    AstNode::NamedValue {
+                        name: field_name,
+                        value: field_type,
+                    },
+                    span_start,
+                    span_end,
+                );
+                payload.push(named_field);
+            }
+            Some(payload)
+        } else {
+            None
+        };
+
+        self.create_node(AstNode::EnumCase { name, payload }, span_start, span_end)
     }
 
     pub fn expression_or_assignment(&mut self) -> NodeId {

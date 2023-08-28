@@ -414,7 +414,7 @@ impl LifetimeChecker {
                 self.expand_lifetime_with_node(value, node_id);
                 self.check_node_lifetime(value, scope_level)
             }
-            AstNode::Fun { .. } | AstNode::Struct { .. } => {
+            AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
                 // ignore
             }
             AstNode::Statement(node_id) => {
