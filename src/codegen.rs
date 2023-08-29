@@ -453,6 +453,7 @@ impl Codegen {
                     panic!("internal error: expected allocation call during allocation")
                 }
             }
+            AstNode::NamespacedLookup { item, .. } => self.codegen_node(*item, output),
             AstNode::NamedValue { value, .. } => {
                 // FIXME: this should probably be handled cleanly via typecheck+codegen
                 // rather than ignoring the name

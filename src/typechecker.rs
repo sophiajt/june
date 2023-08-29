@@ -786,7 +786,7 @@ impl Typechecker {
 
                 RANGE_I64_TYPE_ID
             }
-            AstNode::NamedLookup { namespace, item } => {
+            AstNode::NamespacedLookup { namespace, item } => {
                 let namespace = *namespace;
                 let item = *item;
 
@@ -820,17 +820,26 @@ impl Typechecker {
                     }
                     Type::Enum { cases, methods } => match &self.compiler.ast_nodes[item.0] {
                         AstNode::Call { head, args } => {}
-                        AstNode::Name => {
+                        AstNode::Name | AstNode::Variable => {
                             let case_name = self.compiler.get_source(item);
 
                             for case in cases {
                                 match case {
-                                    EnumCase::Simple { name } => if name == case_name {},
+                                    EnumCase::Simple { name } => {
+                                        if name == case_name {
+                                            return *type_id;
+                                        }
+                                    }
                                 }
                             }
+
+                            self.error("can't find matche enum case", item);
                         }
-                        _ => {
-                            self.error("expected enum case when created enum value", item);
+                        x => {
+                            self.error(
+                                format!("expected enum case when created enum value: {:?}", x),
+                                item,
+                            );
                         }
                     },
                     _ => {

@@ -1,0 +1,8 @@
+enum State {
+    None
+    I64(i64)
+}
+
+fun main() {
+    let y = State::I64(4)
+}

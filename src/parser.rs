@@ -73,7 +73,7 @@ pub enum AstNode {
     },
     Return(Option<NodeId>),
 
-    NamedLookup {
+    NamespacedLookup {
         namespace: NodeId,
         item: NodeId,
     },
@@ -1094,7 +1094,7 @@ impl Parser {
                 let span_end = self.get_span_end(item);
 
                 expr = self.create_node(
-                    AstNode::NamedLookup {
+                    AstNode::NamespacedLookup {
                         namespace: expr,
                         item,
                     },

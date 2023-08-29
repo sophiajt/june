@@ -291,6 +291,11 @@ fn scope_struct_to_upper_scope2() -> TestResult {
 }
 
 #[test]
+fn static_method() -> TestResult {
+    test_example("static_method")
+}
+
+#[test]
 fn struct_allocator() -> TestResult {
     test_example("struct_allocator")
 }
