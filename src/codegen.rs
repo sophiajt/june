@@ -23,7 +23,9 @@ impl Codegen {
                 output.extend_from_slice(b"struct struct_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
             }
-            Type::Pointer(_, type_id) => {
+            Type::Pointer {
+                target: type_id, ..
+            } => {
                 self.codegen_typename(*type_id, output);
                 output.push(b'*');
             }
@@ -54,7 +56,7 @@ impl Codegen {
         is_allocator: bool,
         output: &mut Vec<u8>,
     ) {
-        let Type::Pointer(_, inner_type_id) = &self.compiler.types[type_id.0] else {
+        let Type::Pointer { target: inner_type_id, ..} = &self.compiler.types[type_id.0] else {
             panic!("internal error: pointer to unknown type");
         };
 
@@ -229,6 +231,9 @@ impl Codegen {
 
                 output.extend_from_slice(src);
             }
+            AstNode::None => {
+                output.extend_from_slice(b"NULL");
+            }
             AstNode::Name => {
                 let src = self.compiler.get_source(node_id);
 
@@ -349,7 +354,7 @@ impl Codegen {
                         output.extend_from_slice(b"printf(\"%s\\n\", ");
                         self.codegen_node(args[0], output);
                     } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                        output.extend_from_slice(b"printf(\"%li\\n\", ");
                         self.codegen_node(args[0], output);
                     } else if self.compiler.node_types[args[0].0] == F64_TYPE_ID {
                         output.extend_from_slice(b"printf(\"%lf\\n\", ");
@@ -391,7 +396,7 @@ impl Codegen {
             AstNode::New(_, allocation_call) => {
                 let type_id = self.compiler.node_types[node_id.0];
 
-                let Type::Pointer(_, type_id) = &self.compiler.types[type_id.0] else {
+                let Type::Pointer { target: type_id, ..} = &self.compiler.types[type_id.0] else {
                     panic!("internal error: 'new' creating non-pointer type: {:?}", &self.compiler.types[type_id.0])
                 };
                 let type_id = *type_id;

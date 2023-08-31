@@ -413,6 +413,11 @@
                     "comment": "booleans",
                     "name": "constant.language.bool.june",
                     "match": "\\b(true|false)\\b"
+                },
+                {
+                    "comment": "pointers",
+                    "name": "constant.language.pointers.june",
+                    "match": "\\b(none)\\b"
                 }
             ]
         },

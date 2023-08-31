@@ -210,7 +210,12 @@ impl LifetimeChecker {
             AstNode::Block(block_id) => {
                 self.check_block_lifetime(*block_id, scope_level + 1);
             }
-            AstNode::Int | AstNode::Float | AstNode::True | AstNode::False | AstNode::String => {}
+            AstNode::Int
+            | AstNode::Float
+            | AstNode::True
+            | AstNode::False
+            | AstNode::String
+            | AstNode::None => {}
             AstNode::Let { initializer, .. } => {
                 // Push lifetime requirement from let into the variable and initializer
                 let initializer = *initializer;

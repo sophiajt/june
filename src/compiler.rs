@@ -461,7 +461,7 @@ impl Compiler {
 
     pub fn find_pointer_to(&self, type_id: TypeId) -> Option<TypeId> {
         for (found_type_id, ty) in self.types.iter().enumerate() {
-            if matches!(ty, Type::Pointer(_, type_id2) if &type_id == type_id2) {
+            if matches!(ty, Type::Pointer { target: type_id2, ..} if &type_id == type_id2) {
                 return Some(TypeId(found_type_id));
             }
         }
@@ -471,7 +471,10 @@ impl Compiler {
 
     pub fn is_allocator_type(&self, type_id: TypeId) -> bool {
         match &self.types[type_id.0] {
-            Type::Pointer(_, pointer_type_id) => self.is_allocator_type(*pointer_type_id),
+            Type::Pointer {
+                target: pointer_type_id,
+                ..
+            } => self.is_allocator_type(*pointer_type_id),
             Type::Struct { is_allocator, .. } => *is_allocator,
             _ => false,
         }
@@ -481,7 +484,7 @@ impl Compiler {
         // FIXME: we should probably clean up the struct/pointer thing a bit
         !matches!(
             self.types[type_id.0],
-            Type::Struct { .. } | Type::Pointer(..)
+            Type::Struct { .. } | Type::Pointer { .. }
         )
     }
 }
