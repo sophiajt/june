@@ -873,20 +873,40 @@ impl Typechecker {
                                         EnumCase::Struct { name, params } => {
                                             if name == case_name {
                                                 if args.len() == params.len() {
+                                                    //FIXME: the names have to match
                                                     for (arg, (param_name, param_type_id)) in
                                                         args.into_iter().zip(params)
                                                     {
-                                                        let arg_type_id = self.typecheck_node(arg);
+                                                        if let AstNode::NamedValue { name, value } =
+                                                            &self.compiler.ast_nodes[arg.0]
+                                                        {
+                                                            let name = *name;
+                                                            let value = *value;
 
-                                                        if !self.is_type_compatible(
-                                                            *param_type_id,
-                                                            arg_type_id,
-                                                        ) {
-                                                            self.error(
-                                                                "incompatible types for enum case",
-                                                                arg,
-                                                            );
-                                                            return VOID_TYPE_ID;
+                                                            let name_contents =
+                                                                self.compiler.get_source(name);
+
+                                                            if name_contents != param_name {
+                                                                self.error(
+                                                                    "name mismatch in enum case",
+                                                                    name,
+                                                                );
+                                                                return VOID_TYPE_ID;
+                                                            }
+
+                                                            let arg_type_id =
+                                                                self.typecheck_node(value);
+
+                                                            if !self.is_type_compatible(
+                                                                *param_type_id,
+                                                                arg_type_id,
+                                                            ) {
+                                                                self.error(
+                                                                    "incompatible types for enum case",
+                                                                    arg,
+                                                                );
+                                                                return VOID_TYPE_ID;
+                                                            }
                                                         }
                                                     }
                                                     self.compiler.call_resolution.insert(
