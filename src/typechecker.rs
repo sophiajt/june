@@ -873,7 +873,6 @@ impl Typechecker {
                                         EnumCase::Struct { name, params } => {
                                             if name == case_name {
                                                 if args.len() == params.len() {
-                                                    //FIXME: the names have to match
                                                     for (arg, (param_name, param_type_id)) in
                                                         args.into_iter().zip(params)
                                                     {
