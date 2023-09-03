@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    compiler::Compiler,
+    compiler::{CallTarget, CaseOffset, Compiler},
     errors::SourceError,
     parser::{AllocationType, AstNode, BlockId, NodeId},
 };
@@ -39,18 +39,18 @@ pub enum Type {
     Pointer(AllocationType, TypeId),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EnumCase {
     Simple {
         name: Vec<u8>,
     },
     Single {
         name: Vec<u8>,
-        arg: TypeId,
+        param: TypeId,
     },
     Struct {
         name: Vec<u8>,
-        args: Vec<(Vec<u8>, TypeId)>,
+        params: Vec<(Vec<u8>, TypeId)>,
     },
 }
 
@@ -307,7 +307,7 @@ impl Typechecker {
 
                                 output_cases.push(EnumCase::Struct {
                                     name: case_name,
-                                    args: fields,
+                                    params: fields,
                                 });
                             }
                             AstNode::Type { .. } => {
@@ -315,7 +315,7 @@ impl Typechecker {
 
                                 output_cases.push(EnumCase::Single {
                                     name: case_name,
-                                    arg: type_id,
+                                    param: type_id,
                                 });
                             }
                             _ => {
@@ -525,7 +525,9 @@ impl Typechecker {
 
         if fun_id.0 == 0 {
             // Just for now, special-case println
-            self.compiler.fun_resolution.insert(name, fun_id);
+            self.compiler
+                .call_resolution
+                .insert(name, CallTarget::Function(fun_id));
             for arg in args {
                 // TODO: add name-checking
                 let arg = *arg;
@@ -546,7 +548,9 @@ impl Typechecker {
 
         // TODO: do we want to wait until all params are checked
         // before we mark this as resolved?
-        self.compiler.fun_resolution.insert(name, fun_id);
+        self.compiler
+            .call_resolution
+            .insert(name, CallTarget::Function(fun_id));
 
         for (arg, param) in args.iter().zip(params) {
             // TODO: add name-checking
@@ -797,6 +801,8 @@ impl Typechecker {
                     return VOID_TYPE_ID;
                 };
 
+                let type_id = *type_id;
+
                 match &self.compiler.types[type_id.0] {
                     Type::Struct { methods, .. } => {
                         let AstNode::Call { head, args } = &self.compiler.ast_nodes[item.0] else {
@@ -818,30 +824,86 @@ impl Typechecker {
                             }
                         }
                     }
-                    Type::Enum { cases, methods } => match &self.compiler.ast_nodes[item.0] {
-                        AstNode::Call { head, args } => {}
-                        AstNode::Name | AstNode::Variable => {
-                            let case_name = self.compiler.get_source(item);
+                    Type::Enum { cases, .. } => {
+                        let cases = cases.clone();
 
-                            for case in cases {
-                                match case {
-                                    EnumCase::Simple { name } => {
-                                        if name == case_name {
-                                            return *type_id;
+                        let output_type = self
+                            .find_or_create_type(Type::Pointer(AllocationType::Normal, type_id));
+
+                        match &self.compiler.ast_nodes[item.0] {
+                            AstNode::Call { head, args } => {
+                                // FIXME: remove clone
+                                let args = args.clone();
+                                let case_name = self.compiler.get_source(*head);
+
+                                for (case_offset, case) in cases.iter().enumerate() {
+                                    match case {
+                                        EnumCase::Single { name, param } => {
+                                            if name == case_name {
+                                                let param = *param;
+                                                if args.len() == 1 {
+                                                    let arg_type_id = self.typecheck_node(args[0]);
+
+                                                    if !self.is_type_compatible(param, arg_type_id)
+                                                    {
+                                                        self.error(
+                                                            "incompatible types for enum case",
+                                                            args[0],
+                                                        );
+                                                        return VOID_TYPE_ID;
+                                                    }
+
+                                                    self.compiler.call_resolution.insert(
+                                                        node_id,
+                                                        CallTarget::EnumConstructor(
+                                                            type_id,
+                                                            CaseOffset(case_offset),
+                                                        ),
+                                                    );
+
+                                                    return output_type;
+                                                } else {
+                                                    self.error(format!("enum case has {} values, but should have 1", args.len()), item);
+                                                    return VOID_TYPE_ID;
+                                                }
+                                            }
                                         }
+                                        _ => {}
                                     }
                                 }
                             }
+                            AstNode::Name | AstNode::Variable => {
+                                let case_name = self.compiler.get_source(item);
 
-                            self.error("can't find matche enum case", item);
+                                for (case_offset, case) in cases.iter().enumerate() {
+                                    match case {
+                                        EnumCase::Simple { name } => {
+                                            if name == case_name {
+                                                self.compiler.call_resolution.insert(
+                                                    node_id,
+                                                    CallTarget::EnumConstructor(
+                                                        type_id,
+                                                        CaseOffset(case_offset),
+                                                    ),
+                                                );
+
+                                                return output_type;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                self.error("can't find matche enum case", item);
+                            }
+                            x => {
+                                self.error(
+                                    format!("expected enum case when created enum value: {:?}", x),
+                                    item,
+                                );
+                            }
                         }
-                        x => {
-                            self.error(
-                                format!("expected enum case when created enum value: {:?}", x),
-                                item,
-                            );
-                        }
-                    },
+                    }
                     _ => {
                         self.error("expected struct or enum", namespace);
                     }

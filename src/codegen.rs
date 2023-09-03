@@ -1,5 +1,5 @@
 use crate::{
-    compiler::Compiler,
+    compiler::{CallTarget, Compiler},
     lifetime_checker::AllocationLifetime,
     parser::{AstNode, NodeId},
     typechecker::{
@@ -21,6 +21,10 @@ impl Codegen {
         match &self.compiler.types[type_id.0] {
             Type::Struct { .. } => {
                 output.extend_from_slice(b"struct struct_");
+                output.extend_from_slice(type_id.0.to_string().as_bytes());
+            }
+            Type::Enum { .. } => {
+                output.extend_from_slice(b"struct enum_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
             }
             Type::Pointer(_, type_id) => {
@@ -134,13 +138,13 @@ impl Codegen {
                     output.extend_from_slice(b"union {\n");
                     for case in cases {
                         match case {
-                            EnumCase::Single { name, arg } => {
+                            EnumCase::Single { name, param: arg } => {
                                 self.codegen_typename(*arg, output);
                                 output.push(b' ');
                                 output.extend_from_slice(name);
                                 output.extend_from_slice(b";\n");
                             }
-                            EnumCase::Struct { name, args } => {
+                            EnumCase::Struct { name, params: args } => {
                                 // FIXME!! This will name collide because of C naming resolution
                                 output.extend_from_slice(b"struct /*");
                                 output.extend_from_slice(name);
@@ -163,6 +167,68 @@ impl Codegen {
                     output.extend_from_slice(b"};\n");
 
                     output.extend_from_slice(b"};\n");
+
+                    for (case_offset, case) in cases.iter().enumerate() {
+                        self.codegen_typename(TypeId(idx), output);
+                        output.extend_from_slice(b"* enum_case_");
+                        output.extend_from_slice(idx.to_string().as_bytes());
+                        output.push(b'_');
+                        output.extend_from_slice(case_offset.to_string().as_bytes());
+
+                        output.extend_from_slice(b"(int allocation_id");
+
+                        match case {
+                            EnumCase::Single { param, .. } => {
+                                output.extend_from_slice(b", ");
+                                self.codegen_typename(*param, output);
+                                output.extend_from_slice(b" arg");
+                            }
+                            EnumCase::Struct { params, .. } => {
+                                for (param_name, param_type) in params {
+                                    output.extend_from_slice(b", ");
+                                    self.codegen_typename(*param_type, output);
+                                    output.extend_from_slice(param_name);
+                                }
+                            }
+                            EnumCase::Simple { .. } => {}
+                        }
+                        output.extend_from_slice(b") {\n");
+
+                        self.codegen_typename(TypeId(idx), output);
+                        output.extend_from_slice(b"* tmp = (");
+                        self.codegen_typename(TypeId(idx), output);
+                        output.extend_from_slice(b"*)allocate(allocator, sizeof(struct enum_");
+                        output.extend_from_slice(idx.to_string().as_bytes());
+                        output.extend_from_slice(b"), allocation_id);\n");
+
+                        output.extend_from_slice(b"tmp->case_id = ");
+                        output.extend_from_slice(case_offset.to_string().as_bytes());
+                        output.extend_from_slice(b";\n");
+
+                        match case {
+                            EnumCase::Single { name, .. } => {
+                                output.extend_from_slice(b"tmp->");
+                                output.extend_from_slice(name);
+                                output.extend_from_slice(b" = ");
+                                output.extend_from_slice(case_offset.to_string().as_bytes());
+                                output.extend_from_slice(b";\n");
+                            }
+                            EnumCase::Struct { params, .. } => {
+                                for (param_name, _) in params {
+                                    output.extend_from_slice(b"tmp->");
+                                    output.extend_from_slice(param_name);
+                                    output.extend_from_slice(b" = ");
+                                    output.extend_from_slice(param_name);
+                                    output.extend_from_slice(b";\n");
+                                }
+                            }
+                            EnumCase::Simple { .. } => {}
+                        }
+
+                        output.extend_from_slice(b"return tmp;\n");
+
+                        output.extend_from_slice(b"}\n");
+                    }
                 }
                 _ => {}
             }
@@ -377,56 +443,76 @@ impl Codegen {
                 output.push(b')');
             }
             AstNode::Call { head, args } => {
-                let fun_id = self
+                let call_target = self
                     .compiler
-                    .fun_resolution
+                    .call_resolution
                     .get(head)
                     .expect("internal error: missing call resolution in codegen");
 
-                if fun_id.0 == 0 {
-                    // special case for println
-                    if self.compiler.node_types[args[0].0] == STRING_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%s\\n\", ");
-                        self.codegen_node(args[0], output);
-                    } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%lli\\n\", ");
-                        self.codegen_node(args[0], output);
-                    } else if self.compiler.node_types[args[0].0] == F64_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%lf\\n\", ");
-                        self.codegen_node(args[0], output);
-                    } else if self.compiler.node_types[args[0].0] == BOOL_TYPE_ID {
-                        output.extend_from_slice(b"printf(\"%s\\n\", (");
-                        self.codegen_node(args[0], output);
-                        output.extend_from_slice(br#")?"true":"false""#);
-                    } else {
-                        panic!(
-                            "unknown type for printf: {}",
-                            self.compiler.node_types[args[0].0].0
+                match call_target {
+                    CallTarget::Function(fun_id) => {
+                        if fun_id.0 == 0 {
+                            // special case for println
+                            if self.compiler.node_types[args[0].0] == STRING_TYPE_ID {
+                                output.extend_from_slice(b"printf(\"%s\\n\", ");
+                                self.codegen_node(args[0], output);
+                            } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
+                                output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                                self.codegen_node(args[0], output);
+                            } else if self.compiler.node_types[args[0].0] == F64_TYPE_ID {
+                                output.extend_from_slice(b"printf(\"%lf\\n\", ");
+                                self.codegen_node(args[0], output);
+                            } else if self.compiler.node_types[args[0].0] == BOOL_TYPE_ID {
+                                output.extend_from_slice(b"printf(\"%s\\n\", (");
+                                self.codegen_node(args[0], output);
+                                output.extend_from_slice(br#")?"true":"false""#);
+                            } else {
+                                panic!(
+                                    "unknown type for printf: {}",
+                                    self.compiler.node_types[args[0].0].0
+                                );
+                            }
+                            output.extend_from_slice(b");\n");
+                            return;
+                        }
+
+                        output.extend_from_slice(b"/* ");
+                        output.extend_from_slice(
+                            self.compiler
+                                .get_source(self.compiler.functions[fun_id.0].name),
                         );
+                        output.extend_from_slice(b" */ ");
+
+                        output.extend_from_slice(b"function_");
+                        output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                        output.push(b'(');
+
+                        self.codegen_annotation(node_id, output);
+
+                        for arg in args {
+                            output.extend_from_slice(b", ");
+
+                            self.codegen_node(*arg, output)
+                        }
+                        output.push(b')');
                     }
-                    output.extend_from_slice(b");\n");
-                    return;
+                    CallTarget::EnumConstructor(target, offset) => {
+                        output.extend_from_slice(b"enum_case_");
+                        output.extend_from_slice(target.0.to_string().as_bytes());
+                        output.push(b'_');
+                        output.extend_from_slice(offset.0.to_string().as_bytes());
+                        output.push(b'(');
+
+                        self.codegen_annotation(node_id, output);
+
+                        for arg in args {
+                            output.extend_from_slice(b", ");
+
+                            self.codegen_node(*arg, output)
+                        }
+                        output.push(b')');
+                    }
                 }
-
-                output.extend_from_slice(b"/* ");
-                output.extend_from_slice(
-                    self.compiler
-                        .get_source(self.compiler.functions[fun_id.0].name),
-                );
-                output.extend_from_slice(b" */ ");
-
-                output.extend_from_slice(b"function_");
-                output.extend_from_slice(fun_id.0.to_string().as_bytes());
-                output.push(b'(');
-
-                self.codegen_annotation(node_id, output);
-
-                for arg in args {
-                    output.extend_from_slice(b", ");
-
-                    self.codegen_node(*arg, output)
-                }
-                output.push(b')');
             }
             AstNode::New(_, allocation_call) => {
                 let type_id = self.compiler.node_types[node_id.0];
@@ -453,7 +539,58 @@ impl Codegen {
                     panic!("internal error: expected allocation call during allocation")
                 }
             }
-            AstNode::NamespacedLookup { item, .. } => self.codegen_node(*item, output),
+            AstNode::NamespacedLookup { item, .. } => match &self.compiler.ast_nodes[item.0] {
+                AstNode::Call { args, .. } => {
+                    let call_target = self
+                        .compiler
+                        .call_resolution
+                        .get(&node_id)
+                        .expect("internal error: missing call resolution in codegen");
+
+                    match call_target {
+                        CallTarget::Function(fun_id) => {
+                            output.extend_from_slice(b"/* ");
+                            output.extend_from_slice(
+                                self.compiler
+                                    .get_source(self.compiler.functions[fun_id.0].name),
+                            );
+                            output.extend_from_slice(b" */ ");
+
+                            output.extend_from_slice(b"function_");
+                            output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                            output.push(b'(');
+
+                            self.codegen_annotation(node_id, output);
+
+                            for arg in args {
+                                output.extend_from_slice(b", ");
+
+                                self.codegen_node(*arg, output)
+                            }
+                            output.push(b')');
+                        }
+                        CallTarget::EnumConstructor(target, offset) => {
+                            output.extend_from_slice(b"enum_case_");
+                            output.extend_from_slice(target.0.to_string().as_bytes());
+                            output.push(b'_');
+                            output.extend_from_slice(offset.0.to_string().as_bytes());
+                            output.push(b'(');
+
+                            self.codegen_annotation(node_id, output);
+
+                            for arg in args {
+                                output.extend_from_slice(b", ");
+
+                                self.codegen_node(*arg, output)
+                            }
+                            output.push(b')');
+                        }
+                    }
+                }
+                _ => {
+                    panic!("unsupported namespace lookup")
+                }
+            },
             AstNode::NamedValue { value, .. } => {
                 // FIXME: this should probably be handled cleanly via typecheck+codegen
                 // rather than ignoring the name

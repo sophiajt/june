@@ -1,5 +1,5 @@
 use crate::{
-    compiler::Compiler,
+    compiler::{CallTarget, Compiler},
     errors::SourceError,
     parser::{AstNode, BlockId, NodeId},
     typechecker::{FunId, VarId},
@@ -358,10 +358,10 @@ impl LifetimeChecker {
                     self.check_node_lifetime(arg, scope_level)
                 }
 
-                let fun_id = self.compiler.fun_resolution.get(&head);
+                let call_target = self.compiler.call_resolution.get(&head);
 
                 // note: fun_id 0 is currently the built-in print
-                if !matches!(fun_id, Some(FunId(0))) {
+                if !matches!(call_target, Some(CallTarget::Function(FunId(0)))) {
                     self.current_block_may_allocate(scope_level, node_id);
                 }
             }
@@ -416,7 +416,10 @@ impl LifetimeChecker {
             }
             AstNode::NamespacedLookup { item, .. } => {
                 if matches!(self.compiler.ast_nodes[item.0], AstNode::Call { .. }) {
-                    self.check_node_lifetime(*item, scope_level)
+                    let item = *item;
+                    self.check_node_lifetime(item, scope_level);
+
+                    self.expand_lifetime_with_node(node_id, item);
                 }
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {

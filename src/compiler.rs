@@ -5,6 +5,15 @@ use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, NodeId};
 use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, STRING_TYPE_ID};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CaseOffset(pub usize);
+
+#[derive(Debug)]
+pub enum CallTarget {
+    Function(FunId),
+    EnumConstructor(TypeId, CaseOffset),
+}
+
 #[derive(Debug)]
 pub struct Compiler {
     // Core information, indexed by NodeId
@@ -30,7 +39,7 @@ pub struct Compiler {
     pub types: Vec<Type>,
 
     // Use/def
-    pub fun_resolution: HashMap<NodeId, FunId>,
+    pub call_resolution: HashMap<NodeId, CallTarget>,
     pub var_resolution: HashMap<NodeId, VarId>,
     pub type_resolution: HashMap<NodeId, TypeId>,
 
@@ -56,7 +65,7 @@ impl Compiler {
             functions: vec![],
             types: vec![],
 
-            fun_resolution: HashMap::new(),
+            call_resolution: HashMap::new(),
             var_resolution: HashMap::new(),
             type_resolution: HashMap::new(),
 
