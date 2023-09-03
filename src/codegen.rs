@@ -540,11 +540,11 @@ impl Codegen {
                 }
             }
             AstNode::NamespacedLookup { item, .. } => match &self.compiler.ast_nodes[item.0] {
-                AstNode::Call { args, .. } => {
+                AstNode::Call { head, args } => {
                     let call_target = self
                         .compiler
                         .call_resolution
-                        .get(&node_id)
+                        .get(head)
                         .expect("internal error: missing call resolution in codegen");
 
                     match call_target {

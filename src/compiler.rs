@@ -102,6 +102,9 @@ impl Compiler {
         for (type_id, ty) in self.types.iter().skip(STRING_TYPE_ID.0 + 1).enumerate() {
             println!("  {}: {:?}", type_id + STRING_TYPE_ID.0 + 1, ty);
         }
+
+        println!("Call resolution");
+        println!("{:?}", self.call_resolution);
     }
 
     fn print_helper(&self, node_id: &NodeId, indent: usize) {

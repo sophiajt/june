@@ -825,6 +825,7 @@ impl Typechecker {
                         }
                     }
                     Type::Enum { cases, .. } => {
+                        // FIXME: remove clone
                         let cases = cases.clone();
 
                         let output_type = self
@@ -833,8 +834,9 @@ impl Typechecker {
                         match &self.compiler.ast_nodes[item.0] {
                             AstNode::Call { head, args } => {
                                 // FIXME: remove clone
+                                let head = *head;
                                 let args = args.clone();
-                                let case_name = self.compiler.get_source(*head);
+                                let case_name = self.compiler.get_source(head);
 
                                 for (case_offset, case) in cases.iter().enumerate() {
                                     match case {
@@ -854,7 +856,7 @@ impl Typechecker {
                                                     }
 
                                                     self.compiler.call_resolution.insert(
-                                                        node_id,
+                                                        head,
                                                         CallTarget::EnumConstructor(
                                                             type_id,
                                                             CaseOffset(case_offset),
@@ -880,7 +882,7 @@ impl Typechecker {
                                         EnumCase::Simple { name } => {
                                             if name == case_name {
                                                 self.compiler.call_resolution.insert(
-                                                    node_id,
+                                                    item,
                                                     CallTarget::EnumConstructor(
                                                         type_id,
                                                         CaseOffset(case_offset),
