@@ -415,7 +415,14 @@ impl LifetimeChecker {
                 self.check_node_lifetime(value, scope_level)
             }
             AstNode::NamespacedLookup { item, .. } => {
-                if matches!(self.compiler.ast_nodes[item.0], AstNode::Call { .. }) {
+                if matches!(self.compiler.ast_nodes[item.0], AstNode::Variable) {
+                    if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Unknown {
+                        self.compiler.node_lifetimes[node_id.0] =
+                            AllocationLifetime::Scope { level: scope_level };
+                    }
+
+                    self.expand_lifetime_with_node(*item, node_id);
+                } else if matches!(self.compiler.ast_nodes[item.0], AstNode::Call { .. }) {
                     let item = *item;
                     self.check_node_lifetime(item, scope_level);
 

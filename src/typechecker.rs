@@ -870,6 +870,40 @@ impl Typechecker {
                                                 }
                                             }
                                         }
+                                        EnumCase::Struct { name, params } => {
+                                            if name == case_name {
+                                                if args.len() == params.len() {
+                                                    for (arg, (param_name, param_type_id)) in
+                                                        args.into_iter().zip(params)
+                                                    {
+                                                        let arg_type_id = self.typecheck_node(arg);
+
+                                                        if !self.is_type_compatible(
+                                                            *param_type_id,
+                                                            arg_type_id,
+                                                        ) {
+                                                            self.error(
+                                                                "incompatible types for enum case",
+                                                                arg,
+                                                            );
+                                                            return VOID_TYPE_ID;
+                                                        }
+                                                    }
+                                                    self.compiler.call_resolution.insert(
+                                                        head,
+                                                        CallTarget::EnumConstructor(
+                                                            type_id,
+                                                            CaseOffset(case_offset),
+                                                        ),
+                                                    );
+
+                                                    return output_type;
+                                                } else {
+                                                    self.error(format!("enum case has {} values, but should have 1", args.len()), item);
+                                                    return VOID_TYPE_ID;
+                                                }
+                                            }
+                                        }
                                         _ => {}
                                     }
                                 }

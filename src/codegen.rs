@@ -187,6 +187,7 @@ impl Codegen {
                                 for (param_name, param_type) in params {
                                     output.extend_from_slice(b", ");
                                     self.codegen_typename(*param_type, output);
+                                    output.push(b' ');
                                     output.extend_from_slice(param_name);
                                 }
                             }
@@ -583,6 +584,43 @@ impl Codegen {
 
                                 self.codegen_node(*arg, output)
                             }
+                            output.push(b')');
+                        }
+                    }
+                }
+                AstNode::Variable => {
+                    let call_target = self
+                        .compiler
+                        .call_resolution
+                        .get(item)
+                        .expect("internal error: missing call resolution in codegen");
+
+                    match call_target {
+                        CallTarget::Function(fun_id) => {
+                            output.extend_from_slice(b"/* ");
+                            output.extend_from_slice(
+                                self.compiler
+                                    .get_source(self.compiler.functions[fun_id.0].name),
+                            );
+                            output.extend_from_slice(b" */ ");
+
+                            output.extend_from_slice(b"function_");
+                            output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                            output.push(b'(');
+
+                            self.codegen_annotation(node_id, output);
+
+                            output.push(b')');
+                        }
+                        CallTarget::EnumConstructor(target, offset) => {
+                            output.extend_from_slice(b"enum_case_");
+                            output.extend_from_slice(target.0.to_string().as_bytes());
+                            output.push(b'_');
+                            output.extend_from_slice(offset.0.to_string().as_bytes());
+                            output.push(b'(');
+
+                            self.codegen_annotation(node_id, output);
+
                             output.push(b')');
                         }
                     }

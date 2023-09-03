@@ -1,8 +1,11 @@
 enum State {
     None
-    I64(i64)
+    StateId(i64)
+    Duration { from: i64, to: i64 }
 }
 
 fun main() {
-    let y = State::I64(4)
+    let x = State::None
+    let y = State::StateId(4)
+    let z = State::Duration(from: 1, to: 10)
 }

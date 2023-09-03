@@ -866,6 +866,7 @@ impl Parser {
             }
             Some(vec![payload])
         } else if self.is_lcurly() {
+            self.lcurly();
             let mut payload = vec![];
             while self.has_tokens() {
                 if self.is_rcurly() {
