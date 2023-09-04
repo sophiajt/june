@@ -19,7 +19,7 @@ pub struct Compiler {
     // Core information, indexed by NodeId
     pub span_start: Vec<usize>,
     pub span_end: Vec<usize>,
-    pub ast_nodes: Vec<AstNode>,
+    ast_nodes: Vec<AstNode>,
     pub node_types: Vec<TypeId>,
     pub node_lifetimes: Vec<AllocationLifetime>,
 
@@ -36,7 +36,7 @@ pub struct Compiler {
     // indexed by FunId
     pub functions: Vec<Function>,
     // indexed by TypeId
-    pub types: Vec<Type>,
+    types: Vec<Type>,
 
     // Use/def
     pub call_resolution: HashMap<NodeId, CallTarget>,
@@ -459,7 +459,51 @@ impl Compiler {
         self.source.len()
     }
 
-    pub fn node_id_offset(&self) -> usize {
+    pub fn get_ast_node(&self, node_id: NodeId) -> &AstNode {
+        &self.ast_nodes[node_id.0]
+    }
+
+    pub fn get_ast_node_mut(&mut self, node_id: NodeId) -> &mut AstNode {
+        &mut self.ast_nodes[node_id.0]
+    }
+
+    pub fn push_ast_node(&mut self, ast_node: AstNode) -> NodeId {
+        self.ast_nodes.push(ast_node);
+
+        NodeId(self.ast_nodes.len() - 1)
+    }
+
+    pub fn get_type(&self, type_id: TypeId) -> &Type {
+        &self.types[type_id.0]
+    }
+
+    pub fn get_type_mut(&mut self, type_id: TypeId) -> &mut Type {
+        &mut self.types[type_id.0]
+    }
+
+    pub fn get_types(&self) -> &[Type] {
+        &self.types
+    }
+
+    pub fn push_type(&mut self, ty: Type) -> TypeId {
+        self.types.push(ty);
+
+        TypeId(self.types.len() - 1)
+    }
+
+    pub fn find_or_create_type(&mut self, ty: Type) -> TypeId {
+        for (idx, t) in self.types.iter().enumerate() {
+            if &ty == t {
+                return TypeId(idx);
+            }
+        }
+
+        self.types.push(ty);
+
+        TypeId(self.types.len() - 1)
+    }
+
+    pub fn num_ast_nodes(&self) -> usize {
         self.ast_nodes.len()
     }
 

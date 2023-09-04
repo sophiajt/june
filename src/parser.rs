@@ -3,7 +3,6 @@ use crate::errors::SourceError;
 
 pub struct Parser {
     pub compiler: Compiler,
-    pub node_id_offset: usize,
     pub span_offset: usize,
     content_length: usize,
 }
@@ -145,6 +144,10 @@ pub enum AstNode {
         then_block: NodeId,
         else_expression: Option<NodeId>,
     },
+    Match {
+        target: NodeId,
+        match_arms: Vec<(NodeId, NodeId)>,
+    },
     New(AllocationType, NodeId),
     Statement(NodeId),
     Garbage,
@@ -227,6 +230,7 @@ pub enum TokenType {
     AmpersandAmpersand,
     QuestionMark,
     ThinArrow,
+    ThickArrow,
 }
 
 #[derive(Debug)]
@@ -260,13 +264,12 @@ fn is_symbol(b: u8) -> bool {
 }
 
 impl Parser {
-    pub fn new(compiler: Compiler, span_offset: usize, node_id_offset: usize) -> Self {
+    pub fn new(compiler: Compiler, span_offset: usize) -> Self {
         let content_length = compiler.source.len() - span_offset;
         Self {
             compiler,
             content_length,
             span_offset,
-            node_id_offset,
         }
     }
 
@@ -438,6 +441,16 @@ impl Parser {
             self.peek(),
             Some(Token {
                 token_type: TokenType::ThinArrow,
+                ..
+            })
+        )
+    }
+
+    pub fn is_thick_arrow(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::ThickArrow,
                 ..
             })
         )
@@ -656,9 +669,7 @@ impl Parser {
     pub fn create_node(&mut self, ast_node: AstNode, span_start: usize, span_end: usize) -> NodeId {
         self.compiler.span_start.push(span_start);
         self.compiler.span_end.push(span_end);
-        self.compiler.ast_nodes.push(ast_node);
-
-        NodeId(self.compiler.span_start.len() - 1 + self.node_id_offset)
+        self.compiler.push_ast_node(ast_node)
     }
 
     pub fn block(&mut self, expect_curly_braces: bool) -> NodeId {
@@ -920,6 +931,8 @@ impl Parser {
             return self.if_expression();
         } else if self.is_keyword(b"new") {
             return self.new_allocation();
+        } else if self.is_keyword(b"match") {
+            return self.match_expression();
         }
 
         // Otherwise assume a math expression
@@ -1062,7 +1075,7 @@ impl Parser {
                 };
                 let span_end = self.get_span_end(field_or_call);
 
-                match &mut self.compiler.ast_nodes[field_or_call.0] {
+                match self.compiler.get_ast_node_mut(field_or_call) {
                     AstNode::Variable | AstNode::Name => {
                         expr = self.create_node(
                             AstNode::MemberAccess {
@@ -1241,7 +1254,7 @@ impl Parser {
     }
 
     pub fn operator_precedence(&mut self, operator: NodeId) -> usize {
-        self.compiler.ast_nodes[operator.0].precedence()
+        self.compiler.get_ast_node(operator).precedence()
     }
 
     pub fn spanning(&mut self, from: NodeId, to: NodeId) -> (usize, usize) {
@@ -1452,6 +1465,45 @@ impl Parser {
             span_start,
             span_end,
         )
+    }
+
+    pub fn match_expression(&mut self) -> NodeId {
+        let span_start = self.position();
+        let span_end;
+
+        self.keyword(b"match");
+        let target = self.simple_expression();
+
+        let mut match_arms = vec![];
+
+        if !self.is_lcurly() {
+            return self.error("expected left curly brace '{'");
+        }
+
+        self.lcurly();
+
+        loop {
+            if self.is_rcurly() {
+                span_end = self.position() + 1;
+                self.rcurly();
+                break;
+            } else if self.is_simple_expression() {
+                let pattern = self.simple_expression();
+
+                if !self.is_thick_arrow() {
+                    return self.error("expected thick arrow (=>) between match cases");
+                }
+                self.next();
+
+                let pattern_result = self.simple_expression();
+
+                match_arms.push((pattern, pattern_result));
+            } else {
+                return self.error("expected match arm in match");
+            }
+        }
+
+        self.create_node(AstNode::Match { target, match_arms }, span_start, span_end)
     }
 
     pub fn if_expression(&mut self) -> NodeId {
@@ -2162,6 +2214,14 @@ impl Parser {
                 {
                     Token {
                         token_type: TokenType::EqualsTilde,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
+                } else if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b'>'
+                {
+                    Token {
+                        token_type: TokenType::ThickArrow,
                         span_start,
                         span_end: span_start + 2,
                     }

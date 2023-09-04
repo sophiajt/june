@@ -18,7 +18,7 @@ pub struct FunId(pub usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeId(pub usize);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Unknown,
     Void,
@@ -33,14 +33,14 @@ pub enum Type {
         is_allocator: bool,
     },
     Enum {
-        cases: Vec<EnumCase>,
+        variants: Vec<EnumVariant>,
         methods: Vec<FunId>,
     },
     Pointer(AllocationType, TypeId),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum EnumCase {
+pub enum EnumVariant {
     Simple {
         name: Vec<u8>,
     },
@@ -129,16 +129,14 @@ impl Typechecker {
             return_type: VOID_TYPE_ID,
         });
 
-        compiler.types = vec![
-            // hardwire in the core types before the user-defined types
-            Type::Unknown,
-            Type::Void,
-            Type::I64,
-            Type::F64,
-            Type::Bool,
-            Type::Range(I64_TYPE_ID),
-            Type::String,
-        ];
+        // hardwire in the core types before the user-defined types
+        compiler.push_type(Type::Unknown);
+        compiler.push_type(Type::Void);
+        compiler.push_type(Type::I64);
+        compiler.push_type(Type::F64);
+        compiler.push_type(Type::Bool);
+        compiler.push_type(Type::Range(I64_TYPE_ID));
+        compiler.push_type(Type::String);
 
         let mut scope = vec![Scope::new()];
 
@@ -163,7 +161,8 @@ impl Typechecker {
             _ => {
                 if let Some(type_id) = self.find_type_in_scope(ty) {
                     // Assume custom types are pointers
-                    self.find_or_create_type(Type::Pointer(AllocationType::Normal, *type_id))
+                    self.compiler
+                        .find_or_create_type(Type::Pointer(AllocationType::Normal, *type_id))
                 } else {
                     self.error(
                         &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
@@ -188,13 +187,13 @@ impl Typechecker {
             .to_vec();
 
         //FIXME: remove clone?
-        if let AstNode::Params(unchecked_params) = self.compiler.ast_nodes[params.0].clone() {
+        if let AstNode::Params(unchecked_params) = self.compiler.get_ast_node(params).clone() {
             for unchecked_param in unchecked_params {
                 if let AstNode::Param {
                     name,
                     ty,
                     is_mutable,
-                } = &self.compiler.ast_nodes[unchecked_param.0]
+                } = &self.compiler.get_ast_node(unchecked_param)
                 {
                     let name = *name;
                     let param_name = self.compiler.get_source(name).to_vec();
@@ -271,7 +270,7 @@ impl Typechecker {
         let mut output_cases = vec![];
 
         for enum_case in cases {
-            if let AstNode::EnumCase { name, payload } = &self.compiler.ast_nodes[enum_case.0] {
+            if let AstNode::EnumCase { name, payload } = self.compiler.get_ast_node(enum_case) {
                 let case_name = self.compiler.get_source(*name).to_vec();
 
                 match payload {
@@ -281,13 +280,13 @@ impl Typechecker {
                             break;
                         }
 
-                        match &self.compiler.ast_nodes[payload[0].0] {
+                        match &self.compiler.get_ast_node(payload[0]) {
                             AstNode::NamedValue { .. } => {
                                 let mut fields = vec![];
                                 let payload = payload.clone();
                                 for item in payload {
                                     if let AstNode::NamedValue { name, value } =
-                                        &self.compiler.ast_nodes[item.0]
+                                        &self.compiler.get_ast_node(item)
                                     {
                                         let name = *name;
                                         let value = *value;
@@ -305,7 +304,7 @@ impl Typechecker {
                                     }
                                 }
 
-                                output_cases.push(EnumCase::Struct {
+                                output_cases.push(EnumVariant::Struct {
                                     name: case_name,
                                     params: fields,
                                 });
@@ -313,7 +312,7 @@ impl Typechecker {
                             AstNode::Type { .. } => {
                                 let type_id = self.typecheck_typename(payload[0]);
 
-                                output_cases.push(EnumCase::Single {
+                                output_cases.push(EnumVariant::Single {
                                     name: case_name,
                                     param: type_id,
                                 });
@@ -324,7 +323,7 @@ impl Typechecker {
                         }
                     }
                     None => {
-                        output_cases.push(EnumCase::Simple { name: case_name });
+                        output_cases.push(EnumVariant::Simple { name: case_name });
                     }
                 }
             } else {
@@ -332,16 +331,13 @@ impl Typechecker {
             }
         }
 
-        self.compiler.types.push(Type::Enum {
-            cases: output_cases,
+        let type_id = self.compiler.push_type(Type::Enum {
+            variants: output_cases,
             methods: vec![],
         });
 
-        let type_id = TypeId(self.compiler.types.len() - 1);
-
         self.compiler
-            .types
-            .push(Type::Pointer(AllocationType::Normal, type_id));
+            .push_type(Type::Pointer(AllocationType::Normal, type_id));
 
         self.add_type_to_scope(enum_name, type_id);
 
@@ -353,7 +349,7 @@ impl Typechecker {
             let mut fun_ids = vec![];
 
             for method in methods {
-                let AstNode::Fun { name, params, return_ty, block } = &self.compiler.ast_nodes[method.0] else {
+                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_ast_node(method) else {
                     self.error("internal error: can't find method definition during typecheck", method);
                     return VOID_TYPE_ID;
                 };
@@ -367,7 +363,7 @@ impl Typechecker {
 
             let Type::Struct {
                 methods, ..
-            } = &mut self.compiler.types[type_id.0] else {
+            } = self.compiler.get_type_mut(type_id) else {
                 panic!("internal error: previously inserted struct can't be found");
             };
 
@@ -401,17 +397,14 @@ impl Typechecker {
             output_fields.push((field_name, field_type));
         }
 
-        self.compiler.types.push(Type::Struct {
+        let type_id = self.compiler.push_type(Type::Struct {
             fields: output_fields,
             methods: vec![],
             is_allocator,
         });
 
-        let type_id = TypeId(self.compiler.types.len() - 1);
-
         self.compiler
-            .types
-            .push(Type::Pointer(AllocationType::Normal, type_id));
+            .push_type(Type::Pointer(AllocationType::Normal, type_id));
 
         self.add_type_to_scope(struct_name, type_id);
 
@@ -423,7 +416,7 @@ impl Typechecker {
             let mut fun_ids = vec![];
 
             for method in methods {
-                let AstNode::Fun { name, params, return_ty, block } = &self.compiler.ast_nodes[method.0] else {
+                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_ast_node(method) else {
                     self.error("internal error: can't find method definition during typecheck", method);
                     return VOID_TYPE_ID;
                 };
@@ -437,7 +430,7 @@ impl Typechecker {
 
             let Type::Struct {
                 methods, ..
-            } = &mut self.compiler.types[type_id.0] else {
+            } = self.compiler.get_type_mut(type_id) else {
                 panic!("internal error: previously inserted struct can't be found");
             };
 
@@ -462,7 +455,7 @@ impl Typechecker {
         let block = self.compiler.blocks[block_id.0].clone();
 
         for node_id in &block.nodes {
-            match &self.compiler.ast_nodes[node_id.0] {
+            match &self.compiler.get_ast_node(*node_id) {
                 AstNode::Fun {
                     name,
                     params,
@@ -556,7 +549,7 @@ impl Typechecker {
             // TODO: add name-checking
             let arg = *arg;
 
-            match &self.compiler.ast_nodes[arg.0] {
+            match &self.compiler.get_ast_node(arg) {
                 AstNode::NamedValue { name, value } => {
                     let name = *name;
                     let value = *value;
@@ -604,7 +597,7 @@ impl Typechecker {
     }
 
     pub fn typecheck_node(&mut self, node_id: NodeId) -> TypeId {
-        let node_type = match &self.compiler.ast_nodes[node_id.0] {
+        let node_type = match &self.compiler.get_ast_node(node_id) {
             AstNode::Block(block_id) => {
                 self.typecheck_block(node_id, *block_id);
                 VOID_TYPE_ID
@@ -667,18 +660,19 @@ impl Typechecker {
 
                 let type_id = self.typecheck_node(target);
 
-                let type_id = match &self.compiler.types[type_id.0] {
+                let type_id = match self.compiler.get_type(type_id) {
                     Type::Pointer(_, type_id) => *type_id,
                     _ => type_id,
                 };
 
-                match &self.compiler.types[type_id.0] {
+                match self.compiler.get_type(type_id) {
                     Type::Struct { fields, .. } => {
                         let field_name = self.compiler.get_source(field);
                         for known_field in fields {
                             if known_field.0 == field_name {
+                                let type_id = known_field.1;
                                 self.compiler.node_types[node_id.0] = known_field.1;
-                                return known_field.1;
+                                return type_id;
                             }
                         }
                         self.error("unknown field", field);
@@ -691,44 +685,7 @@ impl Typechecker {
                 }
             }
             AstNode::MethodCall { target, call } => {
-                let target = *target;
-                let call = *call;
-
-                let AstNode::Call { head, args } = &self.compiler.ast_nodes[call.0] else {
-                    panic!("Internal error: method call using a non-call")
-                };
-
-                let head = *head;
-                // FIXME: fix clone
-                let args = args.clone();
-
-                let name = self.compiler.get_source(head).to_vec();
-                let type_id = self.typecheck_node(target);
-
-                let type_id = match &self.compiler.types[type_id.0] {
-                    Type::Pointer(_, type_id) => *type_id,
-                    _ => type_id,
-                };
-
-                match &self.compiler.types[type_id.0] {
-                    Type::Struct { methods, .. } => {
-                        for method in methods {
-                            let method_name = self
-                                .compiler
-                                .get_source(self.compiler.functions[method.0].name);
-
-                            if method_name == name {
-                                let type_id = self.typecheck_call_with_fun_id(head, *method, &args);
-                                self.compiler.node_types[node_id.0] = type_id;
-                                return type_id;
-                            }
-                        }
-                        self.error("can't find method in struct", head);
-                    }
-                    _ => self.error("expected struct type for method call", target),
-                }
-
-                VOID_TYPE_ID
+                self.typecheck_method_call(*target, *call, node_id)
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 let lhs = *lhs;
@@ -737,7 +694,7 @@ impl Typechecker {
                 let lhs_ty = self.typecheck_node(lhs);
                 let rhs_ty = self.typecheck_node(rhs);
 
-                match &self.compiler.ast_nodes[op.0] {
+                match self.compiler.get_ast_node(op) {
                     AstNode::Plus | AstNode::Minus | AstNode::Multiply | AstNode::Divide => {
                         if lhs_ty != rhs_ty {
                             // FIXME: actually say the types
@@ -791,180 +748,7 @@ impl Typechecker {
                 RANGE_I64_TYPE_ID
             }
             AstNode::NamespacedLookup { namespace, item } => {
-                let namespace = *namespace;
-                let item = *item;
-
-                let type_id = self.find_type_in_scope(namespace);
-
-                let Some(type_id) = type_id else {
-                    self.error("could not find namespace", namespace);
-                    return VOID_TYPE_ID;
-                };
-
-                let type_id = *type_id;
-
-                match &self.compiler.types[type_id.0] {
-                    Type::Struct { methods, .. } => {
-                        let AstNode::Call { head, args } = &self.compiler.ast_nodes[item.0] else {
-                            self.error("expected static method call on struct", item);
-                            return VOID_TYPE_ID;
-                        };
-
-                        let head = *head;
-                        let args = args.clone();
-
-                        let call_name = self.compiler.get_source(head);
-
-                        for method in methods {
-                            let method_name = self
-                                .compiler
-                                .get_source(self.compiler.functions[method.0].name);
-                            if method_name == call_name {
-                                return self.typecheck_call_with_fun_id(head, *method, &args);
-                            }
-                        }
-                    }
-                    Type::Enum { cases, .. } => {
-                        // FIXME: remove clone
-                        let cases = cases.clone();
-
-                        let output_type = self
-                            .find_or_create_type(Type::Pointer(AllocationType::Normal, type_id));
-
-                        match &self.compiler.ast_nodes[item.0] {
-                            AstNode::Call { head, args } => {
-                                // FIXME: remove clone
-                                let head = *head;
-                                let args = args.clone();
-                                let case_name = self.compiler.get_source(head);
-
-                                for (case_offset, case) in cases.iter().enumerate() {
-                                    match case {
-                                        EnumCase::Single { name, param } => {
-                                            if name == case_name {
-                                                let param = *param;
-                                                if args.len() == 1 {
-                                                    let arg_type_id = self.typecheck_node(args[0]);
-
-                                                    if !self.is_type_compatible(param, arg_type_id)
-                                                    {
-                                                        self.error(
-                                                            "incompatible types for enum case",
-                                                            args[0],
-                                                        );
-                                                        return VOID_TYPE_ID;
-                                                    }
-
-                                                    self.compiler.call_resolution.insert(
-                                                        head,
-                                                        CallTarget::EnumConstructor(
-                                                            type_id,
-                                                            CaseOffset(case_offset),
-                                                        ),
-                                                    );
-
-                                                    return output_type;
-                                                } else {
-                                                    self.error(format!("enum case has {} values, but should have 1", args.len()), item);
-                                                    return VOID_TYPE_ID;
-                                                }
-                                            }
-                                        }
-                                        EnumCase::Struct { name, params } => {
-                                            if name == case_name {
-                                                if args.len() == params.len() {
-                                                    for (arg, (param_name, param_type_id)) in
-                                                        args.into_iter().zip(params)
-                                                    {
-                                                        if let AstNode::NamedValue { name, value } =
-                                                            &self.compiler.ast_nodes[arg.0]
-                                                        {
-                                                            let name = *name;
-                                                            let value = *value;
-
-                                                            let name_contents =
-                                                                self.compiler.get_source(name);
-
-                                                            if name_contents != param_name {
-                                                                self.error(
-                                                                    "name mismatch in enum case",
-                                                                    name,
-                                                                );
-                                                                return VOID_TYPE_ID;
-                                                            }
-
-                                                            let arg_type_id =
-                                                                self.typecheck_node(value);
-
-                                                            if !self.is_type_compatible(
-                                                                *param_type_id,
-                                                                arg_type_id,
-                                                            ) {
-                                                                self.error(
-                                                                    "incompatible types for enum case",
-                                                                    arg,
-                                                                );
-                                                                return VOID_TYPE_ID;
-                                                            }
-                                                        }
-                                                    }
-                                                    self.compiler.call_resolution.insert(
-                                                        head,
-                                                        CallTarget::EnumConstructor(
-                                                            type_id,
-                                                            CaseOffset(case_offset),
-                                                        ),
-                                                    );
-
-                                                    return output_type;
-                                                } else {
-                                                    self.error(format!("enum case has {} values, but should have 1", args.len()), item);
-                                                    return VOID_TYPE_ID;
-                                                }
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-                            AstNode::Name | AstNode::Variable => {
-                                let case_name = self.compiler.get_source(item);
-
-                                for (case_offset, case) in cases.iter().enumerate() {
-                                    match case {
-                                        EnumCase::Simple { name } => {
-                                            if name == case_name {
-                                                self.compiler.call_resolution.insert(
-                                                    item,
-                                                    CallTarget::EnumConstructor(
-                                                        type_id,
-                                                        CaseOffset(case_offset),
-                                                    ),
-                                                );
-
-                                                return output_type;
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-
-                                self.error("can't find matche enum case", item);
-                            }
-                            x => {
-                                self.error(
-                                    format!("expected enum case when created enum value: {:?}", x),
-                                    item,
-                                );
-                            }
-                        }
-                    }
-                    _ => {
-                        self.error("expected struct or enum", namespace);
-                    }
-                }
-
-                VOID_TYPE_ID
+                self.typecheck_namespaced_lookup(*namespace, *item)
             }
             AstNode::Call { head, args } => {
                 let head = *head;
@@ -1011,31 +795,7 @@ impl Typechecker {
                 condition,
                 then_block,
                 else_expression,
-            } => {
-                let condition = *condition;
-                let then_block = *then_block;
-                let else_expression = *else_expression;
-
-                self.typecheck_node(condition);
-                self.typecheck_node(then_block);
-
-                if self.compiler.node_types[condition.0] != BOOL_TYPE_ID {
-                    self.error("condition not a boolean expression", condition);
-                }
-
-                if let Some(else_expression) = else_expression {
-                    self.typecheck_node(else_expression);
-
-                    // FIXME: add type compatibility
-                    if self.compiler.node_types[then_block.0]
-                        != self.compiler.node_types[else_expression.0]
-                    {
-                        self.error("return used outside of a function", else_expression);
-                    }
-                }
-
-                self.compiler.node_types[then_block.0]
-            }
+            } => self.typecheck_if(*condition, *then_block, *else_expression),
             AstNode::While { condition, block } => {
                 let condition = *condition;
                 let block = *block;
@@ -1060,7 +820,7 @@ impl Typechecker {
 
                 let range_type = self.typecheck_node(range);
 
-                if matches!(self.compiler.types[range_type.0], Type::Range(I64_TYPE_ID)) {
+                if matches!(self.compiler.get_type(range_type), Type::Range(I64_TYPE_ID)) {
                     self.enter_scope();
 
                     let var_id = self.define_variable(variable, I64_TYPE_ID, true, variable);
@@ -1074,6 +834,9 @@ impl Typechecker {
                 }
 
                 VOID_TYPE_ID
+            }
+            AstNode::Match { target, match_arms } => {
+                self.typecheck_match(*target, match_arms.clone())
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
                 // ignore here, since we checked this in an earlier pass
@@ -1094,7 +857,7 @@ impl Typechecker {
     }
 
     pub fn typecheck_lvalue(&mut self, lvalue: NodeId) -> TypeId {
-        match &self.compiler.ast_nodes[lvalue.0] {
+        match self.compiler.get_ast_node(lvalue) {
             AstNode::Variable => {
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
@@ -1125,12 +888,12 @@ impl Typechecker {
 
                 let field_name = self.compiler.get_source(field);
 
-                let target_type_id = match &self.compiler.types[head_type_id.0] {
+                let target_type_id = match self.compiler.get_type(head_type_id) {
                     Type::Pointer(_, inner_type_id) => *inner_type_id,
                     _ => head_type_id,
                 };
 
-                match &self.compiler.types[target_type_id.0] {
+                match self.compiler.get_type(target_type_id) {
                     Type::Struct { fields, .. } => {
                         for f in fields {
                             if f.0 == field_name {
@@ -1161,7 +924,7 @@ impl Typechecker {
         allocation_type: AllocationType,
         node_id: NodeId,
     ) -> TypeId {
-        if let AstNode::Call { head, args } = &self.compiler.ast_nodes[node_id.0] {
+        if let AstNode::Call { head, args } = self.compiler.get_ast_node(node_id) {
             // FIXME: remove clone
             let head = *head;
             let args = args.clone();
@@ -1172,10 +935,12 @@ impl Typechecker {
             };
 
             let type_id = *type_id;
-            let output_type = self.find_or_create_type(Type::Pointer(allocation_type, type_id));
+            let output_type = self
+                .compiler
+                .find_or_create_type(Type::Pointer(allocation_type, type_id));
 
             'arg: for arg in args {
-                let AstNode::NamedValue { name, value } = &self.compiler.ast_nodes[arg.0] else {
+                let AstNode::NamedValue { name, value } = self.compiler.get_ast_node(arg) else {
                     self.error("unexpected argument in allocation", arg);
                     return UNKNOWN_TYPE_ID
                 };
@@ -1184,7 +949,7 @@ impl Typechecker {
 
                 self.typecheck_node(*value);
 
-                match &self.compiler.types[type_id.0] {
+                match self.compiler.get_type(type_id) {
                     Type::Struct { fields, .. } => {
                         let field_name = self.compiler.get_source(name);
                         for known_field in fields {
@@ -1196,7 +961,7 @@ impl Typechecker {
                         self.error("unknown field", name);
                         return UNKNOWN_TYPE_ID;
                     }
-                    Type::Pointer(_, type_id) => match &self.compiler.types[type_id.0] {
+                    Type::Pointer(_, type_id) => match self.compiler.get_type(*type_id) {
                         Type::Struct { fields, .. } => {
                             let field_name = self.compiler.get_source(name);
                             for known_field in fields {
@@ -1227,11 +992,328 @@ impl Typechecker {
         }
     }
 
+    pub fn typecheck_namespaced_lookup(&mut self, namespace: NodeId, item: NodeId) -> TypeId {
+        let type_id = self.find_type_in_scope(namespace);
+
+        let Some(type_id) = type_id else {
+            self.error("could not find namespace", namespace);
+            return VOID_TYPE_ID;
+        };
+
+        let type_id = *type_id;
+
+        match self.compiler.get_type(type_id) {
+            Type::Struct { methods, .. } => {
+                let AstNode::Call { head, args } = self.compiler.get_ast_node(item) else {
+                    self.error("expected static method call on struct", item);
+                    return VOID_TYPE_ID;
+                };
+
+                let head = *head;
+                let args = args.clone();
+
+                let call_name = self.compiler.get_source(head);
+
+                for method in methods {
+                    let method_name = self
+                        .compiler
+                        .get_source(self.compiler.functions[method.0].name);
+                    if method_name == call_name {
+                        return self.typecheck_call_with_fun_id(head, *method, &args);
+                    }
+                }
+            }
+            Type::Enum {
+                variants: cases, ..
+            } => {
+                // FIXME: remove clone
+                let cases = cases.clone();
+
+                let output_type = self
+                    .compiler
+                    .find_or_create_type(Type::Pointer(AllocationType::Normal, type_id));
+
+                match self.compiler.get_ast_node(item) {
+                    AstNode::Call { head, args } => {
+                        // FIXME: remove clone
+                        let head = *head;
+                        let args = args.clone();
+                        let case_name = self.compiler.get_source(head);
+
+                        for (case_offset, case) in cases.iter().enumerate() {
+                            match case {
+                                EnumVariant::Single { name, param } => {
+                                    if name == case_name {
+                                        let param = *param;
+                                        if args.len() == 1 {
+                                            let arg_type_id = self.typecheck_node(args[0]);
+
+                                            if !self.is_type_compatible(param, arg_type_id) {
+                                                self.error(
+                                                    "incompatible types for enum case",
+                                                    args[0],
+                                                );
+                                                return VOID_TYPE_ID;
+                                            }
+
+                                            self.compiler.call_resolution.insert(
+                                                head,
+                                                CallTarget::EnumConstructor(
+                                                    type_id,
+                                                    CaseOffset(case_offset),
+                                                ),
+                                            );
+
+                                            return output_type;
+                                        } else {
+                                            self.error(
+                                                format!(
+                                                    "enum case has {} values, but should have 1",
+                                                    args.len()
+                                                ),
+                                                item,
+                                            );
+                                            return VOID_TYPE_ID;
+                                        }
+                                    }
+                                }
+                                EnumVariant::Struct { name, params } => {
+                                    if name == case_name {
+                                        if args.len() == params.len() {
+                                            for (arg, (param_name, param_type_id)) in
+                                                args.into_iter().zip(params)
+                                            {
+                                                if let AstNode::NamedValue { name, value } =
+                                                    self.compiler.get_ast_node(arg)
+                                                {
+                                                    let name = *name;
+                                                    let value = *value;
+
+                                                    let name_contents =
+                                                        self.compiler.get_source(name);
+
+                                                    if name_contents != param_name {
+                                                        self.error(
+                                                            "name mismatch in enum case",
+                                                            name,
+                                                        );
+                                                        return VOID_TYPE_ID;
+                                                    }
+
+                                                    let arg_type_id = self.typecheck_node(value);
+
+                                                    if !self.is_type_compatible(
+                                                        *param_type_id,
+                                                        arg_type_id,
+                                                    ) {
+                                                        self.error(
+                                                            "incompatible types for enum case",
+                                                            arg,
+                                                        );
+                                                        return VOID_TYPE_ID;
+                                                    }
+                                                }
+                                            }
+                                            self.compiler.call_resolution.insert(
+                                                head,
+                                                CallTarget::EnumConstructor(
+                                                    type_id,
+                                                    CaseOffset(case_offset),
+                                                ),
+                                            );
+
+                                            return output_type;
+                                        } else {
+                                            self.error(
+                                                format!(
+                                                    "enum case has {} values, but should have 1",
+                                                    args.len()
+                                                ),
+                                                item,
+                                            );
+                                            return VOID_TYPE_ID;
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    AstNode::Name | AstNode::Variable => {
+                        let case_name = self.compiler.get_source(item);
+
+                        for (case_offset, case) in cases.iter().enumerate() {
+                            match case {
+                                EnumVariant::Simple { name } => {
+                                    if name == case_name {
+                                        self.compiler.call_resolution.insert(
+                                            item,
+                                            CallTarget::EnumConstructor(
+                                                type_id,
+                                                CaseOffset(case_offset),
+                                            ),
+                                        );
+
+                                        return output_type;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        self.error("can't find matche enum case", item);
+                    }
+                    x => {
+                        self.error(
+                            format!("expected enum case when created enum value: {:?}", x),
+                            item,
+                        );
+                    }
+                }
+            }
+            _ => {
+                self.error("expected struct or enum", namespace);
+            }
+        }
+
+        VOID_TYPE_ID
+    }
+
+    pub fn typecheck_if(
+        &mut self,
+        condition: NodeId,
+        then_block: NodeId,
+        else_expression: Option<NodeId>,
+    ) -> TypeId {
+        self.typecheck_node(condition);
+        self.typecheck_node(then_block);
+
+        if self.compiler.node_types[condition.0] != BOOL_TYPE_ID {
+            self.error("condition not a boolean expression", condition);
+        }
+
+        if let Some(else_expression) = else_expression {
+            self.typecheck_node(else_expression);
+
+            // FIXME: add type compatibility
+            if self.compiler.node_types[then_block.0] != self.compiler.node_types[else_expression.0]
+            {
+                self.error("return used outside of a function", else_expression);
+            }
+        }
+
+        self.compiler.node_types[then_block.0]
+    }
+
+    pub fn typecheck_match(&mut self, target: NodeId, match_arms: Vec<(NodeId, NodeId)>) -> TypeId {
+        let target_type_id = self.typecheck_node(target);
+
+        match self.compiler.get_type(target_type_id) {
+            Type::Enum { variants, .. } => {
+                let variants = variants.clone();
+
+                for (arm_pattern, arm_result) in match_arms {
+                    self.enter_scope();
+                    match self.compiler.get_ast_node(arm_pattern) {
+                        AstNode::Variable | AstNode::Name => {
+                            let var_id = self.define_variable(
+                                arm_pattern,
+                                target_type_id,
+                                false,
+                                arm_pattern,
+                            );
+
+                            let variable_name = self.compiler.get_source(arm_pattern).to_vec();
+                            self.add_variable_to_scope(variable_name, var_id);
+
+                            self.typecheck_node(arm_result);
+                        }
+                        AstNode::NamespacedLookup { namespace, item } => {
+                            let namespace = *namespace;
+                            let item = *item;
+
+                            // For now, let's keep things simple. The namespace has to be the enum name
+                            // and the item has to be the case/arm to match
+
+                            let namespace_type_id = self.find_type_in_scope(namespace);
+
+                            if let Some(namespace_type_id) = namespace_type_id {
+                                let namespace_type_id = *namespace_type_id;
+
+                                if namespace_type_id != target_type_id {
+                                    self.error(
+                                        "expected match case to be the same type as matched value",
+                                        namespace,
+                                    )
+                                } else {
+                                }
+                            } else {
+                                self.error("unknown match variant type", namespace)
+                            }
+                        }
+                        _ => self.error("unexpected kind of match case in match", arm_pattern),
+                    }
+                    self.exit_scope();
+                }
+
+                VOID_TYPE_ID
+            }
+            _ => {
+                //FIXME: add support for other value types
+                self.error("currently only enums are supported in matches", target);
+                VOID_TYPE_ID
+            }
+        }
+    }
+
+    pub fn typecheck_method_call(
+        &mut self,
+        target: NodeId,
+        call: NodeId,
+        node_id: NodeId,
+    ) -> TypeId {
+        let AstNode::Call { head, args } = self.compiler.get_ast_node(call) else {
+            panic!("Internal error: method call using a non-call")
+        };
+
+        let head = *head;
+        // FIXME: fix clone
+        let args = args.clone();
+
+        let name = self.compiler.get_source(head).to_vec();
+        let type_id = self.typecheck_node(target);
+
+        let type_id = match self.compiler.get_type(type_id) {
+            Type::Pointer(_, type_id) => *type_id,
+            _ => type_id,
+        };
+
+        match self.compiler.get_type(type_id) {
+            Type::Struct { methods, .. } => {
+                for method in methods {
+                    let method_name = self
+                        .compiler
+                        .get_source(self.compiler.functions[method.0].name);
+
+                    if method_name == name {
+                        let type_id = self.typecheck_call_with_fun_id(head, *method, &args);
+                        self.compiler.node_types[node_id.0] = type_id;
+                        return type_id;
+                    }
+                }
+                self.error("can't find method in struct", head);
+            }
+            _ => self.error("expected struct type for method call", target),
+        }
+
+        VOID_TYPE_ID
+    }
+
     pub fn typecheck(mut self) -> Compiler {
-        let num_nodes = self.compiler.ast_nodes.len();
+        let num_nodes = self.compiler.num_ast_nodes();
         self.compiler.node_types.resize(num_nodes, UNKNOWN_TYPE_ID);
 
-        let top_level = NodeId(self.compiler.ast_nodes.len() - 1);
+        let top_level = NodeId(self.compiler.num_ast_nodes() - 1);
         self.typecheck_node(top_level);
 
         let top_level_type = self.compiler.node_types[top_level.0];
@@ -1240,12 +1322,11 @@ impl Typechecker {
         if !self.compiler.has_main() {
             // Synthesis of a fake 'main' node
             self.compiler.source.extend_from_slice(b"main");
-            self.compiler.ast_nodes.push(AstNode::Name);
+            let main_node = self.compiler.push_ast_node(AstNode::Name);
             self.compiler
                 .span_start
                 .push(self.compiler.source.len() - 4);
             self.compiler.span_end.push(self.compiler.source.len());
-            let main_node = NodeId(self.compiler.ast_nodes.len() - 1);
 
             self.compiler.functions.push(Function {
                 name: main_node,
@@ -1334,18 +1415,6 @@ impl Typechecker {
         }
 
         None
-    }
-
-    pub fn find_or_create_type(&mut self, ty: Type) -> TypeId {
-        for (idx, t) in self.compiler.types.iter().enumerate() {
-            if &ty == t {
-                return TypeId(idx);
-            }
-        }
-
-        self.compiler.types.push(ty);
-
-        TypeId(self.compiler.types.len() - 1)
     }
 
     pub fn find_expected_return_type(&self) -> Option<TypeId> {

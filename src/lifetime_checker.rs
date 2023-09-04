@@ -176,7 +176,7 @@ impl LifetimeChecker {
     }
 
     pub fn check_lvalue_lifetime(&mut self, lvalue: NodeId) {
-        match &self.compiler.ast_nodes[lvalue.0] {
+        match &self.compiler.get_ast_node(lvalue) {
             AstNode::Variable => {
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
@@ -206,7 +206,7 @@ impl LifetimeChecker {
     }
 
     pub fn check_node_lifetime(&mut self, node_id: NodeId, scope_level: usize) {
-        match &self.compiler.ast_nodes[node_id.0] {
+        match self.compiler.get_ast_node(node_id) {
             AstNode::Block(block_id) => {
                 self.check_block_lifetime(*block_id, scope_level + 1);
             }
@@ -276,7 +276,7 @@ impl LifetimeChecker {
                 let rhs = *rhs;
                 let op = *op;
 
-                if matches!(self.compiler.ast_nodes[op.0], AstNode::Assignment) {
+                if matches!(self.compiler.get_ast_node(op), AstNode::Assignment) {
                     self.check_lvalue_lifetime(lhs);
 
                     if matches!(
@@ -345,14 +345,15 @@ impl LifetimeChecker {
             }
             AstNode::Call { head, args } => {
                 let head = *head;
+                // FIXME: remove clone
+                let args = args.clone();
+
                 // If the call is not constrained, use the local scope level
                 if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Unknown {
                     self.compiler.node_lifetimes[node_id.0] =
                         AllocationLifetime::Scope { level: scope_level };
                 }
 
-                // FIXME: remove clone
-                let args = args.clone();
                 for arg in args {
                     self.expand_lifetime_with_node(arg, node_id);
                     self.check_node_lifetime(arg, scope_level)
@@ -384,7 +385,7 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(allocation_node_id, node_id);
                 }
 
-                match &self.compiler.ast_nodes[allocation_node_id.0] {
+                match &self.compiler.get_ast_node(allocation_node_id) {
                     AstNode::Call { args, .. } => {
                         // FIXME: remove clone
                         let args = args.clone();
@@ -415,15 +416,16 @@ impl LifetimeChecker {
                 self.check_node_lifetime(value, scope_level)
             }
             AstNode::NamespacedLookup { item, .. } => {
-                if matches!(self.compiler.ast_nodes[item.0], AstNode::Variable) {
+                let item = *item;
+
+                if matches!(self.compiler.get_ast_node(item), AstNode::Variable) {
                     if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Unknown {
                         self.compiler.node_lifetimes[node_id.0] =
                             AllocationLifetime::Scope { level: scope_level };
                     }
 
-                    self.expand_lifetime_with_node(*item, node_id);
-                } else if matches!(self.compiler.ast_nodes[item.0], AstNode::Call { .. }) {
-                    let item = *item;
+                    self.expand_lifetime_with_node(item, node_id);
+                } else if matches!(self.compiler.get_ast_node(item), AstNode::Call { .. }) {
                     self.check_node_lifetime(item, scope_level);
 
                     self.expand_lifetime_with_node(node_id, item);
@@ -442,7 +444,7 @@ impl LifetimeChecker {
     }
 
     pub fn check_lifetimes(mut self) -> Compiler {
-        let num_nodes = self.compiler.ast_nodes.len();
+        let num_nodes = self.compiler.num_ast_nodes();
         self.compiler
             .node_lifetimes
             .resize(num_nodes, AllocationLifetime::Unknown);

@@ -3,7 +3,7 @@ use crate::{
     lifetime_checker::AllocationLifetime,
     parser::{AstNode, NodeId},
     typechecker::{
-        EnumCase, FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
+        EnumVariant, FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
         STRING_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
     },
 };
@@ -18,7 +18,7 @@ impl Codegen {
     }
 
     pub fn codegen_typename(&self, type_id: TypeId, output: &mut Vec<u8>) {
-        match &self.compiler.types[type_id.0] {
+        match self.compiler.get_type(type_id) {
             Type::Struct { .. } => {
                 output.extend_from_slice(b"struct struct_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
@@ -58,7 +58,7 @@ impl Codegen {
         is_allocator: bool,
         output: &mut Vec<u8>,
     ) {
-        let Type::Pointer(_, inner_type_id) = &self.compiler.types[type_id.0] else {
+        let Type::Pointer(_, inner_type_id) = self.compiler.get_type(type_id) else {
             panic!("internal error: pointer to unknown type");
         };
 
@@ -100,7 +100,7 @@ impl Codegen {
     }
 
     pub fn codegen_structs_and_enums(&self, output: &mut Vec<u8>) {
-        for (idx, ty) in self.compiler.types.iter().enumerate() {
+        for (idx, ty) in self.compiler.get_types().iter().enumerate() {
             match ty {
                 Type::Struct {
                     fields,
@@ -130,7 +130,9 @@ impl Codegen {
                         panic!("internal error: can't find pointer to type")
                     }
                 }
-                Type::Enum { cases, .. } => {
+                Type::Enum {
+                    variants: cases, ..
+                } => {
                     output.extend_from_slice(b"struct enum_");
                     output.extend_from_slice(idx.to_string().as_bytes());
                     output.extend_from_slice(b"{\n");
@@ -138,13 +140,13 @@ impl Codegen {
                     output.extend_from_slice(b"union {\n");
                     for case in cases {
                         match case {
-                            EnumCase::Single { name, param: arg } => {
+                            EnumVariant::Single { name, param: arg } => {
                                 self.codegen_typename(*arg, output);
                                 output.push(b' ');
                                 output.extend_from_slice(name);
                                 output.extend_from_slice(b";\n");
                             }
-                            EnumCase::Struct { name, params: args } => {
+                            EnumVariant::Struct { name, params: args } => {
                                 // FIXME!! This will name collide because of C naming resolution
                                 output.extend_from_slice(b"struct /*");
                                 output.extend_from_slice(name);
@@ -159,7 +161,7 @@ impl Codegen {
 
                                 output.extend_from_slice(b"};\n");
                             }
-                            EnumCase::Simple { .. } => {
+                            EnumVariant::Simple { .. } => {
                                 // ignore because it is encoded into the case_id above
                             }
                         }
@@ -178,12 +180,12 @@ impl Codegen {
                         output.extend_from_slice(b"(int allocation_id");
 
                         match case {
-                            EnumCase::Single { param, .. } => {
+                            EnumVariant::Single { param, .. } => {
                                 output.extend_from_slice(b", ");
                                 self.codegen_typename(*param, output);
                                 output.extend_from_slice(b" arg");
                             }
-                            EnumCase::Struct { params, .. } => {
+                            EnumVariant::Struct { params, .. } => {
                                 for (param_name, param_type) in params {
                                     output.extend_from_slice(b", ");
                                     self.codegen_typename(*param_type, output);
@@ -191,7 +193,7 @@ impl Codegen {
                                     output.extend_from_slice(param_name);
                                 }
                             }
-                            EnumCase::Simple { .. } => {}
+                            EnumVariant::Simple { .. } => {}
                         }
                         output.extend_from_slice(b") {\n");
 
@@ -207,14 +209,14 @@ impl Codegen {
                         output.extend_from_slice(b";\n");
 
                         match case {
-                            EnumCase::Single { name, .. } => {
+                            EnumVariant::Single { name, .. } => {
                                 output.extend_from_slice(b"tmp->");
                                 output.extend_from_slice(name);
                                 output.extend_from_slice(b" = ");
                                 output.extend_from_slice(case_offset.to_string().as_bytes());
                                 output.extend_from_slice(b";\n");
                             }
-                            EnumCase::Struct { params, .. } => {
+                            EnumVariant::Struct { params, .. } => {
                                 for (param_name, _) in params {
                                     output.extend_from_slice(b"tmp->");
                                     output.extend_from_slice(param_name);
@@ -223,7 +225,7 @@ impl Codegen {
                                     output.extend_from_slice(b";\n");
                                 }
                             }
-                            EnumCase::Simple { .. } => {}
+                            EnumVariant::Simple { .. } => {}
                         }
 
                         output.extend_from_slice(b"return tmp;\n");
@@ -319,7 +321,7 @@ impl Codegen {
     }
 
     pub fn codegen_node(&self, node_id: NodeId, output: &mut Vec<u8>) {
-        match &self.compiler.ast_nodes[node_id.0] {
+        match &self.compiler.get_ast_node(node_id) {
             AstNode::String => {
                 let src = self.compiler.get_source(node_id);
 
@@ -518,8 +520,8 @@ impl Codegen {
             AstNode::New(_, allocation_call) => {
                 let type_id = self.compiler.node_types[node_id.0];
 
-                let Type::Pointer(_, type_id) = &self.compiler.types[type_id.0] else {
-                    panic!("internal error: 'new' creating non-pointer type: {:?}", &self.compiler.types[type_id.0])
+                let Type::Pointer(_, type_id) = self.compiler.get_type(type_id) else {
+                    panic!("internal error: 'new' creating non-pointer type: {:?}", self.compiler.get_type(type_id))
                 };
                 let type_id = *type_id;
 
@@ -529,7 +531,7 @@ impl Codegen {
 
                 self.codegen_annotation(node_id, output);
 
-                if let AstNode::Call { args, .. } = &self.compiler.ast_nodes[allocation_call.0] {
+                if let AstNode::Call { args, .. } = self.compiler.get_ast_node(*allocation_call) {
                     for arg in args {
                         output.extend_from_slice(b", ");
 
@@ -540,7 +542,7 @@ impl Codegen {
                     panic!("internal error: expected allocation call during allocation")
                 }
             }
-            AstNode::NamespacedLookup { item, .. } => match &self.compiler.ast_nodes[item.0] {
+            AstNode::NamespacedLookup { item, .. } => match self.compiler.get_ast_node(*item) {
                 AstNode::Call { head, args } => {
                     let call_target = self
                         .compiler
@@ -676,7 +678,7 @@ impl Codegen {
             } => {
                 output.extend_from_slice(b"for (");
 
-                let AstNode::Range { lhs, rhs } = &self.compiler.ast_nodes[range.0] else {
+                let AstNode::Range { lhs, rhs } = self.compiler.get_ast_node(*range) else {
                     panic!("internal error: range not found for 'for'");
                 };
 
@@ -726,9 +728,9 @@ impl Codegen {
     }
 
     pub fn codegen_block(&self, block: NodeId, output: &mut Vec<u8>) {
-        if let AstNode::Block(block_id) = &self.compiler.ast_nodes[block.0] {
+        if let AstNode::Block(block_id) = self.compiler.get_ast_node(block) {
             for node_id in &self.compiler.blocks[block_id.0].nodes {
-                if let AstNode::Return(return_expr) = &self.compiler.ast_nodes[node_id.0] {
+                if let AstNode::Return(return_expr) = self.compiler.get_ast_node(*node_id) {
                     if let Some(return_expr) = return_expr {
                         self.codegen_typename(self.compiler.node_types[return_expr.0], output);
                         output.extend_from_slice(b" return_expr = ");

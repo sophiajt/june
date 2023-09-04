@@ -8,4 +8,8 @@ fun main() {
     let x = State::None
     let y = State::StateId(4)
     let z = State::Duration(from: 1, to: 10)
+
+    match x {
+        State::None => println("None")
+    }
 }
