@@ -142,6 +142,21 @@ fn double() -> TestResult {
 }
 
 #[test]
+fn enum_simple() -> TestResult {
+    test_example("enum_simple")
+}
+
+#[test]
+fn enum_single_payload() -> TestResult {
+    test_example("enum_single_payload")
+}
+
+#[test]
+fn enum_struct_payload() -> TestResult {
+    test_example("enum_struct_payload")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("for_range")
 }
@@ -288,6 +303,11 @@ fn scope_struct_to_upper_scope() -> TestResult {
 #[test]
 fn scope_struct_to_upper_scope2() -> TestResult {
     test_example("scope_struct_to_upper_scope2")
+}
+
+#[test]
+fn static_method() -> TestResult {
+    test_example("static_method")
 }
 
 #[test]

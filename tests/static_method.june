@@ -1,0 +1,15 @@
+// output: 100
+
+struct Foo {
+    x: i64
+
+    fun default() -> Foo {
+        return new Foo(x: 100)
+    }
+}
+
+fun main() {
+    let default = Foo::default()
+
+    println(default.x)
+}

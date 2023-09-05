@@ -3,7 +3,6 @@ use crate::errors::SourceError;
 
 pub struct Parser {
     pub compiler: Compiler,
-    pub node_id_offset: usize,
     pub span_offset: usize,
     content_length: usize,
 }
@@ -77,6 +76,11 @@ pub enum AstNode {
     },
     Return(Option<NodeId>),
 
+    NamespacedLookup {
+        namespace: NodeId,
+        item: NodeId,
+    },
+
     // Definitions
     Fun {
         name: NodeId,
@@ -95,6 +99,16 @@ pub enum AstNode {
         fields: Vec<(NodeId, NodeId)>,
         methods: Vec<NodeId>,
         is_allocator: bool,
+    },
+
+    Enum {
+        name: NodeId,
+        cases: Vec<NodeId>,
+        methods: Vec<NodeId>,
+    },
+    EnumCase {
+        name: NodeId,
+        payload: Option<Vec<NodeId>>,
     },
 
     // Closure {
@@ -133,6 +147,10 @@ pub enum AstNode {
         condition: NodeId,
         then_block: NodeId,
         else_expression: Option<NodeId>,
+    },
+    Match {
+        target: NodeId,
+        match_arms: Vec<(NodeId, NodeId)>,
     },
     New(AllocationType, NodeId),
     Statement(NodeId),
@@ -183,6 +201,7 @@ pub enum TokenType {
     Pipe,
     PipePipe,
     Colon,
+    ColonColon,
     Semicolon,
     Plus,
     PlusPlus,
@@ -215,6 +234,7 @@ pub enum TokenType {
     AmpersandAmpersand,
     QuestionMark,
     ThinArrow,
+    ThickArrow,
 }
 
 #[derive(Debug)]
@@ -248,13 +268,12 @@ fn is_symbol(b: u8) -> bool {
 }
 
 impl Parser {
-    pub fn new(compiler: Compiler, span_offset: usize, node_id_offset: usize) -> Self {
+    pub fn new(compiler: Compiler, span_offset: usize) -> Self {
         let content_length = compiler.source.len() - span_offset;
         Self {
             compiler,
             content_length,
             span_offset,
-            node_id_offset,
         }
     }
 
@@ -431,6 +450,16 @@ impl Parser {
         )
     }
 
+    pub fn is_thick_arrow(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::ThickArrow,
+                ..
+            })
+        )
+    }
+
     // pub fn is_double_pipe(&mut self) -> bool {
     //     matches!(
     //         self.peek(),
@@ -496,6 +525,16 @@ impl Parser {
             self.peek(),
             Some(Token {
                 token_type: TokenType::DotDot,
+                ..
+            })
+        )
+    }
+
+    pub fn is_coloncolon(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::ColonColon,
                 ..
             })
         )
@@ -631,17 +670,10 @@ impl Parser {
         }
     }
 
-    pub fn create_node(
-        &mut self,
-        node_type: AstNode,
-        span_start: usize,
-        span_end: usize,
-    ) -> NodeId {
+    pub fn create_node(&mut self, ast_node: AstNode, span_start: usize, span_end: usize) -> NodeId {
         self.compiler.span_start.push(span_start);
         self.compiler.span_end.push(span_end);
-        self.compiler.ast_nodes.push(node_type);
-
-        NodeId(self.compiler.span_start.len() - 1 + self.node_id_offset)
+        self.compiler.push_ast_node(ast_node)
     }
 
     pub fn block(&mut self, expect_curly_braces: bool) -> NodeId {
@@ -665,6 +697,8 @@ impl Parser {
                 code_body.push(self.fun_definition());
             } else if self.is_keyword(b"struct") {
                 code_body.push(self.struct_definition());
+            } else if self.is_keyword(b"enum") {
+                code_body.push(self.enum_definition());
             } else if self.is_keyword(b"let") {
                 code_body.push(self.let_statement());
             } else if self.is_keyword(b"mut") {
@@ -790,6 +824,99 @@ impl Parser {
         )
     }
 
+    pub fn enum_definition(&mut self) -> NodeId {
+        let mut cases = vec![];
+        let mut methods = vec![];
+
+        let span_start = self.position();
+        let mut span_end = self.position();
+
+        self.keyword(b"enum");
+
+        let name = self.typename();
+        self.lcurly();
+
+        // parse fields
+        while self.has_tokens() {
+            if self.is_rcurly() {
+                span_end = self.position() + 1;
+                self.rcurly();
+                break;
+            }
+
+            if self.is_keyword(b"fun") {
+                let fun = self.fun_definition();
+
+                methods.push(fun);
+            } else {
+                // enum case
+                let case = self.enum_case();
+
+                cases.push(case);
+            }
+        }
+
+        self.create_node(
+            AstNode::Enum {
+                name,
+                cases,
+                methods,
+            },
+            span_start,
+            span_end,
+        )
+    }
+
+    pub fn enum_case(&mut self) -> NodeId {
+        let span_start = self.position();
+        let name = self.name();
+        let mut span_end = self.get_span_end(name);
+        let payload = if self.is_lparen() {
+            self.next();
+            let payload = self.typename();
+            if !self.is_rparen() {
+                self.error("expected right paren ')'");
+            } else {
+                self.next();
+            }
+            Some(vec![payload])
+        } else if self.is_lcurly() {
+            self.lcurly();
+            let mut payload = vec![];
+            while self.has_tokens() {
+                if self.is_rcurly() {
+                    span_end = self.position() + 1;
+                    self.rcurly();
+                    break;
+                }
+
+                // field
+                let span_start = self.position();
+                let field_name = self.name();
+                self.colon();
+                let field_type = self.typename();
+                if self.is_comma() {
+                    self.comma();
+                }
+
+                let named_field = self.create_node(
+                    AstNode::NamedValue {
+                        name: field_name,
+                        value: field_type,
+                    },
+                    span_start,
+                    span_end,
+                );
+                payload.push(named_field);
+            }
+            Some(payload)
+        } else {
+            None
+        };
+
+        self.create_node(AstNode::EnumCase { name, payload }, span_start, span_end)
+    }
+
     pub fn expression_or_assignment(&mut self) -> NodeId {
         self.math_expression(true)
     }
@@ -808,6 +935,8 @@ impl Parser {
             return self.if_expression();
         } else if self.is_keyword(b"new") {
             return self.new_allocation();
+        } else if self.is_keyword(b"match") {
+            return self.match_expression();
         }
 
         // Otherwise assume a math expression
@@ -952,7 +1081,7 @@ impl Parser {
                 };
                 let span_end = self.get_span_end(field_or_call);
 
-                match &mut self.compiler.ast_nodes[field_or_call.0] {
+                match self.compiler.get_ast_node_mut(field_or_call) {
                     AstNode::Variable | AstNode::Name => {
                         expr = self.create_node(
                             AstNode::MemberAccess {
@@ -978,6 +1107,20 @@ impl Parser {
                         self.error("expected field or method call");
                     }
                 }
+            } else if self.is_coloncolon() {
+                self.next();
+
+                let item = self.simple_expression();
+                let span_end = self.get_span_end(item);
+
+                expr = self.create_node(
+                    AstNode::NamespacedLookup {
+                        namespace: expr,
+                        item,
+                    },
+                    span_start,
+                    span_end,
+                );
             } else {
                 return expr;
             }
@@ -1132,7 +1275,7 @@ impl Parser {
     }
 
     pub fn operator_precedence(&mut self, operator: NodeId) -> usize {
-        self.compiler.ast_nodes[operator.0].precedence()
+        self.compiler.get_ast_node(operator).precedence()
     }
 
     pub fn spanning(&mut self, from: NodeId, to: NodeId) -> (usize, usize) {
@@ -1355,6 +1498,45 @@ impl Parser {
             span_start,
             span_end,
         )
+    }
+
+    pub fn match_expression(&mut self) -> NodeId {
+        let span_start = self.position();
+        let span_end;
+
+        self.keyword(b"match");
+        let target = self.simple_expression();
+
+        let mut match_arms = vec![];
+
+        if !self.is_lcurly() {
+            return self.error("expected left curly brace '{'");
+        }
+
+        self.lcurly();
+
+        loop {
+            if self.is_rcurly() {
+                span_end = self.position() + 1;
+                self.rcurly();
+                break;
+            } else if self.is_simple_expression() {
+                let pattern = self.simple_expression();
+
+                if !self.is_thick_arrow() {
+                    return self.error("expected thick arrow (=>) between match cases");
+                }
+                self.next();
+
+                let pattern_result = self.simple_expression();
+
+                match_arms.push((pattern, pattern_result));
+            } else {
+                return self.error("expected match arm in match");
+            }
+        }
+
+        self.create_node(AstNode::Match { target, match_arms }, span_start, span_end)
     }
 
     pub fn if_expression(&mut self) -> NodeId {
@@ -2068,6 +2250,14 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
+                } else if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b'>'
+                {
+                    Token {
+                        token_type: TokenType::ThickArrow,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
                 } else {
                     Token {
                         token_type: TokenType::Equals,
@@ -2076,11 +2266,23 @@ impl Parser {
                     }
                 }
             }
-            b':' => Token {
-                token_type: TokenType::Colon,
-                span_start,
-                span_end: span_start + 1,
-            },
+            b':' => {
+                if self.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.span_offset + 1] == b':'
+                {
+                    Token {
+                        token_type: TokenType::ColonColon,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
+                } else {
+                    Token {
+                        token_type: TokenType::Colon,
+                        span_start,
+                        span_end: span_start + 1,
+                    }
+                }
+            }
             b';' => Token {
                 token_type: TokenType::Semicolon,
                 span_start,

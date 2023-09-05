@@ -1,0 +1,13 @@
+// output: None
+
+enum State {
+    None
+}
+
+fun main() {
+    let x = State::None
+
+    match x {
+        State::None => println("None")
+    }
+}

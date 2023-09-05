@@ -5,13 +5,22 @@ use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, NodeId};
 use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, STRING_TYPE_ID};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CaseOffset(pub usize);
+
+#[derive(Debug)]
+pub enum CallTarget {
+    Function(FunId),
+    EnumConstructor(TypeId, CaseOffset),
+}
+
 #[derive(Debug)]
 pub struct Compiler {
     // Core information, indexed by NodeId
     pub span_start: Vec<usize>,
     pub span_end: Vec<usize>,
-    pub ast_nodes: Vec<AstNode>,
-    pub node_types: Vec<TypeId>,
+    ast_nodes: Vec<AstNode>,
+    node_types: Vec<TypeId>,
     pub node_lifetimes: Vec<AllocationLifetime>,
 
     // Blocks, indexed by BlockId
@@ -27,10 +36,10 @@ pub struct Compiler {
     // indexed by FunId
     pub functions: Vec<Function>,
     // indexed by TypeId
-    pub types: Vec<Type>,
+    types: Vec<Type>,
 
     // Use/def
-    pub fun_resolution: HashMap<NodeId, FunId>,
+    pub call_resolution: HashMap<NodeId, CallTarget>,
     pub var_resolution: HashMap<NodeId, VarId>,
     pub type_resolution: HashMap<NodeId, TypeId>,
 
@@ -56,7 +65,7 @@ impl Compiler {
             functions: vec![],
             types: vec![],
 
-            fun_resolution: HashMap::new(),
+            call_resolution: HashMap::new(),
             var_resolution: HashMap::new(),
             type_resolution: HashMap::new(),
 
@@ -93,6 +102,9 @@ impl Compiler {
         for (type_id, ty) in self.types.iter().skip(STRING_TYPE_ID.0 + 1).enumerate() {
             println!("  {}: {:?}", type_id + STRING_TYPE_ID.0 + 1, ty);
         }
+
+        println!("Call resolution");
+        println!("{:?}", self.call_resolution);
     }
 
     fn print_helper(&self, node_id: &NodeId, indent: usize) {
@@ -447,7 +459,63 @@ impl Compiler {
         self.source.len()
     }
 
-    pub fn node_id_offset(&self) -> usize {
+    pub fn get_ast_node(&self, node_id: NodeId) -> &AstNode {
+        &self.ast_nodes[node_id.0]
+    }
+
+    pub fn get_ast_node_mut(&mut self, node_id: NodeId) -> &mut AstNode {
+        &mut self.ast_nodes[node_id.0]
+    }
+
+    pub fn push_ast_node(&mut self, ast_node: AstNode) -> NodeId {
+        self.ast_nodes.push(ast_node);
+
+        NodeId(self.ast_nodes.len() - 1)
+    }
+
+    pub fn resize_node_types(&mut self, size: usize, type_id: TypeId) {
+        self.node_types.resize(size, type_id)
+    }
+
+    pub fn get_node_type(&self, node_id: NodeId) -> TypeId {
+        self.node_types[node_id.0]
+    }
+
+    pub fn set_node_type(&mut self, node_id: NodeId, type_id: TypeId) {
+        self.node_types[node_id.0] = type_id;
+    }
+
+    pub fn get_type(&self, type_id: TypeId) -> &Type {
+        &self.types[type_id.0]
+    }
+
+    pub fn get_type_mut(&mut self, type_id: TypeId) -> &mut Type {
+        &mut self.types[type_id.0]
+    }
+
+    pub fn get_types(&self) -> &[Type] {
+        &self.types
+    }
+
+    pub fn push_type(&mut self, ty: Type) -> TypeId {
+        self.types.push(ty);
+
+        TypeId(self.types.len() - 1)
+    }
+
+    pub fn find_or_create_type(&mut self, ty: Type) -> TypeId {
+        for (idx, t) in self.types.iter().enumerate() {
+            if &ty == t {
+                return TypeId(idx);
+            }
+        }
+
+        self.types.push(ty);
+
+        TypeId(self.types.len() - 1)
+    }
+
+    pub fn num_ast_nodes(&self) -> usize {
         self.ast_nodes.len()
     }
 

@@ -24,10 +24,9 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     };
 
     let span_offset = compiler.span_offset();
-    let node_id_offset = compiler.node_id_offset();
     compiler.add_file(fname, &contents);
 
-    let parser = Parser::new(compiler, span_offset, node_id_offset);
+    let parser = Parser::new(compiler, span_offset);
     let compiler = parser.parse();
 
     for error in &compiler.errors.first() {

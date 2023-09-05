@@ -1,0 +1,15 @@
+// output: 9
+
+enum State {
+    Duration { from: i64, to: i64 }
+}
+
+fun main() {
+    let z = State::Duration(from: 1, to: 10)
+
+    match z {
+        State::Duration(from, to) => {
+            println(to - from)
+        }
+    }
+}

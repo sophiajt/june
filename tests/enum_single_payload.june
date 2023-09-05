@@ -1,0 +1,13 @@
+// output: 4
+
+enum State {
+    StateId(i64)
+}
+
+fun main() {
+    let y = State::StateId(4)
+
+    match y {
+        State::StateId(x) => println(x)
+    }
+}
