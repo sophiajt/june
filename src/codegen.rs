@@ -733,8 +733,36 @@ impl Codegen {
 
                 output.extend_from_slice(b";\n");
 
+                let mut first = true;
+
                 for (match_arm, match_result) in match_arms {
+                    if !first {
+                        output.extend_from_slice(b"else ");
+                    } else {
+                        first = false
+                    }
                     match self.compiler.get_ast_node(*match_arm) {
+                        AstNode::Variable => {
+                            output.extend_from_slice(b"if (true) {\n");
+
+                            let var_id = self
+                                .compiler
+                                .var_resolution
+                                .get(match_arm)
+                                .expect("internal error: unresolved variable in codegen");
+                            let var_type = self.compiler.variables[var_id.0].ty;
+                            self.codegen_typename(var_type, output);
+                            output.extend_from_slice(b" variable_");
+                            output.extend_from_slice(var_id.0.to_string().as_bytes());
+
+                            output.extend_from_slice(b" = ");
+                            output.extend_from_slice(match_var.as_bytes());
+                            output.extend_from_slice(b";\n");
+
+                            self.codegen_node(*match_result, output);
+
+                            output.extend_from_slice(b"}\n");
+                        }
                         AstNode::NamespacedLookup { item, .. } => {
                             match self.compiler.get_ast_node(*item) {
                                 AstNode::Name | AstNode::Variable => {

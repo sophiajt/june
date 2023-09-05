@@ -1293,12 +1293,12 @@ impl Typechecker {
     pub fn typecheck_match(&mut self, target: NodeId, match_arms: Vec<(NodeId, NodeId)>) -> TypeId {
         let target_type_id = self.typecheck_node(target);
 
-        let target_type_id = match self.compiler.get_type(target_type_id) {
+        let inner_type_id = match self.compiler.get_type(target_type_id) {
             Type::Pointer { target, .. } => *target,
             _ => target_type_id,
         };
 
-        match self.compiler.get_type(target_type_id) {
+        match self.compiler.get_type(inner_type_id) {
             Type::Enum { variants, .. } => {
                 let variants = variants.clone();
 
@@ -1321,6 +1321,7 @@ impl Typechecker {
 
                             let variable_name = self.compiler.get_source(arm_pattern).to_vec();
                             self.add_variable_to_scope(variable_name, var_id);
+                            self.compiler.var_resolution.insert(arm_pattern, var_id);
 
                             self.typecheck_node(arm_result);
 
@@ -1338,7 +1339,7 @@ impl Typechecker {
                             if let Some(namespace_type_id) = namespace_type_id {
                                 let namespace_type_id = *namespace_type_id;
 
-                                if namespace_type_id != target_type_id {
+                                if namespace_type_id != inner_type_id {
                                     self.error(
                                         "expected match case to be the same type as matched value",
                                         namespace,
@@ -1355,7 +1356,7 @@ impl Typechecker {
                                                             self.compiler.call_resolution.insert(
                                                                 arm_pattern,
                                                                 CallTarget::EnumConstructor(
-                                                                    target_type_id,
+                                                                    inner_type_id,
                                                                     CaseOffset(idx),
                                                                 ),
                                                             );
@@ -1386,7 +1387,7 @@ impl Typechecker {
                                                             self.compiler.call_resolution.insert(
                                                                 arm_pattern,
                                                                 CallTarget::EnumConstructor(
-                                                                    target_type_id,
+                                                                    inner_type_id,
                                                                     CaseOffset(idx),
                                                                 ),
                                                             );
@@ -1414,7 +1415,7 @@ impl Typechecker {
                                                             self.compiler.call_resolution.insert(
                                                                 arm_pattern,
                                                                 CallTarget::EnumConstructor(
-                                                                    target_type_id,
+                                                                    inner_type_id,
                                                                     CaseOffset(idx),
                                                                 ),
                                                             );
