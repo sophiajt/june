@@ -12,4 +12,8 @@ fun main() {
     match x {
         State::None => println("None")
     }
+
+    match y {
+        State::StateId(x) => println(x)
+    }
 }

@@ -1363,6 +1363,45 @@ impl Typechecker {
 
                                             self.error("could not find match enum case", item)
                                         }
+                                        AstNode::Call { head, args } => {
+                                            let arm_name = self.compiler.get_source(*head);
+                                            let args = args.clone();
+
+                                            for (idx, variant) in variants.iter().enumerate() {
+                                                match variant {
+                                                    EnumVariant::Single {
+                                                        name: variant_name,
+                                                        param,
+                                                    } => {
+                                                        if variant_name == arm_name {
+                                                            self.compiler.call_resolution.insert(
+                                                                arm_pattern,
+                                                                CallTarget::EnumConstructor(
+                                                                    target_type_id,
+                                                                    CaseOffset(idx),
+                                                                ),
+                                                            );
+                                                            if matches!(
+                                                                self.compiler.get_ast_node(args[0]),
+                                                                AstNode::Variable
+                                                            ) {
+                                                                let var_id = self.define_variable(
+                                                                    args[0], *param, false, args[0],
+                                                                );
+                                                                self.compiler
+                                                                    .var_resolution
+                                                                    .insert(args[0], var_id);
+                                                            }
+                                                            self.typecheck_node(arm_result);
+                                                            continue 'arm;
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+
+                                            self.error("could not find match enum case", item)
+                                        }
                                         _ => {
                                             panic!("not yet supported")
                                         }

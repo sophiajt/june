@@ -215,7 +215,7 @@ impl Codegen {
                                 output.extend_from_slice(b"tmp->");
                                 output.extend_from_slice(name);
                                 output.extend_from_slice(b" = ");
-                                output.extend_from_slice(case_offset.to_string().as_bytes());
+                                output.extend_from_slice(b"arg");
                                 output.extend_from_slice(b";\n");
                             }
                             EnumVariant::Struct { params, .. } => {
@@ -751,6 +751,90 @@ impl Codegen {
                                             );
                                             output.extend_from_slice(b") ");
                                             self.codegen_node(*match_result, output);
+                                        }
+                                        x => {
+                                            panic!("target not supported in enum codegen: {:?}", x);
+                                        }
+                                    }
+                                }
+                                AstNode::Call { head, args } => {
+                                    let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
+                                        panic!("internal error: match arm unresolved at codegen time")
+                                    };
+
+                                    match resolution {
+                                        CallTarget::EnumConstructor(enum_type_id, case_offset) => {
+                                            output.extend_from_slice(b"if (");
+                                            output.extend_from_slice(match_var.as_bytes());
+                                            output.extend_from_slice(b"->arm_id == ");
+                                            output.extend_from_slice(
+                                                case_offset.0.to_string().as_bytes(),
+                                            );
+
+                                            let mut variable_assignments: Vec<u8> = vec![];
+
+                                            for arg in args {
+                                                match self.compiler.get_ast_node(*arg) {
+                                                    AstNode::Variable => {
+                                                        let var_id = self.compiler.var_resolution.get(arg).expect("internal error: unresolved variable in codegen");
+                                                        let var_type =
+                                                            self.compiler.variables[var_id.0].ty;
+                                                        self.codegen_typename(
+                                                            var_type,
+                                                            &mut variable_assignments,
+                                                        );
+                                                        variable_assignments
+                                                            .extend_from_slice(b" variable_");
+                                                        variable_assignments.extend_from_slice(
+                                                            var_id.0.to_string().as_bytes(),
+                                                        );
+
+                                                        variable_assignments
+                                                            .extend_from_slice(b" = ");
+                                                        variable_assignments.extend_from_slice(
+                                                            match_var.as_bytes(),
+                                                        );
+                                                        variable_assignments
+                                                            .extend_from_slice(b"->");
+
+                                                        match self.compiler.get_type(*enum_type_id)
+                                                        {
+                                                            Type::Enum { variants, .. } => {
+                                                                match &variants[case_offset.0] {
+                                                                    EnumVariant::Single {
+                                                                        name,
+                                                                        ..
+                                                                    } => {
+                                                                        variable_assignments
+                                                                            .extend_from_slice(
+                                                                                name,
+                                                                            );
+                                                                    }
+                                                                    _ => panic!(
+                                                                        "unsupported enum variant"
+                                                                    ),
+                                                                }
+                                                            }
+                                                            _ => {
+                                                                panic!("internal error: enum match on non-enum variant ast node")
+                                                            }
+                                                        }
+
+                                                        variable_assignments
+                                                            .extend_from_slice(b";\n");
+                                                    }
+                                                    _ => {
+                                                        panic!("not yet supported")
+                                                    }
+                                                }
+                                            }
+
+                                            output.extend_from_slice(b") {\n");
+
+                                            output.extend_from_slice(&variable_assignments);
+
+                                            self.codegen_node(*match_result, output);
+                                            output.extend_from_slice(b"}\n");
                                         }
                                         x => {
                                             panic!("target not supported in enum codegen: {:?}", x);
