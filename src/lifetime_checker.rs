@@ -431,9 +431,8 @@ impl LifetimeChecker {
 
                     self.expand_lifetime_with_node(item, node_id);
                 } else if matches!(self.compiler.get_ast_node(item), AstNode::Call { .. }) {
+                    self.expand_lifetime_with_node(item, node_id);
                     self.check_node_lifetime(item, scope_level);
-
-                    self.expand_lifetime_with_node(node_id, item);
                 }
             }
             AstNode::Match { target, match_arms } => {

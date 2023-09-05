@@ -1,0 +1,23 @@
+// output: 4
+
+struct Stats {
+    age: i64
+}
+
+enum State {
+    Stats(Stats)
+}
+
+fun helper() -> State {
+    let y = State::Stats(new Stats(age: 88))
+
+    return y
+}
+
+fun main() {
+    let z = helper();
+
+    match z {
+        State::Stats(x) => println(x.age)
+    }
+}

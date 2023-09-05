@@ -288,6 +288,7 @@ impl Codegen {
 
             output.extend_from_slice(b";\n");
         }
+        output.push(b'\n');
 
         for (
             idx,
