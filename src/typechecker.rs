@@ -1302,6 +1302,12 @@ impl Typechecker {
             Type::Enum { variants, .. } => {
                 let variants = variants.clone();
 
+                let mut seen_variants = vec![];
+
+                for _ in 0..variants.len() {
+                    seen_variants.push(false);
+                }
+
                 'arm: for (arm_pattern, arm_result) in match_arms {
                     self.enter_scope();
                     match self.compiler.get_ast_node(arm_pattern) {
@@ -1317,6 +1323,8 @@ impl Typechecker {
                             self.add_variable_to_scope(variable_name, var_id);
 
                             self.typecheck_node(arm_result);
+
+                            seen_variants.fill(true);
                         }
                         AstNode::NamespacedLookup { namespace, item } => {
                             let namespace = *namespace;
@@ -1352,6 +1360,7 @@ impl Typechecker {
                                                                 ),
                                                             );
                                                             self.typecheck_node(arm_result);
+                                                            seen_variants[idx] = true;
                                                             continue 'arm;
                                                         }
                                                     }
@@ -1393,6 +1402,7 @@ impl Typechecker {
                                                                     .insert(args[0], var_id);
                                                             }
                                                             self.typecheck_node(arm_result);
+                                                            seen_variants[idx] = true;
                                                             continue 'arm;
                                                         }
                                                     }
@@ -1408,6 +1418,8 @@ impl Typechecker {
                                                                     CaseOffset(idx),
                                                                 ),
                                                             );
+
+                                                            seen_variants[idx] = true;
 
                                                             let mut idx = 0;
 
@@ -1435,6 +1447,7 @@ impl Typechecker {
                                                                 idx += 1;
                                                             }
                                                             self.typecheck_node(arm_result);
+
                                                             continue 'arm;
                                                         }
                                                     }
@@ -1456,6 +1469,34 @@ impl Typechecker {
                         _ => self.error("unexpected kind of match case in match", arm_pattern),
                     }
                     self.exit_scope();
+                }
+
+                for (variant, seen) in seen_variants.iter().enumerate() {
+                    if !*seen {
+                        match &variants[variant] {
+                            EnumVariant::Simple { name } => self.error(
+                                format!(
+                                    "missing pattern match for {}",
+                                    String::from_utf8_lossy(&name)
+                                ),
+                                target,
+                            ),
+                            EnumVariant::Single { name, .. } => self.error(
+                                format!(
+                                    "missing pattern match for {}(..)",
+                                    String::from_utf8_lossy(&name)
+                                ),
+                                target,
+                            ),
+                            EnumVariant::Struct { name, .. } => self.error(
+                                format!(
+                                    "missing pattern match for {}(..)",
+                                    String::from_utf8_lossy(&name)
+                                ),
+                                target,
+                            ),
+                        }
+                    }
                 }
 
                 VOID_TYPE_ID

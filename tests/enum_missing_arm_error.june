@@ -1,0 +1,14 @@
+// error: missing pattern match for None
+
+enum State {
+    None
+    Some(i64)
+}
+
+fun main() {
+    let x = State::Some(77)
+
+    match x {
+        State::Some(i) => println(i)
+    }
+}
