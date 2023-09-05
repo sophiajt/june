@@ -757,7 +757,7 @@ impl Codegen {
                                         }
                                     }
                                 }
-                                AstNode::Call { head, args } => {
+                                AstNode::Call { args, .. } => {
                                     let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
                                         panic!("internal error: match arm unresolved at codegen time")
                                     };
@@ -773,7 +773,7 @@ impl Codegen {
 
                                             let mut variable_assignments: Vec<u8> = vec![];
 
-                                            for arg in args {
+                                            for (arg_idx, arg) in args.iter().enumerate() {
                                                 match self.compiler.get_ast_node(*arg) {
                                                     AstNode::Variable => {
                                                         let var_id = self.compiler.var_resolution.get(arg).expect("internal error: unresolved variable in codegen");
@@ -808,6 +808,15 @@ impl Codegen {
                                                                         variable_assignments
                                                                             .extend_from_slice(
                                                                                 name,
+                                                                            );
+                                                                    }
+                                                                    EnumVariant::Struct {
+                                                                        name,
+                                                                        params,
+                                                                    } => {
+                                                                        variable_assignments
+                                                                            .extend_from_slice(
+                                                                                &params[arg_idx].0,
                                                                             );
                                                                     }
                                                                     _ => panic!(

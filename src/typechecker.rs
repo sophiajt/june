@@ -1396,6 +1396,48 @@ impl Typechecker {
                                                             continue 'arm;
                                                         }
                                                     }
+                                                    EnumVariant::Struct {
+                                                        name: variant_name,
+                                                        params,
+                                                    } => {
+                                                        if variant_name == arm_name {
+                                                            self.compiler.call_resolution.insert(
+                                                                arm_pattern,
+                                                                CallTarget::EnumConstructor(
+                                                                    target_type_id,
+                                                                    CaseOffset(idx),
+                                                                ),
+                                                            );
+
+                                                            let mut idx = 0;
+
+                                                            while idx < params.len() {
+                                                                let (_, param_type_id) =
+                                                                    &params[idx];
+                                                                let arg = args[idx];
+                                                                if matches!(
+                                                                    self.compiler
+                                                                        .get_ast_node(args[0]),
+                                                                    AstNode::Variable
+                                                                ) {
+                                                                    let var_id = self
+                                                                        .define_variable(
+                                                                            arg,
+                                                                            *param_type_id,
+                                                                            false,
+                                                                            arg,
+                                                                        );
+                                                                    self.compiler
+                                                                        .var_resolution
+                                                                        .insert(args[idx], var_id);
+                                                                }
+
+                                                                idx += 1;
+                                                            }
+                                                            self.typecheck_node(arm_result);
+                                                            continue 'arm;
+                                                        }
+                                                    }
                                                     _ => {}
                                                 }
                                             }

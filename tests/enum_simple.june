@@ -16,4 +16,11 @@ fun main() {
     match y {
         State::StateId(x) => println(x)
     }
+
+    match z {
+        State::Duration(from, to) => {
+            println(from)
+            println(to)
+        }
+    }
 }
