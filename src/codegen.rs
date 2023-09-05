@@ -138,7 +138,7 @@ impl Codegen {
                     output.extend_from_slice(b"struct enum_");
                     output.extend_from_slice(idx.to_string().as_bytes());
                     output.extend_from_slice(b"{\n");
-                    output.extend_from_slice(b"int case_id;\n");
+                    output.extend_from_slice(b"int arm_id;\n");
                     output.extend_from_slice(b"union {\n");
                     for case in cases {
                         match case {
@@ -164,7 +164,7 @@ impl Codegen {
                                 output.extend_from_slice(b"};\n");
                             }
                             EnumVariant::Simple { .. } => {
-                                // ignore because it is encoded into the case_id above
+                                // ignore because it is encoded into the arm_id above
                             }
                         }
                     }
@@ -206,7 +206,7 @@ impl Codegen {
                         output.extend_from_slice(idx.to_string().as_bytes());
                         output.extend_from_slice(b"), allocation_id);\n");
 
-                        output.extend_from_slice(b"tmp->case_id = ");
+                        output.extend_from_slice(b"tmp->arm_id = ");
                         output.extend_from_slice(case_offset.to_string().as_bytes());
                         output.extend_from_slice(b";\n");
 
@@ -451,11 +451,10 @@ impl Codegen {
                 output.push(b')');
             }
             AstNode::Call { head, args } => {
-                let call_target = self
-                    .compiler
-                    .call_resolution
-                    .get(head)
-                    .expect("internal error: missing call resolution in codegen");
+                let call_target = self.compiler.call_resolution.get(head).expect(&format!(
+                    "internal error: missing call resolution in codegen: {:?}",
+                    head
+                ));
 
                 match call_target {
                     CallTarget::Function(fun_id) => {
@@ -724,7 +723,7 @@ impl Codegen {
                 output.extend_from_slice(b"{\n");
                 let type_id = self.compiler.get_node_type(*target);
                 self.codegen_typename(type_id, output);
-
+                output.push(b' ');
                 let match_var = format!("match_var_{}", target.0);
 
                 output.extend_from_slice(match_var.as_bytes());
@@ -735,21 +734,37 @@ impl Codegen {
 
                 for (match_arm, match_result) in match_arms {
                     match self.compiler.get_ast_node(*match_arm) {
-                        AstNode::Name | AstNode::Variable => {
-                            let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
-                                panic!("internal error: match arm unresolved at codegen time")
-                            };
+                        AstNode::NamespacedLookup { item, .. } => {
+                            match self.compiler.get_ast_node(*item) {
+                                AstNode::Name | AstNode::Variable => {
+                                    let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
+                                        panic!("internal error: match arm unresolved at codegen time")
+                                    };
 
-                            match resolution {
-                                CallTarget::EnumConstructor(_, case_offset) => {
-                                    output.extend_from_slice(b"if (");
-                                    output.extend_from_slice(match_var.as_bytes());
-                                    output.extend_from_slice(b". == ")
+                                    match resolution {
+                                        CallTarget::EnumConstructor(_, case_offset) => {
+                                            output.extend_from_slice(b"if (");
+                                            output.extend_from_slice(match_var.as_bytes());
+                                            output.extend_from_slice(b"->arm_id == ");
+                                            output.extend_from_slice(
+                                                case_offset.0.to_string().as_bytes(),
+                                            );
+                                            output.extend_from_slice(b") ");
+                                            self.codegen_node(*match_result, output);
+                                        }
+                                        x => {
+                                            panic!("target not supported in enum codegen: {:?}", x);
+                                        }
+                                    }
                                 }
-                                _ => {}
+                                x => {
+                                    panic!("node not supported in enum codegen: {:?}", x);
+                                }
                             }
                         }
-                        _ => {}
+                        x => {
+                            panic!("node not supported in enum codegen: {:?}", x);
+                        }
                     }
                 }
 

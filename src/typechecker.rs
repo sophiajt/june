@@ -1351,10 +1351,13 @@ impl Typechecker {
                                                                     CaseOffset(idx),
                                                                 ),
                                                             );
+                                                            self.typecheck_node(arm_result);
                                                             continue 'arm;
                                                         }
                                                     }
-                                                    _ => {}
+                                                    _ => {
+                                                        panic!("unsupported enum variant")
+                                                    }
                                                 }
                                             }
 
