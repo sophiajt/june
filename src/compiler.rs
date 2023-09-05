@@ -20,7 +20,7 @@ pub struct Compiler {
     pub span_start: Vec<usize>,
     pub span_end: Vec<usize>,
     ast_nodes: Vec<AstNode>,
-    pub node_types: Vec<TypeId>,
+    node_types: Vec<TypeId>,
     pub node_lifetimes: Vec<AllocationLifetime>,
 
     // Blocks, indexed by BlockId
@@ -471,6 +471,18 @@ impl Compiler {
         self.ast_nodes.push(ast_node);
 
         NodeId(self.ast_nodes.len() - 1)
+    }
+
+    pub fn resize_node_types(&mut self, size: usize, type_id: TypeId) {
+        self.node_types.resize(size, type_id)
+    }
+
+    pub fn get_node_type(&self, node_id: NodeId) -> TypeId {
+        self.node_types[node_id.0]
+    }
+
+    pub fn set_node_type(&mut self, node_id: NodeId, type_id: TypeId) {
+        self.node_types[node_id.0] = type_id;
     }
 
     pub fn get_type(&self, type_id: TypeId) -> &Type {

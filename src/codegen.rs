@@ -456,24 +456,30 @@ impl Codegen {
                     CallTarget::Function(fun_id) => {
                         if fun_id.0 == 0 {
                             // special case for println
-                            if self.compiler.node_types[args[0].0] == STRING_TYPE_ID {
-                                output.extend_from_slice(b"printf(\"%s\\n\", ");
-                                self.codegen_node(args[0], output);
-                            } else if self.compiler.node_types[args[0].0] == I64_TYPE_ID {
-                                output.extend_from_slice(b"printf(\"%lli\\n\", ");
-                                self.codegen_node(args[0], output);
-                            } else if self.compiler.node_types[args[0].0] == F64_TYPE_ID {
-                                output.extend_from_slice(b"printf(\"%lf\\n\", ");
-                                self.codegen_node(args[0], output);
-                            } else if self.compiler.node_types[args[0].0] == BOOL_TYPE_ID {
-                                output.extend_from_slice(b"printf(\"%s\\n\", (");
-                                self.codegen_node(args[0], output);
-                                output.extend_from_slice(br#")?"true":"false""#);
-                            } else {
-                                panic!(
-                                    "unknown type for printf: {}",
-                                    self.compiler.node_types[args[0].0].0
-                                );
+                            match self.compiler.get_node_type(args[0]) {
+                                STRING_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%s\\n\", ");
+                                    self.codegen_node(args[0], output);
+                                }
+                                I64_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                                    self.codegen_node(args[0], output);
+                                }
+                                F64_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%lf\\n\", ");
+                                    self.codegen_node(args[0], output);
+                                }
+                                BOOL_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%s\\n\", (");
+                                    self.codegen_node(args[0], output);
+                                    output.extend_from_slice(br#")?"true":"false""#);
+                                }
+                                x => {
+                                    panic!(
+                                        "unknown type for printf: {:?}",
+                                        self.compiler.get_type(x)
+                                    );
+                                }
                             }
                             output.extend_from_slice(b");\n");
                             return;
@@ -518,7 +524,7 @@ impl Codegen {
                 }
             }
             AstNode::New(_, allocation_call) => {
-                let type_id = self.compiler.node_types[node_id.0];
+                let type_id = self.compiler.get_node_type(node_id);
 
                 let Type::Pointer(_, type_id) = self.compiler.get_type(type_id) else {
                     panic!("internal error: 'new' creating non-pointer type: {:?}", self.compiler.get_type(type_id))
@@ -709,6 +715,39 @@ impl Codegen {
                 self.codegen_node(*block, output);
                 output.extend_from_slice(b"}");
             }
+            AstNode::Match { target, match_arms } => {
+                output.extend_from_slice(b"{\n");
+                let type_id = self.compiler.get_node_type(*target);
+                self.codegen_typename(type_id, output);
+
+                let match_var = format!("match_var_{}", target.0);
+
+                output.extend_from_slice(match_var.as_bytes());
+                output.extend_from_slice(b" = ");
+                self.codegen_node(*target, output);
+
+                output.extend_from_slice(b";\n");
+
+                for (match_arm, match_result) in match_arms {
+                    match self.compiler.get_node(*match_arm) {
+                        AstNode::Name | AstNode::Variable => {
+                            let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
+                                panic!("internal error: match arm unresolved at codegen time")
+                            };
+
+                            match resolution {
+                                CallTarget::EnumConstructor(_, case_offset) => {
+                                    output.extend_from_slice(b"if (");
+                                    output.extend_from_slice(match_var.as_bytes());
+                                    output.extend_from_slice(b". == ")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                output.extend_from_slice(b"}\n");
+            }
             AstNode::Block(..) => {
                 self.codegen_block(node_id, output);
             }
@@ -732,7 +771,7 @@ impl Codegen {
             for node_id in &self.compiler.blocks[block_id.0].nodes {
                 if let AstNode::Return(return_expr) = self.compiler.get_ast_node(*node_id) {
                     if let Some(return_expr) = return_expr {
-                        self.codegen_typename(self.compiler.node_types[return_expr.0], output);
+                        self.codegen_typename(self.compiler.get_node_type(*return_expr), output);
                         output.extend_from_slice(b" return_expr = ");
                         self.codegen_node(*return_expr, output);
                         output.extend_from_slice(b";\n");

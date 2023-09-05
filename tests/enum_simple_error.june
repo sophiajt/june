@@ -1,0 +1,11 @@
+enum State {
+    None
+    StateId(i64)
+    Duration { from: i64, to: i64 }
+}
+
+fun main() {
+    let x = State::None
+    let y = State::StateId(4)
+    let z = State::Duration(from: 1, too: 10)
+}

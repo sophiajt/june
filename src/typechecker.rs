@@ -492,7 +492,7 @@ impl Typechecker {
         for node_id in &block.nodes {
             self.typecheck_node(*node_id);
         }
-        self.compiler.node_types[node_id.0] = VOID_TYPE_ID;
+        self.compiler.set_node_type(node_id, VOID_TYPE_ID);
 
         self.exit_scope()
     }
@@ -671,7 +671,7 @@ impl Typechecker {
                         for known_field in fields {
                             if known_field.0 == field_name {
                                 let type_id = known_field.1;
-                                self.compiler.node_types[node_id.0] = known_field.1;
+                                self.compiler.set_node_type(node_id, known_field.1);
                                 return type_id;
                             }
                         }
@@ -803,11 +803,11 @@ impl Typechecker {
                 self.typecheck_node(condition);
                 self.typecheck_node(block);
 
-                if self.compiler.node_types[condition.0] != BOOL_TYPE_ID {
+                if self.compiler.get_node_type(condition) != BOOL_TYPE_ID {
                     self.error("condition not a boolean expression", condition);
                 }
 
-                self.compiler.node_types[block.0]
+                self.compiler.get_node_type(block)
             }
             AstNode::For {
                 variable,
@@ -851,7 +851,7 @@ impl Typechecker {
             }
         };
 
-        self.compiler.node_types[node_id.0] = node_type;
+        self.compiler.set_node_type(node_id, node_type);
 
         node_type
     }
@@ -954,7 +954,7 @@ impl Typechecker {
                         let field_name = self.compiler.get_source(name);
                         for known_field in fields {
                             if known_field.0 == field_name {
-                                self.compiler.node_types[node_id.0] = known_field.1;
+                                self.compiler.set_node_type(node_id, known_field.1);
                                 continue 'arg;
                             }
                         }
@@ -966,7 +966,7 @@ impl Typechecker {
                             let field_name = self.compiler.get_source(name);
                             for known_field in fields {
                                 if known_field.0 == field_name {
-                                    self.compiler.node_types[node_id.0] = known_field.1;
+                                    self.compiler.set_node_type(node_id, known_field.1);
                                     continue 'arg;
                                 }
                             }
@@ -1188,7 +1188,7 @@ impl Typechecker {
         self.typecheck_node(condition);
         self.typecheck_node(then_block);
 
-        if self.compiler.node_types[condition.0] != BOOL_TYPE_ID {
+        if self.compiler.get_node_type(condition) != BOOL_TYPE_ID {
             self.error("condition not a boolean expression", condition);
         }
 
@@ -1196,23 +1196,29 @@ impl Typechecker {
             self.typecheck_node(else_expression);
 
             // FIXME: add type compatibility
-            if self.compiler.node_types[then_block.0] != self.compiler.node_types[else_expression.0]
+            if self.compiler.get_node_type(then_block)
+                != self.compiler.get_node_type(else_expression)
             {
                 self.error("return used outside of a function", else_expression);
             }
         }
 
-        self.compiler.node_types[then_block.0]
+        self.compiler.get_node_type(then_block)
     }
 
     pub fn typecheck_match(&mut self, target: NodeId, match_arms: Vec<(NodeId, NodeId)>) -> TypeId {
         let target_type_id = self.typecheck_node(target);
 
+        let target_type_id = match self.compiler.get_type(target_type_id) {
+            Type::Pointer(_, type_id) => *type_id,
+            _ => target_type_id,
+        };
+
         match self.compiler.get_type(target_type_id) {
             Type::Enum { variants, .. } => {
                 let variants = variants.clone();
 
-                for (arm_pattern, arm_result) in match_arms {
+                'arm: for (arm_pattern, arm_result) in match_arms {
                     self.enter_scope();
                     match self.compiler.get_ast_node(arm_pattern) {
                         AstNode::Variable | AstNode::Name => {
@@ -1246,6 +1252,34 @@ impl Typechecker {
                                         namespace,
                                     )
                                 } else {
+                                    match self.compiler.get_ast_node(item) {
+                                        AstNode::Name | AstNode::Variable => {
+                                            let arm_name = self.compiler.get_source(item);
+
+                                            for (idx, variant) in variants.iter().enumerate() {
+                                                match variant {
+                                                    EnumVariant::Simple { name: variant_name } => {
+                                                        if variant_name == arm_name {
+                                                            self.compiler.call_resolution.insert(
+                                                                arm_pattern,
+                                                                CallTarget::EnumConstructor(
+                                                                    target_type_id,
+                                                                    CaseOffset(idx),
+                                                                ),
+                                                            );
+                                                            continue 'arm;
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+
+                                            self.error("could not find match enum case", item)
+                                        }
+                                        _ => {
+                                            panic!("not yet supported")
+                                        }
+                                    }
                                 }
                             } else {
                                 self.error("unknown match variant type", namespace)
@@ -1258,9 +1292,12 @@ impl Typechecker {
 
                 VOID_TYPE_ID
             }
-            _ => {
+            x => {
                 //FIXME: add support for other value types
-                self.error("currently only enums are supported in matches", target);
+                self.error(
+                    format!("currently only enums are supported in matches: {:?}", x),
+                    target,
+                );
                 VOID_TYPE_ID
             }
         }
@@ -1297,7 +1334,7 @@ impl Typechecker {
 
                     if method_name == name {
                         let type_id = self.typecheck_call_with_fun_id(head, *method, &args);
-                        self.compiler.node_types[node_id.0] = type_id;
+                        self.compiler.set_node_type(node_id, type_id);
                         return type_id;
                     }
                 }
@@ -1311,12 +1348,12 @@ impl Typechecker {
 
     pub fn typecheck(mut self) -> Compiler {
         let num_nodes = self.compiler.num_ast_nodes();
-        self.compiler.node_types.resize(num_nodes, UNKNOWN_TYPE_ID);
+        self.compiler.resize_node_types(num_nodes, UNKNOWN_TYPE_ID);
 
         let top_level = NodeId(self.compiler.num_ast_nodes() - 1);
         self.typecheck_node(top_level);
 
-        let top_level_type = self.compiler.node_types[top_level.0];
+        let top_level_type = self.compiler.get_node_type(top_level);
 
         // If we haven't seen a main, create one from the top-level node
         if !self.compiler.has_main() {

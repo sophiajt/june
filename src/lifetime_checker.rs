@@ -250,7 +250,7 @@ impl LifetimeChecker {
 
                 let target = *target;
 
-                let field_type = self.compiler.node_types[node_id.0];
+                let field_type = self.compiler.get_node_type(node_id);
                 if !self.compiler.is_copyable_type(field_type) {
                     self.expand_lifetime_with_node(target, node_id);
                 }
@@ -264,7 +264,7 @@ impl LifetimeChecker {
                 let target = *target;
                 let call = *call;
 
-                let field_type = self.compiler.node_types[node_id.0];
+                let field_type = self.compiler.get_node_type(node_id);
                 if !self.compiler.is_copyable_type(field_type) {
                     self.expand_lifetime_with_node(target, node_id);
                 }
@@ -429,6 +429,16 @@ impl LifetimeChecker {
                     self.check_node_lifetime(item, scope_level);
 
                     self.expand_lifetime_with_node(node_id, item);
+                }
+            }
+            AstNode::Match { target, match_arms } => {
+                let target = *target;
+                let match_arms = match_arms.clone();
+
+                self.expand_lifetime_with_node(target, node_id);
+
+                for (_, match_result) in &match_arms {
+                    self.check_node_lifetime(*match_result, scope_level)
                 }
             }
             AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
