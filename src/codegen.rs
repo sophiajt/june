@@ -27,7 +27,9 @@ impl Codegen {
                 output.extend_from_slice(b"struct enum_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
             }
-            Type::Pointer(_, type_id) => {
+            Type::Pointer {
+                target: type_id, ..
+            } => {
                 self.codegen_typename(*type_id, output);
                 output.push(b'*');
             }
@@ -58,7 +60,7 @@ impl Codegen {
         is_allocator: bool,
         output: &mut Vec<u8>,
     ) {
-        let Type::Pointer(_, inner_type_id) = self.compiler.get_type(type_id) else {
+        let Type::Pointer { target: inner_type_id, ..} = self.compiler.get_type(type_id) else {
             panic!("internal error: pointer to unknown type");
         };
 
@@ -338,6 +340,9 @@ impl Codegen {
 
                 output.extend_from_slice(src);
             }
+            AstNode::None => {
+                output.extend_from_slice(b"NULL");
+            }
             AstNode::Name => {
                 let src = self.compiler.get_source(node_id);
 
@@ -526,7 +531,7 @@ impl Codegen {
             AstNode::New(_, allocation_call) => {
                 let type_id = self.compiler.get_node_type(node_id);
 
-                let Type::Pointer(_, type_id) = self.compiler.get_type(type_id) else {
+                let Type::Pointer { target: type_id, ..} = self.compiler.get_type(type_id) else {
                     panic!("internal error: 'new' creating non-pointer type: {:?}", self.compiler.get_type(type_id))
                 };
                 let type_id = *type_id;
@@ -729,7 +734,7 @@ impl Codegen {
                 output.extend_from_slice(b";\n");
 
                 for (match_arm, match_result) in match_arms {
-                    match self.compiler.get_node(*match_arm) {
+                    match self.compiler.get_ast_node(*match_arm) {
                         AstNode::Name | AstNode::Variable => {
                             let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
                                 panic!("internal error: match arm unresolved at codegen time")
@@ -741,8 +746,10 @@ impl Codegen {
                                     output.extend_from_slice(match_var.as_bytes());
                                     output.extend_from_slice(b". == ")
                                 }
+                                _ => {}
                             }
                         }
+                        _ => {}
                     }
                 }
 

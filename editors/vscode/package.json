@@ -1,0 +1,65 @@
+{
+    "name": "june-syntax",
+    "displayName": "June Syntax",
+    "version": "0.6.1",
+    "description": "Improved June syntax highlighting",
+    "publisher": "dustypomerleau",
+    "homepage": "https://github.com/dustypomerleau/rust-syntax",
+    "author": {
+        "name": "jt"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/dustypomerleau/rust-syntax"
+    },
+    "bugs": {
+        "url": "https://github.com/dustypomerleau/rust-syntax/issues"
+    },
+    "license": "Please see LICENSE.txt",
+    "galleryBanner": {
+        "color": "#292d3e",
+        "theme": "dark"
+    },
+    "icon": "images/icon.png",
+    "categories": [
+        "Programming Languages"
+    ],
+    "keywords": [
+        "june",
+        "language",
+        "syntax",
+        "grammar",
+        "highlighting"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "june",
+                "aliases": [
+                    "June"
+                ],
+                "extensions": [
+                    ".june"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "june",
+                "scopeName": "source.june",
+                "path": "./syntaxes/june.tmLanguage.json"
+            }
+        ]
+    },
+    "devDependencies": {
+        "gulp": "^4.0.2",
+        "gulp-yaml": "^2.0.4",
+        "js-yaml": "^4.1.0",
+        "vsce": "^2.9.2",
+        "vscode-tmgrammar-test": "^0.1.1"
+    },
+    "engines": {
+        "vscode": "^1.44.0"
+    }
+}

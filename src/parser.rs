@@ -20,6 +20,7 @@ pub enum AstNode {
     String,
     Name,
     Type {
+        name: NodeId,
         params: Option<NodeId>,
         optional: bool,
         raw: bool,
@@ -29,6 +30,9 @@ pub enum AstNode {
     // Booleans
     True,
     False,
+
+    // Empty optional values
+    None,
 
     // Operators
     Equal,
@@ -1033,6 +1037,8 @@ impl Parser {
             output
         } else if self.is_keyword(b"true") || self.is_keyword(b"false") {
             self.boolean()
+        } else if self.is_keyword(b"none") {
+            self.none()
         } else if self.is_keyword(b"new") {
             self.new_allocation()
         } else if self.is_string() {
@@ -1160,6 +1166,21 @@ impl Parser {
                 self.create_node(AstNode::False, span_start, span_end)
             }
             _ => self.error("expected: boolean"),
+        }
+    }
+
+    pub fn none(&mut self) -> NodeId {
+        match self.peek() {
+            Some(Token {
+                token_type: TokenType::Name,
+                span_start,
+                span_end,
+            }) if &self.compiler.source[span_start..span_end] == b"none" => {
+                self.next();
+
+                self.create_node(AstNode::None, span_start, span_end)
+            }
+            _ => self.error("expected: none"),
         }
     }
 
@@ -1309,7 +1330,7 @@ impl Parser {
                 span_end,
                 ..
             }) => {
-                self.next();
+                let name = self.name();
                 let mut params = None;
                 if self.is_less_than() {
                     // We have generics
@@ -1326,6 +1347,7 @@ impl Parser {
 
                 self.create_node(
                     AstNode::Type {
+                        name,
                         params,
                         optional,
                         raw,
@@ -1409,7 +1431,7 @@ impl Parser {
             if self.is_colon() {
                 self.colon();
 
-                let ty = self.name();
+                let ty = self.typename();
 
                 let span_end = self.get_span_end(ty);
 
@@ -1428,10 +1450,21 @@ impl Parser {
                 if name_contents == b"self" {
                     let span_end = self.get_span_end(name);
 
+                    let ty = self.create_node(
+                        AstNode::Type {
+                            name,
+                            params: None,
+                            optional: false,
+                            raw: false,
+                        },
+                        span_start,
+                        span_end,
+                    );
+
                     params.push(self.create_node(
                         AstNode::Param {
                             name,
-                            ty: name,
+                            ty,
                             is_mutable,
                         },
                         span_start,

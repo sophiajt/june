@@ -1,0 +1,19 @@
+name: CI
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: run Textmate scope tests
+        run: npx vscode-tmgrammar-test -s source.rust -g syntaxes/rust.tmLanguage.json -t "test/**/*.rs"
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: package extension
+        run: npx vsce package

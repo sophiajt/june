@@ -36,7 +36,11 @@ pub enum Type {
         variants: Vec<EnumVariant>,
         methods: Vec<FunId>,
     },
-    Pointer(AllocationType, TypeId),
+    Pointer {
+        allocation_type: AllocationType,
+        optional: bool,
+        target: TypeId,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -149,8 +153,16 @@ impl Typechecker {
         Self { compiler, scope }
     }
 
-    pub fn typecheck_typename(&mut self, ty: NodeId) -> TypeId {
-        let name = self.compiler.get_source(ty);
+    pub fn typecheck_typename(&mut self, node_id: NodeId) -> TypeId {
+        let AstNode::Type { name, optional, ..} = self.compiler.get_ast_node(node_id) else {
+            self.error("expected type name", node_id);
+            return VOID_TYPE_ID;
+        };
+
+        let name_node_id = *name;
+        let optional = *optional;
+
+        let name = self.compiler.get_source(name_node_id);
 
         match name {
             b"i64" => I64_TYPE_ID,
@@ -159,14 +171,17 @@ impl Typechecker {
             b"bool" => BOOL_TYPE_ID,
             b"void" => VOID_TYPE_ID,
             _ => {
-                if let Some(type_id) = self.find_type_in_scope(ty) {
+                if let Some(type_id) = self.find_type_in_scope(name_node_id) {
                     // Assume custom types are pointers
-                    self.compiler
-                        .find_or_create_type(Type::Pointer(AllocationType::Normal, *type_id))
+                    self.compiler.find_or_create_type(Type::Pointer {
+                        allocation_type: AllocationType::Normal,
+                        optional,
+                        target: *type_id,
+                    })
                 } else {
                     self.error(
                         &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
-                        ty,
+                        node_id,
                     );
                     UNKNOWN_TYPE_ID
                 }
@@ -336,8 +351,11 @@ impl Typechecker {
             methods: vec![],
         });
 
-        self.compiler
-            .push_type(Type::Pointer(AllocationType::Normal, type_id));
+        self.compiler.push_type(Type::Pointer {
+            allocation_type: AllocationType::Normal,
+            optional: false,
+            target: type_id,
+        });
 
         self.add_type_to_scope(enum_name, type_id);
 
@@ -388,6 +406,14 @@ impl Typechecker {
     ) -> TypeId {
         let struct_name = self.compiler.get_source(name).to_vec();
 
+        let type_id = self.compiler.push_type(Type::Struct {
+            fields: vec![],
+            methods: vec![],
+            is_allocator,
+        });
+
+        self.add_type_to_scope(struct_name, type_id);
+
         let mut output_fields = vec![];
 
         for (field_name, field_type) in fields {
@@ -397,16 +423,17 @@ impl Typechecker {
             output_fields.push((field_name, field_type));
         }
 
-        let type_id = self.compiler.push_type(Type::Struct {
-            fields: output_fields,
-            methods: vec![],
-            is_allocator,
-        });
+        let Type::Struct {
+            fields, ..
+        } = &mut self.compiler.get_type_mut(type_id) else {
+            panic!("internal error: previously inserted struct can't be found");
+        };
 
-        self.compiler
-            .push_type(Type::Pointer(AllocationType::Normal, type_id));
+        *fields = output_fields;
 
-        self.add_type_to_scope(struct_name, type_id);
+        // self.compiler
+        //     .types
+        //     .push(Type::Pointer { allocation_type: AllocationType::Normal, type_id));
 
         if !methods.is_empty() {
             self.enter_scope();
@@ -498,7 +525,25 @@ impl Typechecker {
     }
 
     pub fn is_type_compatible(&self, lhs: TypeId, rhs: TypeId) -> bool {
-        lhs == rhs
+        match (self.compiler.get_type(lhs), self.compiler.get_type(rhs)) {
+            (
+                Type::Pointer {
+                    allocation_type: allocation_type_lhs,
+                    optional: optional_lhs,
+                    target: target_lhs,
+                },
+                Type::Pointer {
+                    allocation_type: allocation_type_rhs,
+                    optional: optional_rhs,
+                    target: target_rhs,
+                },
+            ) => {
+                allocation_type_lhs == allocation_type_rhs
+                    && target_lhs == target_rhs
+                    && (*optional_lhs || optional_lhs == optional_rhs)
+            }
+            _ => lhs == rhs,
+        }
     }
 
     pub fn typecheck_call_with_fun_id(
@@ -554,6 +599,11 @@ impl Typechecker {
                     let name = *name;
                     let value = *value;
 
+                    // Set up expected type for inference. Note: if we find concrete values
+                    // this inference type will be replaced by the concrete type.
+                    self.compiler
+                        .set_node_type(value, self.compiler.variables[param.var_id.0].ty);
+
                     let arg_ty = self.typecheck_node(value);
 
                     if !self.is_type_compatible(arg_ty, self.compiler.variables[param.var_id.0].ty)
@@ -605,6 +655,28 @@ impl Typechecker {
             AstNode::Int => I64_TYPE_ID,
             AstNode::Float => F64_TYPE_ID,
             AstNode::True | AstNode::False => BOOL_TYPE_ID,
+            AstNode::None => {
+                // FIXME: check that this is an optional type
+                let type_id = self.compiler.get_node_type(node_id);
+
+                match self.compiler.get_type(type_id) {
+                    Type::Pointer { optional, .. } => {
+                        if *optional {
+                            // Success, none can point to an optional pointer
+                        } else {
+                            self.error("'none' used on required (non-optional) pointer", node_id);
+                        }
+                    }
+                    x => {
+                        self.error(
+                            format!("'none' requires pointer type, found: {:?}", x),
+                            node_id,
+                        );
+                    }
+                }
+
+                type_id
+            }
             AstNode::String => STRING_TYPE_ID,
             AstNode::Let {
                 variable_name,
@@ -619,15 +691,15 @@ impl Typechecker {
 
                 let initializer_ty = self.typecheck_node(initializer);
 
-                if let Some(ty) = ty {
+                let var_id = if let Some(ty) = ty {
                     let ty = self.typecheck_typename(ty);
                     if !self.is_type_compatible(ty, initializer_ty) {
                         self.error("initializer and given type do not match", initializer);
                     }
-                }
-
-                let var_id =
-                    self.define_variable(variable_name, initializer_ty, is_mutable, node_id);
+                    self.define_variable(variable_name, ty, is_mutable, node_id)
+                } else {
+                    self.define_variable(variable_name, initializer_ty, is_mutable, node_id)
+                };
 
                 self.compiler.var_resolution.insert(variable_name, var_id);
 
@@ -660,10 +732,7 @@ impl Typechecker {
 
                 let type_id = self.typecheck_node(target);
 
-                let type_id = match self.compiler.get_type(type_id) {
-                    Type::Pointer(_, type_id) => *type_id,
-                    _ => type_id,
-                };
+                let type_id = self.get_underlying_type_id(type_id);
 
                 match self.compiler.get_type(type_id) {
                     Type::Struct { fields, .. } => {
@@ -697,8 +766,14 @@ impl Typechecker {
                 match self.compiler.get_ast_node(op) {
                     AstNode::Plus | AstNode::Minus | AstNode::Multiply | AstNode::Divide => {
                         if lhs_ty != rhs_ty {
-                            // FIXME: actually say the types
-                            self.error("type mismatch during operation", op)
+                            self.error(
+                                format!(
+                                    "type mismatch during operation. expected: {:?}, found: {:?}",
+                                    self.compiler.get_type(lhs_ty),
+                                    self.compiler.get_type(rhs_ty),
+                                ),
+                                op,
+                            )
                         }
                         lhs_ty
                     }
@@ -708,9 +783,15 @@ impl Typechecker {
                     | AstNode::NotEqual
                     | AstNode::GreaterThan
                     | AstNode::GreaterThanOrEqual => {
-                        if lhs_ty != rhs_ty {
-                            // FIXME: actually say the types
-                            self.error("type mismatch during operation", op)
+                        if !self.is_type_compatible(lhs_ty, rhs_ty) {
+                            self.error(
+                                format!(
+                                    "type mismatch during operation. expected: {:?}, found: {:?}",
+                                    self.compiler.get_type(lhs_ty),
+                                    self.compiler.get_type(rhs_ty),
+                                ),
+                                op,
+                            )
                         }
                         BOOL_TYPE_ID
                     }
@@ -721,9 +802,15 @@ impl Typechecker {
                     | AstNode::DivideAssignment => {
                         let lhs_ty = self.typecheck_lvalue(lhs);
 
-                        if lhs_ty != rhs_ty {
-                            // FIXME: actually say the types
-                            self.error("type mismatch during operation", op)
+                        if !self.is_type_compatible(lhs_ty, rhs_ty) {
+                            self.error(
+                                format!(
+                                    "type mismatch during operation. expected: {:?}, found: {:?}",
+                                    self.compiler.get_type(lhs_ty),
+                                    self.compiler.get_type(rhs_ty),
+                                ),
+                                op,
+                            );
                         }
                         VOID_TYPE_ID
                     }
@@ -888,10 +975,7 @@ impl Typechecker {
 
                 let field_name = self.compiler.get_source(field);
 
-                let target_type_id = match self.compiler.get_type(head_type_id) {
-                    Type::Pointer(_, inner_type_id) => *inner_type_id,
-                    _ => head_type_id,
-                };
+                let target_type_id = self.get_underlying_type_id(head_type_id);
 
                 match self.compiler.get_type(target_type_id) {
                     Type::Struct { fields, .. } => {
@@ -935,9 +1019,11 @@ impl Typechecker {
             };
 
             let type_id = *type_id;
-            let output_type = self
-                .compiler
-                .find_or_create_type(Type::Pointer(allocation_type, type_id));
+            let output_type = self.compiler.find_or_create_type(Type::Pointer {
+                allocation_type,
+                optional: false,
+                target: type_id,
+            });
 
             'arg: for arg in args {
                 let AstNode::NamedValue { name, value } = self.compiler.get_ast_node(arg) else {
@@ -946,38 +1032,34 @@ impl Typechecker {
                 };
 
                 let name = *name;
+                let value = *value;
 
-                self.typecheck_node(*value);
-
-                match self.compiler.get_type(type_id) {
+                let type_id = self.get_underlying_type_id(type_id);
+                match &self.compiler.get_type(type_id) {
                     Type::Struct { fields, .. } => {
                         let field_name = self.compiler.get_source(name);
                         for known_field in fields {
                             if known_field.0 == field_name {
-                                self.compiler.set_node_type(node_id, known_field.1);
+                                let known_field_type = known_field.1;
+
+                                self.compiler.set_node_type(arg, known_field_type);
+
+                                // Set up expected type for inference. Note: if we find concrete values
+                                // this inference type will be replaced by the concrete type.
+                                self.compiler.set_node_type(value, known_field_type);
+                                let value_type = self.typecheck_node(value);
+
+                                if !self.is_type_compatible(known_field_type, value_type) {
+                                    self.error(format!("incompatible type for argument, found: {:?}, expected: {:?}",
+                                        self.compiler.get_type(known_field_type), self.compiler.get_type(value_type)), value)
+                                }
+
                                 continue 'arg;
                             }
                         }
                         self.error("unknown field", name);
                         return UNKNOWN_TYPE_ID;
                     }
-                    Type::Pointer(_, type_id) => match self.compiler.get_type(*type_id) {
-                        Type::Struct { fields, .. } => {
-                            let field_name = self.compiler.get_source(name);
-                            for known_field in fields {
-                                if known_field.0 == field_name {
-                                    self.compiler.set_node_type(node_id, known_field.1);
-                                    continue 'arg;
-                                }
-                            }
-                            self.error("unknown field", name);
-                            return UNKNOWN_TYPE_ID;
-                        }
-                        _ => {
-                            self.error("internal error: allocation of non-struct type", node_id);
-                            return UNKNOWN_TYPE_ID;
-                        }
-                    },
                     _ => {
                         self.error("internal error: allocation of non-struct type", node_id);
                         return UNKNOWN_TYPE_ID;
@@ -1029,9 +1111,11 @@ impl Typechecker {
                 // FIXME: remove clone
                 let cases = cases.clone();
 
-                let output_type = self
-                    .compiler
-                    .find_or_create_type(Type::Pointer(AllocationType::Normal, type_id));
+                let output_type = self.compiler.find_or_create_type(Type::Pointer {
+                    allocation_type: AllocationType::Normal,
+                    optional: false,
+                    target: type_id,
+                });
 
                 match self.compiler.get_ast_node(item) {
                     AstNode::Call { head, args } => {
@@ -1210,7 +1294,7 @@ impl Typechecker {
         let target_type_id = self.typecheck_node(target);
 
         let target_type_id = match self.compiler.get_type(target_type_id) {
-            Type::Pointer(_, type_id) => *type_id,
+            Type::Pointer { target, .. } => *target,
             _ => target_type_id,
         };
 
@@ -1320,10 +1404,7 @@ impl Typechecker {
         let name = self.compiler.get_source(head).to_vec();
         let type_id = self.typecheck_node(target);
 
-        let type_id = match self.compiler.get_type(type_id) {
-            Type::Pointer(_, type_id) => *type_id,
-            _ => type_id,
-        };
+        let type_id = self.get_underlying_type_id(type_id);
 
         match self.compiler.get_type(type_id) {
             Type::Struct { methods, .. } => {
@@ -1472,6 +1553,14 @@ impl Typechecker {
         frame.expected_return_type = Some(expected_type)
     }
 
+    pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
+        match self.compiler.get_type(type_id) {
+            Type::Pointer {
+                target: type_id, ..
+            } => *type_id,
+            _ => type_id,
+        }
+    }
     pub fn enter_scope(&mut self) {
         self.scope.push(Scope::new())
     }
