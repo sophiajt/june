@@ -1,0 +1,15 @@
+// output: 77
+
+enum State {
+    None
+    Some(i64)
+}
+
+fun main() {
+    let x = State::Some(77)
+
+    match x {
+        State::None => println("None")
+        State::Some(i) => println(i)
+    }
+}

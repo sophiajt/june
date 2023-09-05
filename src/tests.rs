@@ -142,6 +142,11 @@ fn double() -> TestResult {
 }
 
 #[test]
+fn enum_multi_arm() -> TestResult {
+    test_example("enum_multi_arm")
+}
+
+#[test]
 fn enum_simple() -> TestResult {
     test_example("enum_simple")
 }
