@@ -811,8 +811,8 @@ impl Codegen {
                                                                             );
                                                                     }
                                                                     EnumVariant::Struct {
-                                                                        name,
                                                                         params,
+                                                                        ..
                                                                     } => {
                                                                         variable_assignments
                                                                             .extend_from_slice(

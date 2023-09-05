@@ -142,6 +142,21 @@ fn double() -> TestResult {
 }
 
 #[test]
+fn enum_simple() -> TestResult {
+    test_example("enum_simple")
+}
+
+#[test]
+fn enum_single_payload() -> TestResult {
+    test_example("enum_single_payload")
+}
+
+#[test]
+fn enum_struct_payload() -> TestResult {
+    test_example("enum_struct_payload")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("for_range")
 }
