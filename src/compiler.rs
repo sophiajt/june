@@ -459,15 +459,15 @@ impl Compiler {
         self.source.len()
     }
 
-    pub fn get_ast_node(&self, node_id: NodeId) -> &AstNode {
+    pub fn get_node(&self, node_id: NodeId) -> &AstNode {
         &self.ast_nodes[node_id.0]
     }
 
-    pub fn get_ast_node_mut(&mut self, node_id: NodeId) -> &mut AstNode {
+    pub fn get_node_mut(&mut self, node_id: NodeId) -> &mut AstNode {
         &mut self.ast_nodes[node_id.0]
     }
 
-    pub fn push_ast_node(&mut self, ast_node: AstNode) -> NodeId {
+    pub fn push_node(&mut self, ast_node: AstNode) -> NodeId {
         self.ast_nodes.push(ast_node);
 
         NodeId(self.ast_nodes.len() - 1)

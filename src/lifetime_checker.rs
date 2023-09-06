@@ -176,7 +176,7 @@ impl LifetimeChecker {
     }
 
     pub fn check_lvalue_lifetime(&mut self, lvalue: NodeId) {
-        match &self.compiler.get_ast_node(lvalue) {
+        match &self.compiler.get_node(lvalue) {
             AstNode::Variable => {
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
@@ -206,7 +206,7 @@ impl LifetimeChecker {
     }
 
     pub fn check_node_lifetime(&mut self, node_id: NodeId, scope_level: usize) {
-        match self.compiler.get_ast_node(node_id) {
+        match self.compiler.get_node(node_id) {
             AstNode::Block(block_id) => {
                 self.check_block_lifetime(*block_id, scope_level + 1);
             }
@@ -281,7 +281,7 @@ impl LifetimeChecker {
                 let rhs = *rhs;
                 let op = *op;
 
-                if matches!(self.compiler.get_ast_node(op), AstNode::Assignment) {
+                if matches!(self.compiler.get_node(op), AstNode::Assignment) {
                     self.check_lvalue_lifetime(lhs);
 
                     if matches!(
@@ -390,7 +390,7 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(allocation_node_id, node_id);
                 }
 
-                match &self.compiler.get_ast_node(allocation_node_id) {
+                match &self.compiler.get_node(allocation_node_id) {
                     AstNode::Call { args, .. } => {
                         // FIXME: remove clone
                         let args = args.clone();
@@ -427,9 +427,9 @@ impl LifetimeChecker {
                         AllocationLifetime::Scope { level: scope_level };
                 }
 
-                if matches!(self.compiler.get_ast_node(item), AstNode::Variable) {
+                if matches!(self.compiler.get_node(item), AstNode::Variable) {
                     self.expand_lifetime_with_node(item, node_id);
-                } else if matches!(self.compiler.get_ast_node(item), AstNode::Call { .. }) {
+                } else if matches!(self.compiler.get_node(item), AstNode::Call { .. }) {
                     self.expand_lifetime_with_node(item, node_id);
                     self.check_node_lifetime(item, scope_level);
                 }

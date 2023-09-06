@@ -154,7 +154,7 @@ impl Typechecker {
     }
 
     pub fn typecheck_typename(&mut self, node_id: NodeId) -> TypeId {
-        let AstNode::Type { name, optional, ..} = self.compiler.get_ast_node(node_id) else {
+        let AstNode::Type { name, optional, ..} = self.compiler.get_node(node_id) else {
             self.error("expected type name", node_id);
             return VOID_TYPE_ID;
         };
@@ -202,13 +202,13 @@ impl Typechecker {
             .to_vec();
 
         //FIXME: remove clone?
-        if let AstNode::Params(unchecked_params) = self.compiler.get_ast_node(params).clone() {
+        if let AstNode::Params(unchecked_params) = self.compiler.get_node(params).clone() {
             for unchecked_param in unchecked_params {
                 if let AstNode::Param {
                     name,
                     ty,
                     is_mutable,
-                } = &self.compiler.get_ast_node(unchecked_param)
+                } = &self.compiler.get_node(unchecked_param)
                 {
                     let name = *name;
                     let param_name = self.compiler.get_source(name).to_vec();
@@ -285,7 +285,7 @@ impl Typechecker {
         let mut output_cases = vec![];
 
         for enum_case in cases {
-            if let AstNode::EnumCase { name, payload } = self.compiler.get_ast_node(enum_case) {
+            if let AstNode::EnumCase { name, payload } = self.compiler.get_node(enum_case) {
                 let case_name = self.compiler.get_source(*name).to_vec();
 
                 match payload {
@@ -295,13 +295,13 @@ impl Typechecker {
                             break;
                         }
 
-                        match &self.compiler.get_ast_node(payload[0]) {
+                        match &self.compiler.get_node(payload[0]) {
                             AstNode::NamedValue { .. } => {
                                 let mut fields = vec![];
                                 let payload = payload.clone();
                                 for item in payload {
                                     if let AstNode::NamedValue { name, value } =
-                                        &self.compiler.get_ast_node(item)
+                                        &self.compiler.get_node(item)
                                     {
                                         let name = *name;
                                         let value = *value;
@@ -367,7 +367,7 @@ impl Typechecker {
             let mut fun_ids = vec![];
 
             for method in methods {
-                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_ast_node(method) else {
+                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_node(method) else {
                     self.error("internal error: can't find method definition during typecheck", method);
                     return VOID_TYPE_ID;
                 };
@@ -443,7 +443,7 @@ impl Typechecker {
             let mut fun_ids = vec![];
 
             for method in methods {
-                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_ast_node(method) else {
+                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_node(method) else {
                     self.error("internal error: can't find method definition during typecheck", method);
                     return VOID_TYPE_ID;
                 };
@@ -482,7 +482,7 @@ impl Typechecker {
         let block = self.compiler.blocks[block_id.0].clone();
 
         for node_id in &block.nodes {
-            match &self.compiler.get_ast_node(*node_id) {
+            match &self.compiler.get_node(*node_id) {
                 AstNode::Fun {
                     name,
                     params,
@@ -594,7 +594,7 @@ impl Typechecker {
             // TODO: add name-checking
             let arg = *arg;
 
-            match &self.compiler.get_ast_node(arg) {
+            match &self.compiler.get_node(arg) {
                 AstNode::NamedValue { name, value } => {
                     let name = *name;
                     let value = *value;
@@ -647,7 +647,7 @@ impl Typechecker {
     }
 
     pub fn typecheck_node(&mut self, node_id: NodeId) -> TypeId {
-        let node_type = match &self.compiler.get_ast_node(node_id) {
+        let node_type = match &self.compiler.get_node(node_id) {
             AstNode::Block(block_id) => {
                 self.typecheck_block(node_id, *block_id);
                 VOID_TYPE_ID
@@ -763,7 +763,7 @@ impl Typechecker {
                 let lhs_ty = self.typecheck_node(lhs);
                 let rhs_ty = self.typecheck_node(rhs);
 
-                match self.compiler.get_ast_node(op) {
+                match self.compiler.get_node(op) {
                     AstNode::Plus | AstNode::Minus | AstNode::Multiply | AstNode::Divide => {
                         if lhs_ty != rhs_ty {
                             self.error(
@@ -944,7 +944,7 @@ impl Typechecker {
     }
 
     pub fn typecheck_lvalue(&mut self, lvalue: NodeId) -> TypeId {
-        match self.compiler.get_ast_node(lvalue) {
+        match self.compiler.get_node(lvalue) {
             AstNode::Variable => {
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
@@ -1008,7 +1008,7 @@ impl Typechecker {
         allocation_type: AllocationType,
         node_id: NodeId,
     ) -> TypeId {
-        if let AstNode::Call { head, args } = self.compiler.get_ast_node(node_id) {
+        if let AstNode::Call { head, args } = self.compiler.get_node(node_id) {
             // FIXME: remove clone
             let head = *head;
             let args = args.clone();
@@ -1026,7 +1026,7 @@ impl Typechecker {
             });
 
             'arg: for arg in args {
-                let AstNode::NamedValue { name, value } = self.compiler.get_ast_node(arg) else {
+                let AstNode::NamedValue { name, value } = self.compiler.get_node(arg) else {
                     self.error("unexpected argument in allocation", arg);
                     return UNKNOWN_TYPE_ID
                 };
@@ -1086,7 +1086,7 @@ impl Typechecker {
 
         match self.compiler.get_type(type_id) {
             Type::Struct { methods, .. } => {
-                let AstNode::Call { head, args } = self.compiler.get_ast_node(item) else {
+                let AstNode::Call { head, args } = self.compiler.get_node(item) else {
                     self.error("expected static method call on struct", item);
                     return VOID_TYPE_ID;
                 };
@@ -1117,7 +1117,7 @@ impl Typechecker {
                     target: type_id,
                 });
 
-                match self.compiler.get_ast_node(item) {
+                match self.compiler.get_node(item) {
                     AstNode::Call { head, args } => {
                         // FIXME: remove clone
                         let head = *head;
@@ -1168,7 +1168,7 @@ impl Typechecker {
                                                 args.into_iter().zip(params)
                                             {
                                                 if let AstNode::NamedValue { name, value } =
-                                                    self.compiler.get_ast_node(arg)
+                                                    self.compiler.get_node(arg)
                                                 {
                                                     let name = *name;
                                                     let value = *value;
@@ -1310,7 +1310,7 @@ impl Typechecker {
 
                 'arm: for (arm_pattern, arm_result) in match_arms {
                     self.enter_scope();
-                    match self.compiler.get_ast_node(arm_pattern) {
+                    match self.compiler.get_node(arm_pattern) {
                         AstNode::Variable | AstNode::Name => {
                             let var_id = self.define_variable(
                                 arm_pattern,
@@ -1345,7 +1345,7 @@ impl Typechecker {
                                         namespace,
                                     )
                                 } else {
-                                    match self.compiler.get_ast_node(item) {
+                                    match self.compiler.get_node(item) {
                                         AstNode::Name | AstNode::Variable => {
                                             let arm_name = self.compiler.get_source(item);
 
@@ -1392,7 +1392,7 @@ impl Typechecker {
                                                                 ),
                                                             );
                                                             if matches!(
-                                                                self.compiler.get_ast_node(args[0]),
+                                                                self.compiler.get_node(args[0]),
                                                                 AstNode::Variable
                                                             ) {
                                                                 let var_id = self.define_variable(
@@ -1429,8 +1429,7 @@ impl Typechecker {
                                                                     &params[idx];
                                                                 let arg = args[idx];
                                                                 if matches!(
-                                                                    self.compiler
-                                                                        .get_ast_node(args[0]),
+                                                                    self.compiler.get_node(args[0]),
                                                                     AstNode::Variable
                                                                 ) {
                                                                     let var_id = self
@@ -1519,7 +1518,7 @@ impl Typechecker {
         call: NodeId,
         node_id: NodeId,
     ) -> TypeId {
-        let AstNode::Call { head, args } = self.compiler.get_ast_node(call) else {
+        let AstNode::Call { head, args } = self.compiler.get_node(call) else {
             panic!("Internal error: method call using a non-call")
         };
 
@@ -1566,7 +1565,7 @@ impl Typechecker {
         if !self.compiler.has_main() {
             // Synthesis of a fake 'main' node
             self.compiler.source.extend_from_slice(b"main");
-            let main_node = self.compiler.push_ast_node(AstNode::Name);
+            let main_node = self.compiler.push_node(AstNode::Name);
             self.compiler
                 .span_start
                 .push(self.compiler.source.len() - 4);

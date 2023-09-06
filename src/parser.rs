@@ -673,7 +673,7 @@ impl Parser {
     pub fn create_node(&mut self, ast_node: AstNode, span_start: usize, span_end: usize) -> NodeId {
         self.compiler.span_start.push(span_start);
         self.compiler.span_end.push(span_end);
-        self.compiler.push_ast_node(ast_node)
+        self.compiler.push_node(ast_node)
     }
 
     pub fn block(&mut self, expect_curly_braces: bool) -> NodeId {
@@ -1081,7 +1081,7 @@ impl Parser {
                 };
                 let span_end = self.get_span_end(field_or_call);
 
-                match self.compiler.get_ast_node_mut(field_or_call) {
+                match self.compiler.get_node_mut(field_or_call) {
                     AstNode::Variable | AstNode::Name => {
                         expr = self.create_node(
                             AstNode::MemberAccess {
@@ -1275,7 +1275,7 @@ impl Parser {
     }
 
     pub fn operator_precedence(&mut self, operator: NodeId) -> usize {
-        self.compiler.get_ast_node(operator).precedence()
+        self.compiler.get_node(operator).precedence()
     }
 
     pub fn spanning(&mut self, from: NodeId, to: NodeId) -> (usize, usize) {

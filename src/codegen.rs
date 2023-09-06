@@ -324,7 +324,7 @@ impl Codegen {
     }
 
     pub fn codegen_node(&self, node_id: NodeId, output: &mut Vec<u8>) {
-        match &self.compiler.get_ast_node(node_id) {
+        match &self.compiler.get_node(node_id) {
             AstNode::String => {
                 let src = self.compiler.get_source(node_id);
 
@@ -542,7 +542,7 @@ impl Codegen {
 
                 self.codegen_annotation(node_id, output);
 
-                if let AstNode::Call { args, .. } = self.compiler.get_ast_node(*allocation_call) {
+                if let AstNode::Call { args, .. } = self.compiler.get_node(*allocation_call) {
                     for arg in args {
                         output.extend_from_slice(b", ");
 
@@ -553,7 +553,7 @@ impl Codegen {
                     panic!("internal error: expected allocation call during allocation")
                 }
             }
-            AstNode::NamespacedLookup { item, .. } => match self.compiler.get_ast_node(*item) {
+            AstNode::NamespacedLookup { item, .. } => match self.compiler.get_node(*item) {
                 AstNode::Call { head, args } => {
                     let call_target = self
                         .compiler
@@ -689,7 +689,7 @@ impl Codegen {
             } => {
                 output.extend_from_slice(b"for (");
 
-                let AstNode::Range { lhs, rhs } = self.compiler.get_ast_node(*range) else {
+                let AstNode::Range { lhs, rhs } = self.compiler.get_node(*range) else {
                     panic!("internal error: range not found for 'for'");
                 };
 
@@ -741,7 +741,7 @@ impl Codegen {
                     } else {
                         first = false
                     }
-                    match self.compiler.get_ast_node(*match_arm) {
+                    match self.compiler.get_node(*match_arm) {
                         AstNode::Variable => {
                             output.extend_from_slice(b"if (true) {\n");
 
@@ -764,7 +764,7 @@ impl Codegen {
                             output.extend_from_slice(b"}\n");
                         }
                         AstNode::NamespacedLookup { item, .. } => {
-                            match self.compiler.get_ast_node(*item) {
+                            match self.compiler.get_node(*item) {
                                 AstNode::Name | AstNode::Variable => {
                                     let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
                                         panic!("internal error: match arm unresolved at codegen time")
@@ -803,7 +803,7 @@ impl Codegen {
                                             let mut variable_assignments: Vec<u8> = vec![];
 
                                             for (arg_idx, arg) in args.iter().enumerate() {
-                                                match self.compiler.get_ast_node(*arg) {
+                                                match self.compiler.get_node(*arg) {
                                                     AstNode::Variable => {
                                                         let var_id = self.compiler.var_resolution.get(arg).expect("internal error: unresolved variable in codegen");
                                                         let var_type =
@@ -911,9 +911,9 @@ impl Codegen {
     }
 
     pub fn codegen_block(&self, block: NodeId, output: &mut Vec<u8>) {
-        if let AstNode::Block(block_id) = self.compiler.get_ast_node(block) {
+        if let AstNode::Block(block_id) = self.compiler.get_node(block) {
             for node_id in &self.compiler.blocks[block_id.0].nodes {
-                if let AstNode::Return(return_expr) = self.compiler.get_ast_node(*node_id) {
+                if let AstNode::Return(return_expr) = self.compiler.get_node(*node_id) {
                     if let Some(return_expr) = return_expr {
                         self.codegen_typename(self.compiler.get_node_type(*return_expr), output);
                         output.extend_from_slice(b" return_expr = ");
