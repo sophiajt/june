@@ -192,6 +192,11 @@ fn enum_var_scope_error2() -> TestResult {
 }
 
 #[test]
+fn enum_var_scope_error3() -> TestResult {
+    test_example("enum_var_scope_error3")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("for_range")
 }
