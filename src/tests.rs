@@ -142,6 +142,11 @@ fn circular_linked_list() -> TestResult {
 }
 
 #[test]
+fn circular_linked_list_abstraction() -> TestResult {
+    test_example("circular_linked_list_abstraction")
+}
+
+#[test]
 fn circular_linked_list_helper() -> TestResult {
     test_example("circular_linked_list_helper")
 }

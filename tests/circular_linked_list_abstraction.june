@@ -1,3 +1,5 @@
+// output: 132132
+
 struct Node {
     data: i64
     next: Node?
@@ -6,46 +8,49 @@ struct Node {
 struct allocator CircularList {
     node: Node?
 
-    fun new() -> CircularList {
+    fun default() -> CircularList {
         return new CircularList(node: none)
     }
 
     fun push(mut self, data: i64) {
         if .node != none {
             let next = self.node.next
-            self.node.next = new Node(data, next)
+            self.node.next = new Node(data: data, next: next)
         } else {
-            self.node = new Node(data, none)
+            self.node = new Node(data: data, next: none)
             self.node.next = self.node
         }
     }
 
     fun next(mut self) -> i64 {
-        if self.node.is_some() {
+        if self.node != none {
             let ret = self.node.data
 
             self.node = self.node.next
             return ret
         } else {
-            return none
+            return 0
         }
     }
 }
 
 fun helper() -> CircularList {
-    let list = new CircularList()
+    let list = CircularList::default()
 
-    return list // error, list does not live long enough
+    return list
 }
 
 fun main() {
-    mut list = new CircularList()
+    mut list = helper()
 
-    // list.push(1)
-    // list.push(2)
-    // list.push(3)
+    list.push(1)
+    list.push(2)
+    list.push(3)
 
-    // println(list.next())
-    // println(list.next())
-    // println(list.next())
+    println(list.next())
+    println(list.next())
+    println(list.next())
+    println(list.next())
+    println(list.next())
+    println(list.next())
 }
