@@ -1362,6 +1362,7 @@ impl Typechecker {
                                                             );
                                                             self.typecheck_node(arm_result);
                                                             seen_variants[idx] = true;
+                                                            self.exit_scope();
                                                             continue 'arm;
                                                         }
                                                     }
@@ -1404,6 +1405,7 @@ impl Typechecker {
                                                             }
                                                             self.typecheck_node(arm_result);
                                                             seen_variants[idx] = true;
+                                                            self.exit_scope();
                                                             continue 'arm;
                                                         }
                                                     }
@@ -1447,7 +1449,7 @@ impl Typechecker {
                                                                 idx += 1;
                                                             }
                                                             self.typecheck_node(arm_result);
-
+                                                            self.exit_scope();
                                                             continue 'arm;
                                                         }
                                                     }

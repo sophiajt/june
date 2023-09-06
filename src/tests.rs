@@ -162,6 +162,11 @@ fn enum_simple() -> TestResult {
 }
 
 #[test]
+fn enum_simple_error() -> TestResult {
+    test_example("enum_simple_error")
+}
+
+#[test]
 fn enum_single_payload() -> TestResult {
     test_example("enum_single_payload")
 }
@@ -174,6 +179,16 @@ fn enum_single_pointer_payload() -> TestResult {
 #[test]
 fn enum_struct_payload() -> TestResult {
     test_example("enum_struct_payload")
+}
+
+#[test]
+fn enum_var_scope_error() -> TestResult {
+    test_example("enum_var_scope_error")
+}
+
+#[test]
+fn enum_var_scope_error2() -> TestResult {
+    test_example("enum_var_scope_error2")
 }
 
 #[test]

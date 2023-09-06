@@ -1,0 +1,15 @@
+// error: can't find variable
+
+enum State {
+    StateId(i64)
+    StatId(i64)
+}
+
+fun main() {
+    let y = State::StateId(4)
+
+    match y {
+        State::StateId(x) => println(x)
+        State::StatId(y) => println(x)
+    }
+}
