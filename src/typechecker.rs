@@ -762,11 +762,11 @@ impl Typechecker {
                 let lhs = *lhs;
                 let rhs = *rhs;
                 let op = *op;
-                let lhs_ty = self.typecheck_node(lhs);
-                let rhs_ty = self.typecheck_node(rhs);
 
                 match self.compiler.get_node(op) {
                     AstNode::Plus | AstNode::Minus | AstNode::Multiply | AstNode::Divide => {
+                        let lhs_ty = self.typecheck_node(lhs);
+                        let rhs_ty = self.typecheck_node(rhs);
                         if lhs_ty != rhs_ty {
                             self.error(
                                 format!(
@@ -779,12 +779,32 @@ impl Typechecker {
                         }
                         lhs_ty
                     }
+                    AstNode::Equal | AstNode::NotEqual => {
+                        let lhs_ty = self.typecheck_node(lhs);
+
+                        // use a quick inference for comparison with 'none'
+                        if matches!(self.compiler.get_node(rhs), AstNode::None) {
+                            self.compiler.set_node_type(rhs, lhs_ty);
+                        }
+                        let rhs_ty = self.typecheck_node(rhs);
+                        if !self.is_type_compatible(lhs_ty, rhs_ty) {
+                            self.error(
+                                format!(
+                                    "type mismatch during operation. expected: {:?}, found: {:?}",
+                                    self.compiler.get_type(lhs_ty),
+                                    self.compiler.get_type(rhs_ty),
+                                ),
+                                op,
+                            )
+                        }
+                        BOOL_TYPE_ID
+                    }
                     AstNode::LessThan
                     | AstNode::LessThanOrEqual
-                    | AstNode::Equal
-                    | AstNode::NotEqual
                     | AstNode::GreaterThan
                     | AstNode::GreaterThanOrEqual => {
+                        let lhs_ty = self.typecheck_node(lhs);
+                        let rhs_ty = self.typecheck_node(rhs);
                         if !self.is_type_compatible(lhs_ty, rhs_ty) {
                             self.error(
                                 format!(
@@ -803,6 +823,7 @@ impl Typechecker {
                     | AstNode::MultiplyAssignment
                     | AstNode::DivideAssignment => {
                         let lhs_ty = self.typecheck_lvalue(lhs);
+                        let rhs_ty = self.typecheck_node(rhs);
 
                         if !self.is_type_compatible(lhs_ty, rhs_ty) {
                             self.error(
@@ -864,7 +885,8 @@ impl Typechecker {
                             self.error(
                                 format!(
                                     "incompatible type at return, found: {:?} expected: {:?}",
-                                    expr_type, expected_type
+                                    self.compiler.get_type(expr_type),
+                                    self.compiler.get_type(expected_type)
                                 ),
                                 return_expr,
                             );
@@ -948,6 +970,7 @@ impl Typechecker {
     pub fn typecheck_lvalue(&mut self, lvalue: NodeId) -> TypeId {
         match self.compiler.get_node(lvalue) {
             AstNode::Variable => {
+                self.typecheck_node(lvalue);
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
                 if let Some(var_id) = var_id {
@@ -1574,6 +1597,9 @@ impl Typechecker {
                 .span_start
                 .push(self.compiler.source.len() - 4);
             self.compiler.span_end.push(self.compiler.source.len());
+            // re-resize to make sure we have enough nodes
+            self.compiler
+                .resize_node_types(main_node.0 + 1, UNKNOWN_TYPE_ID);
 
             self.compiler.functions.push(Function {
                 name: main_node,

@@ -147,6 +147,11 @@ fn circular_linked_list_helper() -> TestResult {
 }
 
 #[test]
+fn deep_field_assignment() -> TestResult {
+    test_example("deep_field_assignment")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("double")
 }

@@ -1,0 +1,15 @@
+// output: 123
+
+struct Stats {
+    age: i64
+}
+
+struct Person {
+    stats: Stats
+}
+
+mut foo = new Person(stats: new Stats(age: 12))
+
+foo.stats.age = 123
+
+println(foo.stats.age)

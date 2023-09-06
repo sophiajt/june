@@ -54,6 +54,7 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     for error in &compiler.errors.first() {
         compiler.print_error(error)
     }
+
     if debug_output {
         println!();
         println!("Results:");

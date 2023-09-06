@@ -81,6 +81,8 @@ impl Compiler {
         }
 
         println!("Nodes:");
+        println!("num nodes: {}", self.ast_nodes.len());
+        println!("{:?}", self.ast_nodes.last());
         for (node_id, node) in self.ast_nodes.iter().enumerate() {
             println!(
                 "  {}: {:?} ({:?}) @ ({:?})",
