@@ -152,11 +152,6 @@ fn circular_linked_list_helper() -> TestResult {
 }
 
 #[test]
-fn deep_field_assignment() -> TestResult {
-    test_example("deep_field_assignment")
-}
-
-#[test]
 fn double() -> TestResult {
     test_example("double")
 }
@@ -388,6 +383,11 @@ fn struct_field_access_caller2() -> TestResult {
 #[test]
 fn struct_field_access_locally() -> TestResult {
     test_example("struct_field_access_locally")
+}
+
+#[test]
+fn struct_field_deep() -> TestResult {
+    test_example("struct_field_deep")
 }
 
 #[test]
