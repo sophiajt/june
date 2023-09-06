@@ -1,23 +1,30 @@
-struct Node<T> {
-    data: T
-    next: raw Node<T>?
+// output: -2
+
+struct Node {
+    data: i64
+    next: Node?
 }
 
-fun builder() -> raw Node<i64> {
-    let node3 = new raw Node(data: 3, next: None)
-    let node2 = new raw Node(data: 2, next: node3)
-    let node1 = new raw Node(data: 1, next: node2)
+fun builder() -> Node {
+    mut node3 = new Node(data: 3, next: none)
+    let node2 = new Node(data: 2, next: node3)
+    let node1 = new Node(data: 1, next: node2)
     node3.next = node1
 
     return node2
 }
 
 fun main() {
-    let curr = builder()
+    mut curr: Node? = builder()
     let end = curr
 
+    // println(curr.data)
+    mut total = curr.data
+
     while curr.next != end {
-        println("{curr.data}")
         curr = curr.next
+        total -= curr.data
     }
+
+    println(total)
 }

@@ -54,15 +54,14 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     for error in &compiler.errors.first() {
         compiler.print_error(error)
     }
-
-    if !compiler.errors.is_empty() {
-        std::process::exit(1);
-    }
-
     if debug_output {
         println!();
         println!("Results:");
         compiler.print();
+    }
+
+    if !compiler.errors.is_empty() {
+        std::process::exit(1);
     }
 
     compiler

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     compiler::{CallTarget, Compiler},
     errors::SourceError,
@@ -17,6 +19,7 @@ pub struct LifetimeChecker {
     compiler: Compiler,
     current_blocks: Vec<BlockId>,
     possible_allocation_sites: Vec<(Vec<BlockId>, usize, NodeId)>,
+    num_lifetime_inferences: HashMap<BlockId, usize>,
 }
 
 impl LifetimeChecker {
@@ -25,6 +28,7 @@ impl LifetimeChecker {
             compiler,
             current_blocks: vec![],
             possible_allocation_sites: vec![],
+            num_lifetime_inferences: HashMap::new(),
         }
     }
 
@@ -34,8 +38,21 @@ impl LifetimeChecker {
         // FIXME: remove clone
         let block = self.compiler.blocks[block_id.0].clone();
 
-        for node_id in block.nodes.iter().rev() {
-            self.check_node_lifetime(*node_id, scope_level);
+        // Run lifetime inference to fixpoint
+        loop {
+            let num_lifetime_inferences_before =
+                *self.num_lifetime_inferences.entry(block_id).or_default();
+
+            for node_id in block.nodes.iter().rev() {
+                self.check_node_lifetime(*node_id, scope_level);
+            }
+
+            let num_lifetime_inferences_after =
+                *self.num_lifetime_inferences.entry(block_id).or_default();
+
+            if num_lifetime_inferences_after == num_lifetime_inferences_before {
+                break;
+            }
         }
 
         self.current_blocks.pop();
@@ -49,8 +66,20 @@ impl LifetimeChecker {
         });
     }
 
+    pub fn increment_lifetime_inferences(&mut self) {
+        let current_block_id = self
+            .current_blocks
+            .last()
+            .expect("internal error: can't find current block id");
+
+        *self
+            .num_lifetime_inferences
+            .entry(*current_block_id)
+            .or_default() += 1;
+    }
+
     pub fn expand_lifetime_with_node(&mut self, node_id: NodeId, lifetime_from_node: NodeId) {
-        let lifetime = self.compiler.node_lifetimes[lifetime_from_node.0];
+        let lifetime = self.compiler.get_node_lifetime(lifetime_from_node);
 
         self.expand_lifetime(node_id, lifetime_from_node, lifetime)
     }
@@ -61,11 +90,27 @@ impl LifetimeChecker {
         lifetime_from_node: NodeId,
         lifetime: AllocationLifetime,
     ) {
-        let current_lifetime = self.compiler.node_lifetimes[node_id.0];
+        let target_type_id = self.compiler.get_node_type(node_id);
+        let source_type_id = self.compiler.get_node_type(lifetime_from_node);
+
+        if self.compiler.is_copyable_type(target_type_id)
+            || self.compiler.is_copyable_type(source_type_id)
+        {
+            // this is a trivially copyable type, so don't calculate the lifetime
+            return;
+        }
+
+        if lifetime == AllocationLifetime::Unknown {
+            // you can't expand to unknown
+            return;
+        }
+
+        let current_lifetime = self.compiler.get_node_lifetime(node_id);
 
         match current_lifetime {
             AllocationLifetime::Unknown => {
-                self.compiler.node_lifetimes[node_id.0] = lifetime;
+                self.compiler.set_node_lifetime(node_id, lifetime);
+                self.increment_lifetime_inferences();
             }
             AllocationLifetime::Param { var_id } => {
                 match lifetime {
@@ -140,7 +185,8 @@ impl LifetimeChecker {
             } => match lifetime {
                 AllocationLifetime::Scope { level: new_level } => {
                     if new_level < current_level {
-                        self.compiler.node_lifetimes[node_id.0] = lifetime;
+                        self.compiler.set_node_lifetime(node_id, lifetime);
+                        self.increment_lifetime_inferences();
                     }
                 }
                 AllocationLifetime::Param { var_id } => {
@@ -157,20 +203,38 @@ impl LifetimeChecker {
                             node_id,
                         );
                     } else {
-                        self.compiler.node_lifetimes[node_id.0] = lifetime;
+                        self.compiler.set_node_lifetime(node_id, lifetime);
+
+                        self.increment_lifetime_inferences();
                     }
                 }
                 AllocationLifetime::Caller => {
-                    self.compiler.node_lifetimes[node_id.0] = lifetime;
+                    self.compiler.set_node_lifetime(node_id, lifetime);
+
+                    self.increment_lifetime_inferences();
                 }
-                _ => {
-                    self.error("can't expand lifetime to unknown", node_id);
+                AllocationLifetime::Unknown => {
+                    self.error(
+                        format!(
+                            "can't find compatible lifetime for scoped expression, found {:?}",
+                            lifetime
+                        ),
+                        lifetime_from_node,
+                    );
                 }
             },
         }
     }
 
     pub fn current_block_may_allocate(&mut self, scope_level: usize, node_id: NodeId) {
+        if let AllocationLifetime::Scope { level } = self.compiler.get_node_lifetime(node_id) {
+            if level > scope_level {
+                panic!(
+                    "current_block_may_allocate saw an impossible level/scope_level: {} vs {}",
+                    level, scope_level
+                )
+            }
+        }
         self.possible_allocation_sites
             .push((self.current_blocks.clone(), scope_level, node_id))
     }
@@ -183,8 +247,7 @@ impl LifetimeChecker {
                 if let Some(var_id) = var_id {
                     let definition_node_id = self.compiler.variables[var_id.0].where_defined;
 
-                    self.compiler.node_lifetimes[lvalue.0] =
-                        self.compiler.node_lifetimes[definition_node_id.0];
+                    self.expand_lifetime_with_node(lvalue, definition_node_id);
                 } else {
                     self.error(
                         "internal error: variable unresolved when checking lifetimes",
@@ -197,7 +260,7 @@ impl LifetimeChecker {
 
                 self.check_lvalue_lifetime(target);
 
-                self.compiler.node_lifetimes[lvalue.0] = self.compiler.node_lifetimes[target.0];
+                self.expand_lifetime_with_node(lvalue, target)
             }
             _ => {
                 self.error("unsupported lvalue, needs variable or field", lvalue);
@@ -220,6 +283,12 @@ impl LifetimeChecker {
                 // Push lifetime requirement from let into the variable and initializer
                 let initializer = *initializer;
 
+                self.expand_lifetime(
+                    node_id,
+                    node_id,
+                    AllocationLifetime::Scope { level: scope_level },
+                );
+
                 self.expand_lifetime_with_node(initializer, node_id);
                 self.check_node_lifetime(initializer, scope_level);
 
@@ -230,11 +299,6 @@ impl LifetimeChecker {
             AstNode::Variable => {
                 // We're seeing a use of a variable at this point, so make sure the variable
                 // lives long enough to get here
-                self.expand_lifetime(
-                    node_id,
-                    node_id,
-                    AllocationLifetime::Scope { level: scope_level },
-                );
 
                 let var_id =
                     self.compiler.var_resolution.get(&node_id).expect(
@@ -245,8 +309,7 @@ impl LifetimeChecker {
 
                 self.expand_lifetime_with_node(definition_node_id, node_id);
 
-                self.compiler.node_lifetimes[node_id.0] =
-                    self.compiler.node_lifetimes[definition_node_id.0];
+                self.expand_lifetime_with_node(node_id, definition_node_id);
             }
             AstNode::MemberAccess { target, .. } => {
                 // Check the type of the access. If it isn't something that can
@@ -285,7 +348,7 @@ impl LifetimeChecker {
                     self.check_lvalue_lifetime(lhs);
 
                     if matches!(
-                        self.compiler.node_lifetimes[lhs.0],
+                        self.compiler.get_node_lifetime(lhs),
                         AllocationLifetime::Unknown
                     ) {
                         self.expand_lifetime(
@@ -302,7 +365,8 @@ impl LifetimeChecker {
                     // Make sure any new lifetimes get back to the variable declaration
                     self.check_node_lifetime(rhs, scope_level);
 
-                    if self.compiler.node_lifetimes[lhs.0] != self.compiler.node_lifetimes[rhs.0] {
+                    if self.compiler.get_node_lifetime(lhs) != self.compiler.get_node_lifetime(rhs)
+                    {
                         self.error("assignment has incompatible lifetimes", lhs)
                     }
                 } else {
@@ -354,27 +418,33 @@ impl LifetimeChecker {
                 let args = args.clone();
 
                 // If the call is not constrained, use the local scope level
-                if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Unknown {
-                    self.compiler.node_lifetimes[node_id.0] =
-                        AllocationLifetime::Scope { level: scope_level };
-                }
-
-                for arg in args {
-                    self.expand_lifetime_with_node(arg, node_id);
-                    self.check_node_lifetime(arg, scope_level)
+                if self.compiler.get_node_lifetime(node_id) == AllocationLifetime::Unknown {
+                    self.compiler.set_node_lifetime(
+                        node_id,
+                        AllocationLifetime::Scope { level: scope_level },
+                    );
                 }
 
                 let call_target = self.compiler.call_resolution.get(&head);
 
                 // note: fun_id 0 is currently the built-in print
                 if !matches!(call_target, Some(CallTarget::Function(FunId(0)))) {
+                    for arg in args {
+                        self.expand_lifetime_with_node(arg, node_id);
+                        self.check_node_lifetime(arg, scope_level)
+                    }
+
                     self.current_block_may_allocate(scope_level, node_id);
+                } else {
+                    for arg in args {
+                        self.check_node_lifetime(arg, scope_level)
+                    }
                 }
             }
             AstNode::New(_, allocation_node_id) => {
                 let allocation_node_id = *allocation_node_id;
 
-                if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Unknown {
+                if self.compiler.get_node_lifetime(node_id) == AllocationLifetime::Unknown {
                     // If we don't have enough constraints, then allocate at the current local scope level
                     self.expand_lifetime(
                         allocation_node_id,
@@ -410,7 +480,7 @@ impl LifetimeChecker {
                 if let Some(return_expr) = return_expr {
                     let return_expr = *return_expr;
 
-                    self.expand_lifetime(return_expr, node_id, AllocationLifetime::Caller);
+                    self.expand_lifetime(return_expr, return_expr, AllocationLifetime::Caller);
                     self.check_node_lifetime(return_expr, scope_level);
                 }
             }
@@ -422,9 +492,11 @@ impl LifetimeChecker {
             }
             AstNode::NamespacedLookup { item, .. } => {
                 let item = *item;
-                if self.compiler.node_lifetimes[node_id.0] == AllocationLifetime::Unknown {
-                    self.compiler.node_lifetimes[node_id.0] =
-                        AllocationLifetime::Scope { level: scope_level };
+                if self.compiler.get_node_lifetime(node_id) == AllocationLifetime::Unknown {
+                    self.compiler.set_node_lifetime(
+                        node_id,
+                        AllocationLifetime::Scope { level: scope_level },
+                    );
                 }
 
                 if matches!(self.compiler.get_node(item), AstNode::Variable) {
@@ -459,18 +531,20 @@ impl LifetimeChecker {
     pub fn check_lifetimes(mut self) -> Compiler {
         let num_nodes = self.compiler.num_ast_nodes();
         self.compiler
-            .node_lifetimes
-            .resize(num_nodes, AllocationLifetime::Unknown);
+            .resize_node_lifetimes(num_nodes, AllocationLifetime::Unknown);
 
         // Check functions, skipping over our built-in print
         for fun_id in 1..self.compiler.functions.len() {
-            let fun = &self.compiler.functions[fun_id];
+            let fun = self.compiler.functions[fun_id].clone();
             for param in &fun.params {
                 let param_node_id = self.compiler.variables[param.var_id.0].where_defined;
 
-                self.compiler.node_lifetimes[param_node_id.0] = AllocationLifetime::Param {
-                    var_id: param.var_id,
-                };
+                self.compiler.set_node_lifetime(
+                    param_node_id,
+                    AllocationLifetime::Param {
+                        var_id: param.var_id,
+                    },
+                );
             }
 
             let body = fun.body;
@@ -481,7 +555,7 @@ impl LifetimeChecker {
         // which local scopes allocate for themselves. If they do, mark their
         // blocks so we can properly deallocate these resources
         for (block_ids, scope_level, node_id) in self.possible_allocation_sites {
-            if let AllocationLifetime::Scope { level } = &self.compiler.node_lifetimes[node_id.0] {
+            if let AllocationLifetime::Scope { level } = &self.compiler.get_node_lifetime(node_id) {
                 if let Some(block_id) = block_ids.into_iter().rev().nth(scope_level - level) {
                     self.compiler.blocks[block_id.0].may_locally_allocate = Some(*level);
                 }

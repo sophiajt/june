@@ -137,6 +137,16 @@ fn call_labeled_error() -> TestResult {
 }
 
 #[test]
+fn circular_linked_list() -> TestResult {
+    test_example("circular_linked_list")
+}
+
+#[test]
+fn circular_linked_list_helper() -> TestResult {
+    test_example("circular_linked_list_helper")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("double")
 }

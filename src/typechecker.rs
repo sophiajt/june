@@ -217,6 +217,7 @@ impl Typechecker {
                     let ty = self.typecheck_typename(ty);
 
                     let var_id = self.define_variable(name, ty, is_mutable, name);
+                    self.compiler.set_node_type(name, ty);
                     fun_params.push(Param::new(param_name, var_id));
                 } else {
                     self.error("expected function parameter", unchecked_param);
@@ -263,8 +264,8 @@ impl Typechecker {
 
         self.set_expected_return_type(return_type);
 
-        for Param { name, var_id, .. } in &params {
-            self.add_variable_to_scope(name.clone(), *var_id)
+        for Param { name, var_id } in &params {
+            self.add_variable_to_scope(name.clone(), *var_id);
         }
 
         self.typecheck_node(body);
@@ -740,7 +741,8 @@ impl Typechecker {
                         for known_field in fields {
                             if known_field.0 == field_name {
                                 let type_id = known_field.1;
-                                self.compiler.set_node_type(node_id, known_field.1);
+                                self.compiler.set_node_type(node_id, type_id);
+                                self.compiler.set_node_type(field, type_id);
                                 return type_id;
                             }
                         }

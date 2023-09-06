@@ -1,3 +1,5 @@
+// output: -2
+
 struct Node {
     data: i64
     next: Node?
@@ -12,10 +14,13 @@ fun main() {
     mut curr: Node? = node2
     let end = curr
 
-    println(curr.data)
+    // println(curr.data)
+    mut total = curr.data
 
     while curr.next != end {
         curr = curr.next
-        println(curr.data)
+        total -= curr.data
     }
+
+    println(total)
 }

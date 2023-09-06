@@ -309,7 +309,7 @@ impl Codegen {
     }
 
     pub fn codegen_annotation(&self, node_id: NodeId, output: &mut Vec<u8>) {
-        match self.compiler.node_lifetimes[node_id.0] {
+        match self.compiler.get_node_lifetime(node_id) {
             AllocationLifetime::Caller => output.extend_from_slice(b"allocation_id"),
             AllocationLifetime::Param { var_id } => output
                 .extend_from_slice(format!("variable_{}->__allocation_id__", var_id.0).as_bytes()),

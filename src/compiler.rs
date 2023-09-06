@@ -21,7 +21,7 @@ pub struct Compiler {
     pub span_end: Vec<usize>,
     ast_nodes: Vec<AstNode>,
     node_types: Vec<TypeId>,
-    pub node_lifetimes: Vec<AllocationLifetime>,
+    node_lifetimes: Vec<AllocationLifetime>,
 
     // Blocks, indexed by BlockId
     pub blocks: Vec<Block>,
@@ -485,6 +485,18 @@ impl Compiler {
         self.node_types[node_id.0] = type_id;
     }
 
+    pub fn resize_node_lifetimes(&mut self, size: usize, allocation_lifetime: AllocationLifetime) {
+        self.node_lifetimes.resize(size, allocation_lifetime)
+    }
+
+    pub fn get_node_lifetime(&self, node_id: NodeId) -> AllocationLifetime {
+        self.node_lifetimes[node_id.0]
+    }
+
+    pub fn set_node_lifetime(&mut self, node_id: NodeId, allocation_lifetime: AllocationLifetime) {
+        self.node_lifetimes[node_id.0] = allocation_lifetime;
+    }
+
     pub fn get_type(&self, type_id: TypeId) -> &Type {
         &self.types[type_id.0]
     }
@@ -549,10 +561,6 @@ impl Compiler {
     }
 
     pub fn is_copyable_type(&self, type_id: TypeId) -> bool {
-        // FIXME: we should probably clean up the struct/pointer thing a bit
-        !matches!(
-            self.types[type_id.0],
-            Type::Struct { .. } | Type::Pointer { .. }
-        )
+        matches!(self.types[type_id.0], Type::Bool | Type::F64 | Type::I64)
     }
 }
