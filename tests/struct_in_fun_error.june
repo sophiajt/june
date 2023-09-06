@@ -1,0 +1,11 @@
+// error: unknown type
+
+fun foo() {
+    struct Employee {
+        name: string,
+        age: i64,
+    }
+}
+
+let employee = new Employee(name: "Bob", age: 123)
+println(employee.age)

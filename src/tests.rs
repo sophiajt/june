@@ -431,6 +431,16 @@ fn struct_helper_deep() -> TestResult {
 }
 
 #[test]
+fn struct_in_fun() -> TestResult {
+    test_example("struct_in_fun")
+}
+
+#[test]
+fn struct_in_fun_error() -> TestResult {
+    test_example("struct_in_fun_error")
+}
+
+#[test]
 fn struct_in_struct() -> TestResult {
     test_example("struct_in_struct")
 }
