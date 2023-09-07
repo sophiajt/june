@@ -1458,9 +1458,7 @@ impl Typechecker {
                                                             continue 'arm;
                                                         }
                                                     }
-                                                    x => {
-                                                        panic!("unsupported enum variant: {:?}", x)
-                                                    }
+                                                    _ => {}
                                                 }
                                             }
 

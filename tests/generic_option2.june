@@ -1,0 +1,13 @@
+// output: 3
+
+enum Option<T> {
+    Some(T)
+    None
+}
+
+let x = Option::Some(3)
+
+match x {
+    Option::Some(y) => println(y)
+    Option::None => println("None")
+}

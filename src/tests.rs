@@ -237,6 +237,11 @@ fn generic_option() -> TestResult {
 }
 
 #[test]
+fn generic_option2() -> TestResult {
+    test_example("generic_option2")
+}
+
+#[test]
 fn hello_fun_rev_order() -> TestResult {
     test_example("hello_fun_rev_order")
 }
