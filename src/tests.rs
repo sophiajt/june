@@ -232,18 +232,18 @@ fn function_in_function() -> TestResult {
 }
 
 #[test]
-fn generic_option() -> TestResult {
-    test_example("generic_option")
+fn generic_enum() -> TestResult {
+    test_example("generic_enum")
 }
 
 #[test]
-fn generic_option2() -> TestResult {
-    test_example("generic_option2")
+fn generic_enum2() -> TestResult {
+    test_example("generic_enum2")
 }
 
 #[test]
-fn generic_option_struct() -> TestResult {
-    test_example("generic_option_struct")
+fn generic_enum_struct_case() -> TestResult {
+    test_example("generic_enum_struct_case")
 }
 
 #[test]
