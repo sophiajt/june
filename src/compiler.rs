@@ -166,7 +166,7 @@ impl Compiler {
                 self.print_helper(block, indent + 2);
             }
             AstNode::Struct {
-                name,
+                typename: name,
                 fields,
                 methods,
                 is_allocator,
@@ -525,6 +525,12 @@ impl Compiler {
         }
 
         self.types.push(ty);
+
+        TypeId(self.types.len() - 1)
+    }
+
+    pub fn fresh_type_variable(&mut self) -> TypeId {
+        self.types.push(Type::TypeVariable);
 
         TypeId(self.types.len() - 1)
     }

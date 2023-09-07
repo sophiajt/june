@@ -95,14 +95,14 @@ pub enum AstNode {
         is_mutable: bool,
     },
     Struct {
-        name: NodeId,
+        typename: NodeId,
         fields: Vec<(NodeId, NodeId)>,
         methods: Vec<NodeId>,
         is_allocator: bool,
     },
 
     Enum {
-        name: NodeId,
+        typename: NodeId,
         cases: Vec<NodeId>,
         methods: Vec<NodeId>,
     },
@@ -827,7 +827,7 @@ impl Parser {
 
         self.create_node(
             AstNode::Struct {
-                name,
+                typename: name,
                 fields,
                 methods,
                 is_allocator,
@@ -873,7 +873,7 @@ impl Parser {
 
         self.create_node(
             AstNode::Enum {
-                name,
+                typename: name,
                 cases,
                 methods,
             },

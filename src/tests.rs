@@ -232,6 +232,11 @@ fn function_in_function() -> TestResult {
 }
 
 #[test]
+fn generic_option() -> TestResult {
+    test_example("generic_option")
+}
+
+#[test]
 fn hello_fun_rev_order() -> TestResult {
     test_example("hello_fun_rev_order")
 }

@@ -28,11 +28,13 @@ pub enum Type {
     Range(TypeId),
     String,
     Struct {
+        generic_params: Vec<TypeId>,
         fields: Vec<(Vec<u8>, TypeId)>,
         methods: Vec<FunId>,
         is_allocator: bool,
     },
     Enum {
+        generic_params: Vec<TypeId>,
         variants: Vec<EnumVariant>,
         methods: Vec<FunId>,
     },
@@ -41,6 +43,7 @@ pub enum Type {
         optional: bool,
         target: TypeId,
     },
+    TypeVariable,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -172,12 +175,16 @@ impl Typechecker {
             b"void" => VOID_TYPE_ID,
             _ => {
                 if let Some(type_id) = self.find_type_in_scope(name_node_id) {
-                    // Assume custom types are pointers
-                    self.compiler.find_or_create_type(Type::Pointer {
-                        allocation_type: AllocationType::Normal,
-                        optional,
-                        target: *type_id,
-                    })
+                    if self.is_type_variable(*type_id) {
+                        *type_id
+                    } else {
+                        // Assume custom types are pointers
+                        self.compiler.find_or_create_type(Type::Pointer {
+                            allocation_type: AllocationType::Normal,
+                            optional,
+                            target: *type_id,
+                        })
+                    }
                 } else {
                     self.error(
                         &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
@@ -277,10 +284,39 @@ impl Typechecker {
 
     pub fn typecheck_enum(
         &mut self,
-        name: NodeId,
+        typename: NodeId,
         cases: Vec<NodeId>,
         methods: Vec<NodeId>,
     ) -> TypeId {
+        let AstNode::Type { name, params, .. } = self.compiler.get_node(typename) else {
+            panic!("internal error: enum does not have type as name");
+        };
+
+        let name = *name;
+        let params = *params;
+
+        let mut generic_params = vec![];
+
+        self.enter_scope();
+
+        if let Some(params) = params {
+            let AstNode::Params(params) = self.compiler.get_node(params) else {
+                panic!("internal error: enum generic params are not proper ast node");
+            };
+
+            let params = params.clone();
+
+            for param in params {
+                let type_id = self.compiler.fresh_type_variable();
+
+                generic_params.push(type_id);
+
+                let type_var_name = self.compiler.get_source(param).to_vec();
+
+                self.add_type_to_scope(type_var_name, type_id);
+            }
+        }
+
         let enum_name = self.compiler.get_source(name).to_vec();
 
         let mut output_cases = vec![];
@@ -348,6 +384,7 @@ impl Typechecker {
         }
 
         let type_id = self.compiler.push_type(Type::Enum {
+            generic_params,
             variants: output_cases,
             methods: vec![],
         });
@@ -358,7 +395,7 @@ impl Typechecker {
             target: type_id,
         });
 
-        self.add_type_to_scope(enum_name, type_id);
+        self.add_type_to_scope(enum_name.clone(), type_id);
 
         if !methods.is_empty() {
             self.enter_scope();
@@ -395,6 +432,10 @@ impl Typechecker {
             self.exit_scope();
         }
 
+        self.exit_scope();
+
+        self.add_type_to_scope(enum_name, type_id);
+
         type_id
     }
 
@@ -408,6 +449,7 @@ impl Typechecker {
         let struct_name = self.compiler.get_source(name).to_vec();
 
         let type_id = self.compiler.push_type(Type::Struct {
+            generic_params: vec![],
             fields: vec![],
             methods: vec![],
             is_allocator,
@@ -494,7 +536,7 @@ impl Typechecker {
                 }
 
                 AstNode::Struct {
-                    name,
+                    typename: name,
                     fields,
                     methods,
                     is_allocator,
@@ -503,11 +545,11 @@ impl Typechecker {
                 }
 
                 AstNode::Enum {
-                    name,
+                    typename,
                     cases,
                     methods,
                 } => {
-                    self.typecheck_enum(*name, cases.clone(), methods.clone());
+                    self.typecheck_enum(*typename, cases.clone(), methods.clone());
                 }
                 _ => {}
             }
@@ -523,6 +565,10 @@ impl Typechecker {
         self.compiler.set_node_type(node_id, VOID_TYPE_ID);
 
         self.exit_scope()
+    }
+
+    pub fn is_type_variable(&self, type_id: TypeId) -> bool {
+        matches!(self.compiler.get_type(type_id), Type::TypeVariable)
     }
 
     pub fn is_type_compatible(&self, lhs: TypeId, rhs: TypeId) -> bool {
@@ -1110,7 +1156,7 @@ impl Typechecker {
             return VOID_TYPE_ID;
         };
 
-        let type_id = *type_id;
+        let mut type_id = *type_id;
 
         match self.compiler.get_type(type_id) {
             Type::Struct { methods, .. } => {
@@ -1139,12 +1185,6 @@ impl Typechecker {
                 // FIXME: remove clone
                 let cases = cases.clone();
 
-                let output_type = self.compiler.find_or_create_type(Type::Pointer {
-                    allocation_type: AllocationType::Normal,
-                    optional: false,
-                    target: type_id,
-                });
-
                 match self.compiler.get_node(item) {
                     AstNode::Call { head, args } => {
                         // FIXME: remove clone
@@ -1160,7 +1200,12 @@ impl Typechecker {
                                         if args.len() == 1 {
                                             let arg_type_id = self.typecheck_node(args[0]);
 
-                                            if !self.is_type_compatible(param, arg_type_id) {
+                                            if self.is_type_variable(param) {
+                                                type_id = self.instantiate_generic(
+                                                    type_id,
+                                                    &[(param, arg_type_id)],
+                                                );
+                                            } else if !self.is_type_compatible(param, arg_type_id) {
                                                 self.error(
                                                     "incompatible types for enum case",
                                                     args[0],
@@ -1176,7 +1221,13 @@ impl Typechecker {
                                                 ),
                                             );
 
-                                            return output_type;
+                                            return self.compiler.find_or_create_type(
+                                                Type::Pointer {
+                                                    allocation_type: AllocationType::Normal,
+                                                    optional: false,
+                                                    target: type_id,
+                                                },
+                                            );
                                         } else {
                                             self.error(
                                                 format!(
@@ -1234,7 +1285,13 @@ impl Typechecker {
                                                 ),
                                             );
 
-                                            return output_type;
+                                            return self.compiler.find_or_create_type(
+                                                Type::Pointer {
+                                                    allocation_type: AllocationType::Normal,
+                                                    optional: false,
+                                                    target: type_id,
+                                                },
+                                            );
                                         } else {
                                             self.error(
                                                 format!(
@@ -1266,7 +1323,11 @@ impl Typechecker {
                                             ),
                                         );
 
-                                        return output_type;
+                                        return self.compiler.find_or_create_type(Type::Pointer {
+                                            allocation_type: AllocationType::Normal,
+                                            optional: false,
+                                            target: type_id,
+                                        });
                                     }
                                 }
                                 _ => {}
@@ -1362,10 +1423,13 @@ impl Typechecker {
                             // For now, let's keep things simple. The namespace has to be the enum name
                             // and the item has to be the case/arm to match
 
-                            let namespace_type_id = self.find_type_in_scope(namespace);
+                            // FIXME/TODO: Confirm that the namespace given is a valid namespace
+                            // for the type being matched
+                            // let namespace_type_id = self.find_type_in_scope(namespace);
+                            let namespace_type_id = Some(inner_type_id);
 
                             if let Some(namespace_type_id) = namespace_type_id {
-                                let namespace_type_id = *namespace_type_id;
+                                // let namespace_type_id = *namespace_type_id;
 
                                 if namespace_type_id != inner_type_id {
                                     self.error(
@@ -1394,8 +1458,8 @@ impl Typechecker {
                                                             continue 'arm;
                                                         }
                                                     }
-                                                    _ => {
-                                                        panic!("unsupported enum variant")
+                                                    x => {
+                                                        panic!("unsupported enum variant: {:?}", x)
                                                     }
                                                 }
                                             }
@@ -1701,6 +1765,57 @@ impl Typechecker {
         }
 
         None
+    }
+
+    pub fn instantiate_generic(
+        &mut self,
+        type_id: TypeId,
+        replacements: &[(TypeId, TypeId)],
+    ) -> TypeId {
+        match self.compiler.get_type(type_id) {
+            Type::Enum {
+                variants, methods, ..
+            } => {
+                // TODO instantiate generic function
+                let mut new_variants = vec![];
+                let new_methods = methods.clone();
+
+                'variant: for variant in variants {
+                    match variant {
+                        EnumVariant::Simple { .. } => {
+                            new_variants.push(variant.clone());
+                        }
+                        EnumVariant::Single { name, param } => {
+                            for replacement in replacements {
+                                if param == &replacement.0 {
+                                    new_variants.push(EnumVariant::Single {
+                                        name: name.clone(),
+                                        param: replacement.1,
+                                    });
+                                    continue 'variant;
+                                }
+                            }
+                            new_variants.push(EnumVariant::Single {
+                                name: name.clone(),
+                                param: *param,
+                            })
+                        }
+                        _ => {
+                            panic!("not yet supported")
+                        }
+                    }
+                }
+
+                self.compiler.find_or_create_type(Type::Enum {
+                    generic_params: vec![], // we're now fully instantiated
+                    variants: new_variants,
+                    methods: new_methods,
+                })
+            }
+            _ => {
+                panic!("not yet supported variant for generic instantiation")
+            }
+        }
     }
 
     pub fn set_expected_return_type(&mut self, expected_type: TypeId) {

@@ -107,8 +107,13 @@ impl Codegen {
                 Type::Struct {
                     fields,
                     is_allocator,
+                    generic_params,
                     ..
                 } => {
+                    if !generic_params.is_empty() {
+                        // Don't codegen generic functions. Instead, only codegen their instantiations
+                        continue;
+                    }
                     output.extend_from_slice(b"struct struct_");
                     output.extend_from_slice(idx.to_string().as_bytes());
                     output.extend_from_slice(b"{\n");
@@ -133,8 +138,15 @@ impl Codegen {
                     }
                 }
                 Type::Enum {
-                    variants: cases, ..
+                    generic_params,
+                    variants: cases,
+                    ..
                 } => {
+                    if !generic_params.is_empty() {
+                        // Don't codegen generic functions. Instead, only codegen their instantiations
+                        continue;
+                    }
+
                     output.extend_from_slice(b"struct enum_");
                     output.extend_from_slice(idx.to_string().as_bytes());
                     output.extend_from_slice(b"{\n");
