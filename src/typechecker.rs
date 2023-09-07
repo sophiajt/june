@@ -85,6 +85,7 @@ impl Param {
 pub struct Function {
     pub name: NodeId,
     pub params: Vec<Param>,
+    pub return_node: Option<NodeId>,
     pub return_type: TypeId,
     pub body: NodeId,
 }
@@ -133,6 +134,7 @@ impl Typechecker {
             name: NodeId(0),
             params: vec![Param::new(b"input".to_vec(), VarId(0))],
             body: NodeId(0),
+            return_node: None,
             return_type: VOID_TYPE_ID,
         });
 
@@ -245,6 +247,7 @@ impl Typechecker {
             name,
             params: fun_params,
             return_type,
+            return_node: return_ty,
             body: block,
         });
 
@@ -264,7 +267,8 @@ impl Typechecker {
             params,
             body,
             return_type,
-            ..
+            return_node,
+            name,
         } = self.compiler.functions[fun_id.0].clone();
 
         self.enter_scope();
@@ -277,7 +281,19 @@ impl Typechecker {
 
         self.typecheck_node(body);
 
-        // FIXME: check return type
+        if return_type != VOID_TYPE_ID && !self.ends_in_return(body) {
+            if let Some(return_node) = return_node {
+                self.error(
+                    "function is missing expected return at end of function",
+                    return_node,
+                )
+            } else {
+                self.error(
+                    "function is missing expected return at end of function",
+                    name,
+                )
+            }
+        }
 
         self.exit_scope();
     }
@@ -1751,6 +1767,7 @@ impl Typechecker {
                 name: main_node,
                 params: vec![],
                 return_type: top_level_type,
+                return_node: None,
                 body: top_level,
             })
         }
@@ -1942,6 +1959,40 @@ impl Typechecker {
             .last_mut()
             .expect("internal error: missing expected scope frame");
         frame.expected_return_type = Some(expected_type)
+    }
+
+    pub fn ends_in_return(&self, node_id: NodeId) -> bool {
+        match self.compiler.get_node(node_id) {
+            AstNode::Return(_) => true,
+            AstNode::Block(stmts) => {
+                let block = &self.compiler.blocks[stmts.0];
+                if block.nodes.is_empty() {
+                    return false;
+                }
+                self.ends_in_return(
+                    *block
+                        .nodes
+                        .last()
+                        .expect("internal error: missing last statement in block"),
+                )
+            }
+            AstNode::If {
+                then_block,
+                else_expression,
+                ..
+            } => {
+                let then_block_ends_in_return = self.ends_in_return(*then_block);
+
+                if let Some(else_expression) = else_expression {
+                    let else_ends_in_return = self.ends_in_return(*else_expression);
+
+                    return then_block_ends_in_return && else_ends_in_return;
+                }
+
+                then_block_ends_in_return
+            }
+            _ => false,
+        }
     }
 
     pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {

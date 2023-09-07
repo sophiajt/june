@@ -362,6 +362,16 @@ fn method_simple_error() -> TestResult {
 }
 
 #[test]
+fn return_missing_error() -> TestResult {
+    test_example("return_missing_error")
+}
+
+#[test]
+fn return_missing_value_error() -> TestResult {
+    test_example("return_missing_value_error")
+}
+
+#[test]
 fn return_top_level_error() -> TestResult {
     test_example("return_top_level_error")
 }

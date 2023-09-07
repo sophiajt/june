@@ -1,0 +1,8 @@
+// error: return needs value
+
+
+fun foo() -> i64 {
+    return
+}
+
+println(foo())

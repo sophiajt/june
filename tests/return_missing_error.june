@@ -1,0 +1,7 @@
+// error: function is missing expected return at end of function
+
+
+fun foo() -> i64 {
+}
+
+println(foo())
