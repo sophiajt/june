@@ -946,7 +946,7 @@ impl Typechecker {
             AstNode::New(allocation_type, allocation_node_id) => {
                 let allocation_type = *allocation_type;
                 let allocation_node_id = *allocation_node_id;
-                self.typecheck_allocation(allocation_type, allocation_node_id)
+                self.typecheck_new(allocation_type, allocation_node_id)
             }
             AstNode::NamedValue { value, .. } => self.typecheck_node(*value),
             AstNode::Return(return_expr) => {
@@ -1109,11 +1109,7 @@ impl Typechecker {
         }
     }
 
-    pub fn typecheck_allocation(
-        &mut self,
-        allocation_type: AllocationType,
-        node_id: NodeId,
-    ) -> TypeId {
+    pub fn typecheck_new(&mut self, allocation_type: AllocationType, node_id: NodeId) -> TypeId {
         if let AstNode::Call { head, args } = self.compiler.get_node(node_id) {
             // FIXME: remove clone
             let head = *head;
@@ -1138,6 +1134,17 @@ impl Typechecker {
             match &self.compiler.get_type(type_id) {
                 Type::Struct { fields, .. } => {
                     let fields = fields.clone();
+
+                    if args.len() != fields.len() {
+                        self.error(
+                            format!(
+                                "mismatch in number of arguments. expected: {}, found: {}",
+                                fields.len(),
+                                args.len()
+                            ),
+                            head,
+                        );
+                    }
 
                     'arg: for arg in args {
                         let AstNode::NamedValue { name, value } = self.compiler.get_node(arg) else {

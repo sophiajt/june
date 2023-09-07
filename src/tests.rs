@@ -396,6 +396,11 @@ fn struct_allocator() -> TestResult {
 }
 
 #[test]
+fn struct_arg_count_error() -> TestResult {
+    test_example("struct_arg_count_error")
+}
+
+#[test]
 fn struct_field_access_caller() -> TestResult {
     test_example("struct_field_access_caller")
 }
