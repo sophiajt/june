@@ -1021,8 +1021,11 @@ impl Typechecker {
                     }
                 }
             }
-            _ => {
-                self.error("unsupported lvalue, needs variable or field", lvalue);
+            x => {
+                self.error(
+                    format!("unsupported lvalue, needs variable or field, found {:?}", x),
+                    lvalue,
+                );
                 VOID_TYPE_ID
             }
         }

@@ -235,6 +235,7 @@ pub enum TokenType {
     QuestionMark,
     ThinArrow,
     ThickArrow,
+    Newline,
 }
 
 #[derive(Debug)]
@@ -500,6 +501,16 @@ impl Parser {
         )
     }
 
+    pub fn is_newline(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::Newline,
+                ..
+            })
+        )
+    }
+
     pub fn is_semicolon(&mut self) -> bool {
         matches!(
             self.peek(),
@@ -690,7 +701,7 @@ impl Parser {
                 span_end = self.position() + 1;
                 self.rcurly();
                 break;
-            } else if self.is_semicolon() {
+            } else if self.is_semicolon() || self.is_newline() {
                 self.next();
                 continue;
             } else if self.is_keyword(b"fun") {
@@ -799,6 +810,8 @@ impl Parser {
                 let fun = self.fun_definition();
 
                 methods.push(fun);
+            } else if self.is_newline() {
+                self.next();
             } else {
                 // field
                 let field_name = self.name();
@@ -848,6 +861,8 @@ impl Parser {
                 let fun = self.fun_definition();
 
                 methods.push(fun);
+            } else if self.is_newline() {
+                self.next();
             } else {
                 // enum case
                 let case = self.enum_case();
@@ -930,6 +945,8 @@ impl Parser {
 
         let mut last_prec = 1000000;
 
+        let span_start = self.position();
+
         // Check for special forms
         if self.is_keyword(b"if") {
             return self.if_expression();
@@ -945,6 +962,22 @@ impl Parser {
         } else {
             return self.error("incomplete math expression");
         };
+
+        if let Some(Token {
+            token_type: TokenType::Equals,
+            ..
+        }) = self.peek()
+        {
+            if !allow_assignment {
+                self.error("assignment found in expression");
+            }
+            let op = self.operator();
+
+            let rhs = self.expression();
+            let span_end = self.get_span_end(rhs);
+
+            return self.create_node(AstNode::BinaryOp { lhs, op, rhs }, span_start, span_end);
+        }
 
         expr_stack.push(lhs);
 
@@ -1531,6 +1564,8 @@ impl Parser {
                 let pattern_result = self.simple_expression();
 
                 match_arms.push((pattern, pattern_result));
+            } else if self.is_newline() {
+                self.next();
             } else {
                 return self.error("expected match arm in match");
             }
@@ -2027,7 +2062,7 @@ impl Parser {
 
     pub fn skip_space(&mut self) {
         let mut span_position = self.span_offset;
-        let whitespace: &[u8] = &[b' ', b'\t', b'\r', b'\n'];
+        let whitespace: &[u8] = &[b' ', b'\t'];
         while span_position < self.compiler.source.len() {
             if !whitespace.contains(&self.compiler.source[span_position]) {
                 break;
@@ -2035,6 +2070,29 @@ impl Parser {
             span_position += 1;
         }
         self.span_offset = span_position;
+    }
+
+    pub fn newline(&mut self) -> Option<Token> {
+        let mut span_position = self.span_offset;
+        let whitespace: &[u8] = &[b'\r', b'\n'];
+        while span_position < self.compiler.source.len() {
+            if !whitespace.contains(&self.compiler.source[span_position]) {
+                break;
+            }
+            span_position += 1;
+        }
+
+        if self.span_offset == span_position {
+            return None;
+        } else {
+            let output = Some(Token {
+                token_type: TokenType::Newline,
+                span_start: self.span_offset,
+                span_end: span_position,
+            });
+            self.span_offset = span_position;
+            return output;
+        }
     }
 
     pub fn skip_comment(&mut self) {
@@ -2413,10 +2471,12 @@ impl Parser {
                 return self.lex_symbol();
             } else if self.compiler.source[self.span_offset] == b' '
                 || self.compiler.source[self.span_offset] == b'\t'
-                || self.compiler.source[self.span_offset] == b'\r'
-                || self.compiler.source[self.span_offset] == b'\n'
             {
                 self.skip_space()
+            } else if self.compiler.source[self.span_offset] == b'\r'
+                || self.compiler.source[self.span_offset] == b'\n'
+            {
+                return self.newline();
             } else if self.compiler.source[self.span_offset].is_ascii_alphanumeric()
                 || self.compiler.source[self.span_offset] == b'_'
             {

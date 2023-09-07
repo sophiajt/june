@@ -14,19 +14,19 @@ struct allocator CircularList {
 
     fun push(mut self, data: i64) {
         if .node != none {
-            let next = self.node.next
-            self.node.next = new Node(data: data, next: next)
+            let next = .node.next
+            .node.next = new Node(data: data, next: next)
         } else {
-            self.node = new Node(data: data, next: none)
-            self.node.next = self.node
+            .node = new Node(data: data, next: none)
+            .node.next = .node
         }
     }
 
     fun next(mut self) -> i64 {
-        if self.node != none {
-            let ret = self.node.data
+        if .node != none {
+            let ret = .node.data
 
-            self.node = self.node.next
+            .node = .node.next
             return ret
         } else {
             return 0
