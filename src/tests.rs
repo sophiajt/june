@@ -247,6 +247,11 @@ fn generic_enum_struct_case() -> TestResult {
 }
 
 #[test]
+fn generic_struct() -> TestResult {
+    test_example("generic_struct")
+}
+
+#[test]
 fn hello_fun_rev_order() -> TestResult {
     test_example("hello_fun_rev_order")
 }

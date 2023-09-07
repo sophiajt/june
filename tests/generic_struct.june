@@ -1,0 +1,11 @@
+// output: 100
+
+struct Foo<T> {
+    x: T
+}
+
+fun main() {
+    let bar = new Foo(x: 100)
+
+    println(bar.x)
+}

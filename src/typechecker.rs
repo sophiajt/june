@@ -441,21 +441,50 @@ impl Typechecker {
 
     pub fn typecheck_struct(
         &mut self,
-        name: NodeId,
+        typename: NodeId,
         fields: Vec<(NodeId, NodeId)>,
         methods: Vec<NodeId>,
         is_allocator: bool,
     ) -> TypeId {
+        let AstNode::Type { name, params, .. } = self.compiler.get_node(typename) else {
+            panic!("internal error: enum does not have type as name");
+        };
+
+        let name = *name;
+        let params = *params;
+
+        let mut generic_params = vec![];
+
+        self.enter_scope();
+
+        if let Some(params) = params {
+            let AstNode::Params(params) = self.compiler.get_node(params) else {
+                panic!("internal error: enum generic params are not proper ast node");
+            };
+
+            let params = params.clone();
+
+            for param in params {
+                let type_id = self.compiler.fresh_type_variable();
+
+                generic_params.push(type_id);
+
+                let type_var_name = self.compiler.get_source(param).to_vec();
+
+                self.add_type_to_scope(type_var_name, type_id);
+            }
+        }
+
         let struct_name = self.compiler.get_source(name).to_vec();
 
         let type_id = self.compiler.push_type(Type::Struct {
-            generic_params: vec![],
+            generic_params,
             fields: vec![],
             methods: vec![],
             is_allocator,
         });
 
-        self.add_type_to_scope(struct_name, type_id);
+        self.add_type_to_scope(struct_name.clone(), type_id);
 
         let mut output_fields = vec![];
 
@@ -512,6 +541,9 @@ impl Typechecker {
 
             self.exit_scope();
         }
+        self.exit_scope();
+
+        self.add_type_to_scope(struct_name, type_id);
 
         type_id
     }
@@ -1099,34 +1131,51 @@ impl Typechecker {
                 target: type_id,
             });
 
-            'arg: for arg in args {
-                let AstNode::NamedValue { name, value } = self.compiler.get_node(arg) else {
-                    self.error("unexpected argument in allocation", arg);
-                    return UNKNOWN_TYPE_ID
-                };
+            let type_id = self.get_underlying_type_id(type_id);
 
-                let name = *name;
-                let value = *value;
+            let mut replacements = vec![];
 
-                let type_id = self.get_underlying_type_id(type_id);
-                match &self.compiler.get_type(type_id) {
-                    Type::Struct { fields, .. } => {
+            match &self.compiler.get_type(type_id) {
+                Type::Struct { fields, .. } => {
+                    let fields = fields.clone();
+
+                    'arg: for arg in args {
+                        let AstNode::NamedValue { name, value } = self.compiler.get_node(arg) else {
+                            self.error("unexpected argument in allocation", arg);
+                            return UNKNOWN_TYPE_ID
+                        };
+
+                        let name = *name;
+                        let value = *value;
+
                         let field_name = self.compiler.get_source(name);
-                        for known_field in fields {
+                        for known_field in &fields {
                             if known_field.0 == field_name {
                                 let known_field_type = known_field.1;
 
-                                self.compiler.set_node_type(arg, known_field_type);
+                                if self.is_type_variable(known_field_type) {
+                                    let value_type = self.typecheck_node(value);
 
-                                // Set up expected type for inference. Note: if we find concrete values
-                                // this inference type will be replaced by the concrete type.
-                                self.compiler.set_node_type(value, known_field_type);
-                                let value_type = self.typecheck_node(value);
+                                    replacements.push((known_field_type, value_type));
 
-                                if !self.is_type_compatible(known_field_type, value_type) {
-                                    self.error(format!("incompatible type for argument, found: {:?}, expected: {:?}",
-                                        self.compiler.get_type(known_field_type), self.compiler.get_type(value_type)), value)
-                                }
+                                    self.compiler.set_node_type(arg, value_type);
+
+                                    // Set up expected type for inference. Note: if we find concrete values
+                                    // this inference type will be replaced by the concrete type.
+                                    self.compiler.set_node_type(value, value_type);
+                                } else {
+                                    self.compiler.set_node_type(arg, known_field_type);
+
+                                    // Set up expected type for inference. Note: if we find concrete values
+                                    // this inference type will be replaced by the concrete type.
+                                    self.compiler.set_node_type(value, known_field_type);
+                                    let value_type = self.typecheck_node(value);
+
+                                    if !self.is_type_compatible(known_field_type, value_type) {
+                                        self.error(format!("incompatible type for argument, found: {:?}, expected: {:?}",
+                                            self.compiler.get_type(known_field_type), self.compiler.get_type(value_type)), value)
+                                    }
+                                };
 
                                 continue 'arg;
                             }
@@ -1134,12 +1183,24 @@ impl Typechecker {
                         self.error("unknown field", name);
                         return UNKNOWN_TYPE_ID;
                     }
-                    _ => {
-                        self.error("internal error: allocation of non-struct type", node_id);
-                        return UNKNOWN_TYPE_ID;
-                    }
+                }
+                _ => {
+                    self.error("internal error: allocation of non-struct type", node_id);
+                    return UNKNOWN_TYPE_ID;
                 }
             }
+
+            let output_type = if !replacements.is_empty() {
+                let type_id = self.instantiate_generic(type_id, &replacements);
+
+                self.compiler.find_or_create_type(Type::Pointer {
+                    allocation_type,
+                    optional: false,
+                    target: type_id,
+                })
+            } else {
+                output_type
+            };
 
             output_type
         } else {
@@ -1834,6 +1895,32 @@ impl Typechecker {
                     generic_params: vec![], // we're now fully instantiated
                     variants: new_variants,
                     methods: new_methods,
+                })
+            }
+            Type::Struct {
+                fields,
+                methods,
+                is_allocator,
+                ..
+            } => {
+                let mut new_fields = vec![];
+                let new_methods = methods.clone();
+
+                for field in fields {
+                    for replacement in replacements {
+                        if field.1 == replacement.0 {
+                            new_fields.push((field.0.clone(), replacement.1));
+                            break;
+                        }
+                    }
+                }
+
+                //TODO: instantiate methods
+                self.compiler.find_or_create_type(Type::Struct {
+                    generic_params: vec![], // we're now fully instantiated
+                    fields: new_fields,
+                    methods: new_methods,
+                    is_allocator: *is_allocator,
                 })
             }
             _ => {
