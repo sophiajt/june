@@ -514,3 +514,8 @@ fn variable_simple() -> TestResult {
 fn variable() -> TestResult {
     test_example("variable")
 }
+
+#[test]
+fn unicode() -> TestResult {
+    test_example("unicode")
+}

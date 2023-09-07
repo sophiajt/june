@@ -2109,8 +2109,9 @@ impl Parser {
         let span_start = self.span_offset;
         let mut span_position = span_start;
         while span_position < self.compiler.source.len()
-            && (self.compiler.source[span_position].is_ascii_alphanumeric()
-                || self.compiler.source[span_position] == b'_')
+            && (!self.compiler.source[span_position].is_ascii_whitespace()
+                && !self.compiler.source[span_position].is_ascii_punctuation())
+            || self.compiler.source[span_position] == b'_'
         {
             span_position += 1;
         }
@@ -2477,15 +2478,16 @@ impl Parser {
                 || self.compiler.source[self.span_offset] == b'\n'
             {
                 return self.newline();
-            } else if self.compiler.source[self.span_offset].is_ascii_alphanumeric()
-                || self.compiler.source[self.span_offset] == b'_'
-            {
-                return self.lex_name();
+            // } else if self.compiler.source[self.span_offset].is_ascii_alphanumeric()
+            //     || self.compiler.source[self.span_offset] == b'_'
+            // {
+            //     return self.lex_name();
             } else {
-                panic!(
-                    "unsupported character: {}",
-                    self.compiler.source[self.span_offset] as char
-                )
+                return self.lex_name();
+                // panic!(
+                //         "unsupported character: {}",
+                //         self.compiler.source[self.span_offset] as char
+                //     )
             }
         }
     }
