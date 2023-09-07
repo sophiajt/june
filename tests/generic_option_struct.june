@@ -1,0 +1,13 @@
+// output: -2
+
+enum Option<T, U> {
+    None
+    Point { x: T, y: U }
+}
+
+let x = Option::Point(x: 3, y: 5)
+
+match x {
+    Option::None => println("None")
+    Option::Point(x, y) => println(x - y)
+}

@@ -242,6 +242,11 @@ fn generic_option2() -> TestResult {
 }
 
 #[test]
+fn generic_option_struct() -> TestResult {
+    test_example("generic_option_struct")
+}
+
+#[test]
 fn hello_fun_rev_order() -> TestResult {
     test_example("hello_fun_rev_order")
 }

@@ -1243,6 +1243,8 @@ impl Typechecker {
                                 EnumVariant::Struct { name, params } => {
                                     if name == case_name {
                                         if args.len() == params.len() {
+                                            let mut replacements = vec![];
+
                                             for (arg, (param_name, param_type_id)) in
                                                 args.into_iter().zip(params)
                                             {
@@ -1265,7 +1267,10 @@ impl Typechecker {
 
                                                     let arg_type_id = self.typecheck_node(value);
 
-                                                    if !self.is_type_compatible(
+                                                    if self.is_type_variable(*param_type_id) {
+                                                        replacements
+                                                            .push((*param_type_id, arg_type_id));
+                                                    } else if !self.is_type_compatible(
                                                         *param_type_id,
                                                         arg_type_id,
                                                     ) {
@@ -1277,6 +1282,14 @@ impl Typechecker {
                                                     }
                                                 }
                                             }
+
+                                            // instantiate, if we have replacements available
+                                            type_id = if !replacements.is_empty() {
+                                                self.instantiate_generic(type_id, &replacements)
+                                            } else {
+                                                type_id
+                                            };
+
                                             self.compiler.call_resolution.insert(
                                                 head,
                                                 CallTarget::EnumConstructor(
@@ -1798,8 +1811,21 @@ impl Typechecker {
                                 param: *param,
                             })
                         }
-                        _ => {
-                            panic!("not yet supported")
+                        EnumVariant::Struct { name, params } => {
+                            let mut new_params = vec![];
+
+                            for param in params {
+                                for replacement in replacements {
+                                    if param.1 == replacement.0 {
+                                        new_params.push((param.0.clone(), replacement.1));
+                                        break;
+                                    }
+                                }
+                            }
+                            new_variants.push(EnumVariant::Struct {
+                                name: name.clone(),
+                                params: new_params,
+                            })
                         }
                     }
                 }
