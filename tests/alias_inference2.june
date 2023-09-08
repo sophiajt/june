@@ -1,25 +1,23 @@
-// error: compatible lifetime
+// output: 100
 
 struct Foo {
     x: i64
 }
 
-struct allocator Bar {
+struct Bar {
     foo: Foo
 }
 
-fun qux(mut bar: Bar) -> Foo {
+fun qux() -> Foo {
     let foo = new Foo(x: 100)
 
-    bar.foo = foo
+    let bar = new Bar(foo: foo)
 
-    return foo
+    return bar.foo
 }
 
 fun main() {
-    mut bar = new Bar(foo: new Foo(x: 88))
-
-    let foo = qux(bar)
+    let foo = qux()
 
     println(foo.x)
 }
