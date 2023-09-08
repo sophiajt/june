@@ -1,0 +1,23 @@
+// error: can't find compatible lifetime
+
+struct Foo {
+    x: i64
+}
+
+struct Bar {
+    foo: Foo
+}
+
+fun return_alias(bar: Bar) -> Foo {
+    let foo = bar.foo
+
+    return foo
+}
+
+fun main() {
+    let xyz = new Bar(foo: new Foo(x: 55));
+
+    let abc = return_alias(bar: xyz)
+
+    println(abc.x)
+}

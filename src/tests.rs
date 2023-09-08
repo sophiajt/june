@@ -132,8 +132,13 @@ fn alias_inference2() -> TestResult {
 }
 
 #[test]
-fn alias_inference3() -> TestResult {
-    test_example("alias_inference3")
+fn alias_inference_error() -> TestResult {
+    test_example("alias_inference_error")
+}
+
+#[test]
+fn alias_return_error() -> TestResult {
+    test_example("alias_return_error")
 }
 
 #[test]
