@@ -122,6 +122,21 @@ fn test_example(test_name: &str) -> TestResult {
 }
 
 #[test]
+fn alias_inference() -> TestResult {
+    test_example("alias_inference")
+}
+
+#[test]
+fn alias_inference2() -> TestResult {
+    test_example("alias_inference2")
+}
+
+#[test]
+fn alias_inference3() -> TestResult {
+    test_example("alias_inference3")
+}
+
+#[test]
 fn bad_condition() -> TestResult {
     test_example("bad_condition")
 }

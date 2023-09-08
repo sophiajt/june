@@ -1,0 +1,23 @@
+// output: 100
+
+struct Foo {
+    x: i64
+}
+
+struct Bar {
+    foo: Foo
+}
+
+fun qux() -> Foo {
+    let foo = new Foo(x: 100)
+
+    let bar = new Bar(foo: foo)
+
+    return foo
+}
+
+fun main() {
+    let foo = qux()
+
+    println(foo.x)
+}

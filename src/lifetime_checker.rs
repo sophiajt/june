@@ -188,6 +188,12 @@ impl LifetimeChecker {
                         self.compiler.set_node_lifetime(node_id, lifetime);
                         self.increment_lifetime_inferences();
                     }
+                    // else if new_level > current_level {
+                    //     self.error(
+                    //         "lifetime inferred to be two different scope levels",
+                    //         node_id,
+                    //     )
+                    // }
                 }
                 AllocationLifetime::Param { var_id } => {
                     let var_type = self.compiler.variables[var_id.0].ty;
@@ -361,6 +367,7 @@ impl LifetimeChecker {
                     self.check_node_lifetime(rhs, scope_level);
 
                     self.expand_lifetime_with_node(rhs, lhs);
+                    self.expand_lifetime_with_node(lhs, rhs);
 
                     // Make sure any new lifetimes get back to the variable declaration
                     self.check_node_lifetime(rhs, scope_level);
@@ -369,7 +376,14 @@ impl LifetimeChecker {
                     if self.compiler.get_node_lifetime(lhs) != self.compiler.get_node_lifetime(rhs)
                         && !self.compiler.is_copyable_type(rhs_ty)
                     {
-                        self.error("assignment has incompatible lifetimes", lhs)
+                        self.error(
+                            format!(
+                                "assignment has incompatible lifetimes. {:?} vs {:?}",
+                                self.compiler.get_node_lifetime(lhs),
+                                self.compiler.get_node_lifetime(rhs)
+                            ),
+                            lhs,
+                        )
                     }
                 } else {
                     self.expand_lifetime_with_node(lhs, node_id);
@@ -467,8 +481,12 @@ impl LifetimeChecker {
                         // FIXME: remove clone
                         let args = args.clone();
                         for arg in args {
+                            self.check_node_lifetime(arg, scope_level);
+
                             self.expand_lifetime_with_node(arg, node_id);
-                            self.check_node_lifetime(arg, scope_level)
+
+                            self.expand_lifetime_with_node(allocation_node_id, arg);
+                            self.expand_lifetime_with_node(node_id, arg);
                         }
                     }
                     _ => {
@@ -490,7 +508,9 @@ impl LifetimeChecker {
                 let value = *value;
 
                 self.expand_lifetime_with_node(value, node_id);
-                self.check_node_lifetime(value, scope_level)
+                self.check_node_lifetime(value, scope_level);
+
+                self.expand_lifetime_with_node(node_id, value)
             }
             AstNode::NamespacedLookup { item, .. } => {
                 let item = *item;
