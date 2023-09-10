@@ -14,3 +14,10 @@ This is why we'd recommend (and lint for) safe abstractions where mutable, share
 Note that aliases can still be created inside of the safe abstraction, these should be easier to audit as a reviewer as you know that the reasoning around these aliases are local to the abstraction.
 
 Safe pointers (owned pointers) could be freed, as could their members that are also owned, once the owned pointer is no longer in scope. This could be done without the need of an `unsafe` keyword, as we know there are no aliases in scope. Any fields that use shared pointers would not be safe to free automatically.
+
+## Pointer types
+
+|type|alias-able|lifetimes|safe delete|
+|--|--|--|--|
+|shared|yes|must match|no|
+|owned|no|equal or greater|yes|
