@@ -4,7 +4,7 @@
 
 June has two fundamental pointer types: shared and owned.
 
-A **shared** pointer type is one where multiple pointers can pointed to the same location. When assigned from one variable to another, a shared pointer *aliases*, creating a new pointer which points to the same location of the original pointer. Shared pointer types are a powerful pointer type, capable of creating arbitrary data structures quickly. Their nature of creating aliases means that they allow for encoding loops, back pointers, and more.
+A **shared** pointer type is one where multiple pointers can point to the same location. When assigned from one variable to another, a shared pointer *aliases*, creating a new pointer which points to the same location of the original pointer. Shared pointer types are a powerful pointer type, capable of creating arbitrary data structures quickly. Their nature of creating aliases means that they allow for encoding cycles, back pointers, and more. Because of their aliases, though, they can not be safely deleted and must use either `unsafe` or wait until the allocation level frees the shared allocations.
 
 An **owned** pointer is one that has only a single owner at any one time. Owners may be a variable, a struct, or a parameter. Once assigned, an owned pointer will move from the original owner to the new owner. This helps to reason about what a pointer can do and when it can be safely freed.
 
