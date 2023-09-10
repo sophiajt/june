@@ -8,6 +8,8 @@ A **shared** pointer type is one where multiple pointers can point to the same l
 
 An **owned** pointer is one that has only a single owner at any one time. Owners may be a variable, a struct, or a parameter. Once assigned, an owned pointer will move from the original owner to the new owner. This helps to reason about what a pointer can do and when it can be safely freed.
 
+NOTE: only shared pointers have been implemented so far.
+
 |type|alias-able|lifetime as a field|safe delete|
 |--|--|--|--|
 |shared|yes|must match owner|no|
