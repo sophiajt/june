@@ -17,7 +17,7 @@ Safe pointers (owned pointers) could be freed, as could their members that are a
 
 ## Pointer types
 
-|type|alias-able|lifetimes|safe delete|
+|type|alias-able|lifetime as a field|safe delete|
 |--|--|--|--|
-|shared|yes|must match|no|
-|owned|no|equal or greater|yes|
+|shared|yes|must match owner|no|
+|owned|no|equal or greater than owner|yes|
