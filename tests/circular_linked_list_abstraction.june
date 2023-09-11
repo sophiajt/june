@@ -8,8 +8,8 @@ struct Node {
 struct allocator CircularList {
     node: shared Node?
 
-    fun default() -> shared CircularList {
-        return new shared CircularList(node: none)
+    fun default() -> owned CircularList {
+        return new owned CircularList(node: none)
     }
 
     fun push(mut self, data: i64) {
@@ -34,7 +34,7 @@ struct allocator CircularList {
     }
 }
 
-fun helper() -> shared CircularList {
+fun helper() -> owned CircularList {
     let list = CircularList::default()
 
     return list

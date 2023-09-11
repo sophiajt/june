@@ -1354,6 +1354,7 @@ impl Parser {
             self.next();
             PointerType::Shared
         } else if self.is_keyword(b"owned") {
+            self.next();
             PointerType::Owned
         } else {
             PointerType::Unknown
