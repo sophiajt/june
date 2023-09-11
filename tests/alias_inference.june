@@ -5,10 +5,10 @@ struct Foo {
 }
 
 struct Bar {
-    foo: Foo
+    foo: shared Foo
 }
 
-fun qux() -> Foo {
+fun qux() -> shared Foo {
     let foo = new shared Foo(x: 100)
 
     let bar = new shared Bar(foo: foo)

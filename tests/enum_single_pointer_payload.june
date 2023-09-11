@@ -5,10 +5,10 @@ struct Stats {
 }
 
 enum State {
-    Stats(Stats)
+    Stats(shared Stats)
 }
 
-fun helper() -> State {
+fun helper() -> shared State {
     let y = State::Stats(new shared Stats(age: 88))
 
     return y

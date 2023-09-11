@@ -3,7 +3,7 @@
 struct Foo {
     x: i64
 
-    fun default() -> Foo {
+    fun default() -> shared Foo {
         return new shared Foo(x: 100)
     }
 }

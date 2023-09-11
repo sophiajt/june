@@ -5,7 +5,7 @@ struct Employee {
     age: i64,
 }
 
-fun helper() -> Employee {
+fun helper() -> shared Employee {
     let employee = new shared Employee(name: "Bob", age: 123)
 
     return employee

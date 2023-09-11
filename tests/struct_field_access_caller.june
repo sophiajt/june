@@ -6,10 +6,10 @@ struct Stats {
 
 struct Employee {
     name: string,
-    stats: Stats,
+    stats: shared Stats,
 }
 
-fun helper() -> Stats {
+fun helper() -> shared Stats {
     let employee = new shared Employee(name: "Sally", stats: new shared Stats(age: 22))
 
     return employee.stats

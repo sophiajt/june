@@ -6,10 +6,10 @@ struct Stats {
 
 struct Employee {
     name: string,
-    stats: Stats,
+    stats: shared Stats,
 }
 
-fun helper(mut employee: Employee, stats: Stats) [employee == stats] {
+fun helper(mut employee: shared Employee, stats: shared Stats) [employee == stats] {
     employee.stats = stats
 }
 

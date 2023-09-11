@@ -6,10 +6,10 @@ struct Stats {
 
 struct Employee {
     name: string,
-    stats: Stats,
+    stats: shared Stats,
 }
 
-fun helper(mut employee: Employee) {
+fun helper(mut employee: shared Employee) {
     employee.stats = new shared Stats(age: 33)
 }
 

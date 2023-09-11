@@ -6,10 +6,10 @@ struct Stats {
 
 struct allocator Employee {
     name: string,
-    stats: Stats,
+    stats: shared Stats,
 }
 
-fun create_stats() -> Stats {
+fun create_stats() -> shared Stats {
     return new shared Stats(age: 33)
 }
 

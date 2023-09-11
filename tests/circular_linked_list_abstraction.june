@@ -2,13 +2,13 @@
 
 struct Node {
     data: i64
-    next: Node?
+    next: shared Node?
 }
 
 struct allocator CircularList {
-    node: Node?
+    node: shared Node?
 
-    fun default() -> CircularList {
+    fun default() -> shared CircularList {
         return new shared CircularList(node: none)
     }
 
@@ -34,7 +34,7 @@ struct allocator CircularList {
     }
 }
 
-fun helper() -> CircularList {
+fun helper() -> shared CircularList {
     let list = CircularList::default()
 
     return list

@@ -166,6 +166,7 @@ impl Typechecker {
 
         let name_node_id = *name;
         let optional = *optional;
+        let pointer_type = *pointer_type;
 
         let name = self.compiler.get_source(name_node_id);
 
@@ -180,9 +181,14 @@ impl Typechecker {
                     if self.is_type_variable(*type_id) {
                         *type_id
                     } else {
+                        if pointer_type == PointerType::Unknown && name != b"self" {
+                            self.error("expected 'shared' or 'owned' before name", name_node_id);
+                            return VOID_TYPE_ID;
+                        }
+
                         // Assume custom types are pointers
                         self.compiler.find_or_create_type(Type::Pointer {
-                            pointer_type: *pointer_type,
+                            pointer_type,
                             optional,
                             target: *type_id,
                         })
@@ -1134,6 +1140,10 @@ impl Typechecker {
     }
 
     pub fn typecheck_new(&mut self, allocation_type: PointerType, node_id: NodeId) -> TypeId {
+        if allocation_type == PointerType::Unknown {
+            self.error("expected 'shared' or 'owned' allocation", node_id);
+            return VOID_TYPE_ID;
+        }
         if let AstNode::Call { head, args } = self.compiler.get_node(node_id) {
             // FIXME: remove clone
             let head = *head;

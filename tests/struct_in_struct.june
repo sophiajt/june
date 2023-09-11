@@ -6,7 +6,7 @@ struct Stats {
 
 struct Employee {
     name: string,
-    stats: Stats,
+    stats: shared Stats,
 }
 
 fun main() {

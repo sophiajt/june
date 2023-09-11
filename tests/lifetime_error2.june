@@ -9,11 +9,11 @@ struct Employee {
     stats: Stats,
 }
 
-fun helper(mut employee: Employee) {
+fun helper(mut employee: shared Employee) {
     return helper2(employee, new shared Stats(age: 33))
 }
 
-fun helper2(mut employee: Employee, stats: Stats) {
+fun helper2(mut employee: shared Employee, stats: shared Stats) {
     employee.stats = stats
 }
 

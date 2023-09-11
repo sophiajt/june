@@ -5,7 +5,7 @@ struct Employee {
     age: i64,
 }
 
-fun get_field(employee: Employee) -> i64 {
+fun get_field(employee: shared Employee) -> i64 {
     return employee.age
 }
 

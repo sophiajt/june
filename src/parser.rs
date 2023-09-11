@@ -1356,7 +1356,7 @@ impl Parser {
         } else if self.is_keyword(b"owned") {
             PointerType::Owned
         } else {
-            PointerType::Shared
+            PointerType::Unknown
         };
 
         match self.peek() {
@@ -1526,7 +1526,7 @@ impl Parser {
             self.next();
             PointerType::Owned
         } else {
-            PointerType::Shared
+            PointerType::Unknown
         };
 
         let allocated = self.variable_or_call();

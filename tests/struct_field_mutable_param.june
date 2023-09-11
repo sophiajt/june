@@ -5,7 +5,7 @@ struct Employee {
     age: i64,
 }
 
-fun helper(mut employee: Employee) {
+fun helper(mut employee: shared Employee) {
     employee.age = 33
 }
 

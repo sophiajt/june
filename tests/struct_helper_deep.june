@@ -5,13 +5,13 @@ struct Employee {
     age: i64,
 }
 
-fun helper2() -> Employee {
+fun helper2() -> shared Employee {
     let employee = new shared Employee(name: "Bob", age: 123)
 
     return employee
 }
 
-fun helper1() -> Employee {
+fun helper1() -> shared Employee {
     return helper2()
 }
 

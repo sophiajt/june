@@ -5,7 +5,7 @@ struct Stat {
 }
 
 struct allocator Box {
-    stat: Stat
+    stat: shared Stat
 
     fun recreate_stat(mut self) {
         .stat = new shared Stat(width: 99)

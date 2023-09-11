@@ -5,7 +5,7 @@ struct Stats {
 }
 
 struct Employee {
-    stats: Stats
+    stats: shared Stats
 }
 
 fun main() {

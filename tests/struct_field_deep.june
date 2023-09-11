@@ -5,7 +5,7 @@ struct Stats {
 }
 
 struct Person {
-    stats: Stats
+    stats: shared Stats
 }
 
 mut foo = new shared Person(stats: new shared Stats(age: 12))

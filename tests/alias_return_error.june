@@ -5,10 +5,10 @@ struct Foo {
 }
 
 struct Bar {
-    foo: Foo
+    foo: shared Foo
 }
 
-fun return_alias(bar: Bar) -> Foo {
+fun return_alias(bar: shared Bar) -> shared Foo {
     let foo = bar.foo
 
     return foo
