@@ -12,7 +12,5 @@ fun main() {
         x = x + 1
     }
 
-    let z = fun(x) { return x + 1 }
-
     println(x)
 }

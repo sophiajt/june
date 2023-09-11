@@ -624,17 +624,17 @@ impl Typechecker {
         match (self.compiler.get_type(lhs), self.compiler.get_type(rhs)) {
             (
                 Type::Pointer {
-                    pointer_type: allocation_type_lhs,
+                    pointer_type: pointer_type_lhs,
                     optional: optional_lhs,
                     target: target_lhs,
                 },
                 Type::Pointer {
-                    pointer_type: allocation_type_rhs,
+                    pointer_type: pointer_type_rhs,
                     optional: optional_rhs,
                     target: target_rhs,
                 },
             ) => {
-                allocation_type_lhs == allocation_type_rhs
+                (pointer_type_lhs == pointer_type_rhs || pointer_type_lhs == &PointerType::Unknown)
                     && target_lhs == target_rhs
                     && (*optional_lhs || optional_lhs == optional_rhs)
             }
@@ -721,7 +721,7 @@ impl Typechecker {
                     let arg_type = self.typecheck_node(arg);
                     let variable = &self.compiler.variables[param.var_id.0];
 
-                    if !self.is_type_compatible(arg_type, variable.ty) {
+                    if !self.is_type_compatible(variable.ty, arg_type) {
                         // FIXME: make this a better type error
                         self.error(
                             format!(
@@ -1315,7 +1315,7 @@ impl Typechecker {
 
                                             return self.compiler.find_or_create_type(
                                                 Type::Pointer {
-                                                    pointer_type: PointerType::Owned,
+                                                    pointer_type: PointerType::Shared,
                                                     optional: false,
                                                     target: type_id,
                                                 },
@@ -1392,7 +1392,7 @@ impl Typechecker {
 
                                             return self.compiler.find_or_create_type(
                                                 Type::Pointer {
-                                                    pointer_type: PointerType::Owned,
+                                                    pointer_type: PointerType::Shared,
                                                     optional: false,
                                                     target: type_id,
                                                 },
@@ -1429,7 +1429,7 @@ impl Typechecker {
                                         );
 
                                         return self.compiler.find_or_create_type(Type::Pointer {
-                                            pointer_type: PointerType::Owned,
+                                            pointer_type: PointerType::Shared,
                                             optional: false,
                                             target: type_id,
                                         });

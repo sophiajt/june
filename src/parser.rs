@@ -11,6 +11,7 @@ pub struct Parser {
 pub enum PointerType {
     Owned,
     Shared,
+    Unknown,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -1490,7 +1491,7 @@ impl Parser {
                             name,
                             params: None,
                             optional: false,
-                            pointer_type: PointerType::Owned,
+                            pointer_type: PointerType::Unknown,
                         },
                         span_start,
                         span_end,
