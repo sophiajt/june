@@ -5,7 +5,7 @@ struct Foo<T> {
 }
 
 fun main() {
-    let bar = new Foo(x: 100)
+    let bar = new shared Foo(x: 100)
 
     println(bar.x)
 }

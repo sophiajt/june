@@ -10,15 +10,15 @@ struct allocator Employee {
 }
 
 fun create_stats() -> Stats {
-    return new Stats(age: 33)
+    return new shared Stats(age: 33)
 }
 
-fun helper(mut employee: Employee) {
+fun helper(mut employee: shared Employee) {
     employee.stats = create_stats()
 }
 
 fun main() {
-    mut employee = new Employee(name: "Sophia", stats: new Stats(age: 22))
+    mut employee = new shared Employee(name: "Sophia", stats: new shared Stats(age: 22))
 
     helper(employee)
 

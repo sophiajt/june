@@ -9,15 +9,15 @@ struct allocator CircularList {
     node: Node?
 
     fun default() -> CircularList {
-        return new CircularList(node: none)
+        return new shared CircularList(node: none)
     }
 
     fun push(mut self, data: i64) {
         if .node != none {
             let next = .node.next
-            .node.next = new Node(data: data, next: next)
+            .node.next = new shared Node(data: data, next: next)
         } else {
-            .node = new Node(data: data, next: none)
+            .node = new shared Node(data: data, next: none)
             .node.next = .node
         }
     }

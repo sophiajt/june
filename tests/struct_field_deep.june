@@ -8,7 +8,7 @@ struct Person {
     stats: Stats
 }
 
-mut foo = new Person(stats: new Stats(age: 12))
+mut foo = new shared Person(stats: new shared Stats(age: 12))
 
 foo.stats.age = 123
 

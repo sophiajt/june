@@ -6,6 +6,6 @@ struct Employee {
 }
 
 fun main() {
-    let employee = new raw Employee(name: "Bob", age: 123)
+    let employee = new owned Employee(name: "Bob", age: 123)
     println(employee.name)
 }

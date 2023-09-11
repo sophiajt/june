@@ -6,6 +6,6 @@ struct Employee {
 }
 
 fun main() {
-    let employee = new Employee(name: "Bob", height: 123)
+    let employee = new shared Employee(name: "Bob", height: 123)
     println(employee.age)
 }

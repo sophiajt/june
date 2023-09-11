@@ -724,6 +724,16 @@
                     "match": "\\bnew\\b"
                 },
                 {
+                    "comment": "shared",
+                    "name": "storage.modifier.shared.june",
+                    "match": "\\bshared\\b"
+                },
+                {
+                    "comment": "owned",
+                    "name": "storage.modifier.owned.june",
+                    "match": "\\owned\\b"
+                },
+                {
                     "comment": "logical operators",
                     "name": "keyword.operator.logical.june",
                     "match": "(\\^|\\||\\|\\||&&|<<|>>|!)(?!=)"

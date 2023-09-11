@@ -9,7 +9,7 @@ enum State {
 }
 
 fun helper() -> State {
-    let y = State::Stats(new Stats(age: 88))
+    let y = State::Stats(new shared Stats(age: 88))
 
     return y
 }

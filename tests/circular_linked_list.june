@@ -6,9 +6,9 @@ struct Node {
 }
 
 fun main() {
-    mut node3 = new Node(data: 3, next: none)
-    let node2 = new Node(data: 2, next: node3)
-    let node1 = new Node(data: 1, next: node2)
+    mut node3 = new shared Node(data: 3, next: none)
+    let node2 = new shared Node(data: 2, next: node3)
+    let node1 = new shared Node(data: 1, next: node2)
     node3.next = node1
 
     mut curr: Node? = node2

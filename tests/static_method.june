@@ -4,7 +4,7 @@ struct Foo {
     x: i64
 
     fun default() -> Foo {
-        return new Foo(x: 100)
+        return new shared Foo(x: 100)
     }
 }
 

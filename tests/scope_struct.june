@@ -7,7 +7,7 @@ struct Employee {
 
 fun main() {
     if true {
-        let employee = new Employee(name: "Bob", age: 123)
+        let employee = new shared Employee(name: "Bob", age: 123)
         println(employee.age)
     }
 }

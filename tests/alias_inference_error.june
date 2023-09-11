@@ -5,11 +5,11 @@ struct Foo {
 }
 
 struct allocator Bar {
-    foo: Foo
+    foo: shared Foo
 }
 
-fun qux(mut bar: Bar) -> Foo {
-    let foo = new Foo(x: 100)
+fun qux(mut bar: shared Bar) -> shared Foo {
+    let foo = new shared Foo(x: 100)
 
     bar.foo = foo
 
@@ -17,7 +17,7 @@ fun qux(mut bar: Bar) -> Foo {
 }
 
 fun main() {
-    mut bar = new Bar(foo: new Foo(x: 88))
+    mut bar = new shared Bar(foo: new shared Foo(x: 88))
 
     let foo = qux(bar)
 

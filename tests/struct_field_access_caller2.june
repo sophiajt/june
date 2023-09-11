@@ -10,8 +10,8 @@ struct Employee {
 }
 
 fun helper() -> Stats {
-    let stats = new Stats(age: 22)
-    let employee = new Employee(name: "Sally", stats: stats)
+    let stats = new shared Stats(age: 22)
+    let employee = new shared Employee(name: "Sally", stats: stats)
 
     return employee.stats
 }

@@ -378,6 +378,12 @@ repository:
       - comment: new
         name: storage.modifier.new.june
         match: \bnew\b
+      - comment: shared
+        name: storage.modifier.shared.june
+        match: \bshared\b
+      - comment: owned
+        name: storage.modifier.owned.june
+        match: \bowned\b
       - comment: logical operators
         name: keyword.operator.logical.june
         match: (\^|\||\|\||&&|<<|>>|!)(?!=)

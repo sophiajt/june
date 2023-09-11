@@ -11,7 +11,7 @@ fun foo(a: Stats, b: Stats) -> Stats {
 }
 
 fun main() {
-    let f = foo(new Stats(age: 22), new Stats(age: 33))
+    let f = foo(new shared Stats(age: 22), new shared Stats(age: 33))
 
     println(f.age)
 }

@@ -13,7 +13,7 @@ struct Box {
 }
 
 fun main() {
-    let box = new Box(width: 5)
+    let box = new shared Box(width: 5)
 
     println(box.get_area())
 }

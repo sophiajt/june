@@ -9,7 +9,7 @@ struct allocator Box {
 }
 
 fun main() {
-    let box = new Box(width: 22)
+    let box = new shared Box(width: 22)
     box.grow_width()
 
     println(box.width)

@@ -8,9 +8,11 @@ struct Employee {
 fun main() {
     mut x = 1
     while x < 12 {
-        let employee = new Employee(name: "Bob", age: 123)
+        let employee = new shared Employee(name: "Bob", age: 123)
         x = x + 1
     }
+
+    let z = fun(x) { return x + 1 }
 
     println(x)
 }

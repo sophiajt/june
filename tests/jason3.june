@@ -11,10 +11,10 @@ struct allocator Employee {
 
 fun helper(mut employee: Employee) {
     for x in 1..100000 {
-        employee.stats = new Stats(age: 100)
+        employee.stats = new shared Stats(age: 100)
     }
 }
 
 fun main() {
-    helper(new Employee(name: "foo", new Stats(age: 100)))
+    helper(new shared Employee(name: "foo", new shared Stats(age: 100)))
 }

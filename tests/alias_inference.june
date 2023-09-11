@@ -9,9 +9,9 @@ struct Bar {
 }
 
 fun qux() -> Foo {
-    let foo = new Foo(x: 100)
+    let foo = new shared Foo(x: 100)
 
-    let bar = new Bar(foo: foo)
+    let bar = new shared Bar(foo: foo)
 
     return foo
 }

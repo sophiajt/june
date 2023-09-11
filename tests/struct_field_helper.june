@@ -10,7 +10,7 @@ fun get_field(employee: Employee) -> i64 {
 }
 
 fun main() {
-    let employee = new Employee(name: "Bob", age: 123)
+    let employee = new shared Employee(name: "Bob", age: 123)
 
     let age = get_field(employee)
 

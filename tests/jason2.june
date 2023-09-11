@@ -7,6 +7,6 @@ struct Employee {
 }
 
 fun main() {
-    mut employee = new Employee(stats: new Stats(age: 100));
-    let employee2 = new Employee(stats: employee.stats);
+    mut employee = new shared Employee(stats: new shared Stats(age: 100));
+    let employee2 = new shared Employee(stats: employee.stats);
 }

@@ -8,9 +8,9 @@ pub struct Parser {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum AllocationType {
-    Normal,
-    Raw,
+pub enum PointerType {
+    Owned,
+    Shared,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -23,7 +23,7 @@ pub enum AstNode {
         name: NodeId,
         params: Option<NodeId>,
         optional: bool,
-        raw: bool,
+        pointer_type: PointerType,
     },
     Variable,
 
@@ -152,7 +152,7 @@ pub enum AstNode {
         target: NodeId,
         match_arms: Vec<(NodeId, NodeId)>,
     },
-    New(AllocationType, NodeId),
+    New(PointerType, NodeId),
     Statement(NodeId),
     Garbage,
 }
@@ -1349,11 +1349,13 @@ impl Parser {
     }
 
     pub fn typename(&mut self) -> NodeId {
-        let raw = if self.is_keyword(b"raw") {
+        let pointer_type = if self.is_keyword(b"shared") {
             self.next();
-            true
+            PointerType::Shared
+        } else if self.is_keyword(b"owned") {
+            PointerType::Owned
         } else {
-            false
+            PointerType::Shared
         };
 
         match self.peek() {
@@ -1383,7 +1385,7 @@ impl Parser {
                         name,
                         params,
                         optional,
-                        raw,
+                        pointer_type,
                     },
                     span_start,
                     span_end,
@@ -1488,7 +1490,7 @@ impl Parser {
                             name,
                             params: None,
                             optional: false,
-                            raw: false,
+                            pointer_type: PointerType::Owned,
                         },
                         span_start,
                         span_end,
@@ -1516,11 +1518,14 @@ impl Parser {
         let span_start = self.position();
         self.keyword(b"new");
 
-        let allocation_type = if self.is_keyword(b"raw") {
+        let allocation_type = if self.is_keyword(b"shared") {
             self.next();
-            AllocationType::Raw
+            PointerType::Shared
+        } else if self.is_keyword(b"owned") {
+            self.next();
+            PointerType::Owned
         } else {
-            AllocationType::Normal
+            PointerType::Shared
         };
 
         let allocated = self.variable_or_call();

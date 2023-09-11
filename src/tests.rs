@@ -511,8 +511,8 @@ fn struct_new_field_error() -> TestResult {
 }
 
 #[test]
-fn struct_raw() -> TestResult {
-    test_example("struct_raw")
+fn struct_owned() -> TestResult {
+    test_example("struct_owned")
 }
 
 #[test]

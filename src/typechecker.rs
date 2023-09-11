@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::{CallTarget, CaseOffset, Compiler},
     errors::SourceError,
-    parser::{AllocationType, AstNode, BlockId, NodeId},
+    parser::{AstNode, BlockId, NodeId, PointerType},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,7 +39,7 @@ pub enum Type {
         methods: Vec<FunId>,
     },
     Pointer {
-        allocation_type: AllocationType,
+        pointer_type: PointerType,
         optional: bool,
         target: TypeId,
     },
@@ -159,7 +159,7 @@ impl Typechecker {
     }
 
     pub fn typecheck_typename(&mut self, node_id: NodeId) -> TypeId {
-        let AstNode::Type { name, optional, ..} = self.compiler.get_node(node_id) else {
+        let AstNode::Type { name, optional, pointer_type, ..} = self.compiler.get_node(node_id) else {
             self.error("expected type name", node_id);
             return VOID_TYPE_ID;
         };
@@ -182,7 +182,7 @@ impl Typechecker {
                     } else {
                         // Assume custom types are pointers
                         self.compiler.find_or_create_type(Type::Pointer {
-                            allocation_type: AllocationType::Normal,
+                            pointer_type: *pointer_type,
                             optional,
                             target: *type_id,
                         })
@@ -304,12 +304,13 @@ impl Typechecker {
         cases: Vec<NodeId>,
         methods: Vec<NodeId>,
     ) -> TypeId {
-        let AstNode::Type { name, params, .. } = self.compiler.get_node(typename) else {
+        let AstNode::Type { name, params, pointer_type, .. } = self.compiler.get_node(typename) else {
             panic!("internal error: enum does not have type as name");
         };
 
         let name = *name;
         let params = *params;
+        let pointer_type = *pointer_type;
 
         let mut generic_params = vec![];
 
@@ -406,7 +407,7 @@ impl Typechecker {
         });
 
         self.compiler.push_type(Type::Pointer {
-            allocation_type: AllocationType::Normal,
+            pointer_type,
             optional: false,
             target: type_id,
         });
@@ -623,12 +624,12 @@ impl Typechecker {
         match (self.compiler.get_type(lhs), self.compiler.get_type(rhs)) {
             (
                 Type::Pointer {
-                    allocation_type: allocation_type_lhs,
+                    pointer_type: allocation_type_lhs,
                     optional: optional_lhs,
                     target: target_lhs,
                 },
                 Type::Pointer {
-                    allocation_type: allocation_type_rhs,
+                    pointer_type: allocation_type_rhs,
                     optional: optional_rhs,
                     target: target_rhs,
                 },
@@ -722,7 +723,14 @@ impl Typechecker {
 
                     if !self.is_type_compatible(arg_type, variable.ty) {
                         // FIXME: make this a better type error
-                        self.error("type mismatch for arg", arg);
+                        self.error(
+                            format!(
+                                "type mismatch for arg. expected: {:?}, found: {:?}",
+                                self.compiler.get_type(variable.ty),
+                                self.compiler.get_type(arg_type)
+                            ),
+                            arg,
+                        );
                         return return_type;
                     }
                 }
@@ -1125,7 +1133,7 @@ impl Typechecker {
         }
     }
 
-    pub fn typecheck_new(&mut self, allocation_type: AllocationType, node_id: NodeId) -> TypeId {
+    pub fn typecheck_new(&mut self, allocation_type: PointerType, node_id: NodeId) -> TypeId {
         if let AstNode::Call { head, args } = self.compiler.get_node(node_id) {
             // FIXME: remove clone
             let head = *head;
@@ -1138,7 +1146,7 @@ impl Typechecker {
 
             let type_id = *type_id;
             let output_type = self.compiler.find_or_create_type(Type::Pointer {
-                allocation_type,
+                pointer_type: allocation_type,
                 optional: false,
                 target: type_id,
             });
@@ -1217,7 +1225,7 @@ impl Typechecker {
                 let type_id = self.instantiate_generic(type_id, &replacements);
 
                 self.compiler.find_or_create_type(Type::Pointer {
-                    allocation_type,
+                    pointer_type: allocation_type,
                     optional: false,
                     target: type_id,
                 })
@@ -1307,7 +1315,7 @@ impl Typechecker {
 
                                             return self.compiler.find_or_create_type(
                                                 Type::Pointer {
-                                                    allocation_type: AllocationType::Normal,
+                                                    pointer_type: PointerType::Owned,
                                                     optional: false,
                                                     target: type_id,
                                                 },
@@ -1384,7 +1392,7 @@ impl Typechecker {
 
                                             return self.compiler.find_or_create_type(
                                                 Type::Pointer {
-                                                    allocation_type: AllocationType::Normal,
+                                                    pointer_type: PointerType::Owned,
                                                     optional: false,
                                                     target: type_id,
                                                 },
@@ -1421,7 +1429,7 @@ impl Typechecker {
                                         );
 
                                         return self.compiler.find_or_create_type(Type::Pointer {
-                                            allocation_type: AllocationType::Normal,
+                                            pointer_type: PointerType::Owned,
                                             optional: false,
                                             target: type_id,
                                         });

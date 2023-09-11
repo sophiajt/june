@@ -15,7 +15,7 @@ fun return_alias(bar: Bar) -> Foo {
 }
 
 fun main() {
-    let xyz = new Bar(foo: new Foo(x: 55));
+    let xyz = new shared Bar(foo: new shared Foo(x: 55));
 
     let abc = return_alias(bar: xyz)
 
