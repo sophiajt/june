@@ -4,7 +4,7 @@ struct Stats {
     age: i64
 }
 
-struct Employee {
+struct noalloc Employee {
     name: string,
     stats: Stats,
 }

@@ -4,7 +4,7 @@ struct Foo {
     x: i64
 }
 
-struct allocator Bar {
+struct Bar {
     foo: Foo
 }
 

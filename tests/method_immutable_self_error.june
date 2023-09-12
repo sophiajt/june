@@ -1,6 +1,6 @@
 // error: 'self' variable is not mutable
 
-struct allocator Box {
+struct Box {
     width: i64
 
     fun grow_width(self) {

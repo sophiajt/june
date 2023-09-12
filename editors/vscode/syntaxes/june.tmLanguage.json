@@ -689,9 +689,9 @@
                     "match": "\\b(struct)\\b"
                 },
                 {
-                    "comment": "allocator keyword",
-                    "name": "keyword.declaration.allocator.june storage.type.june",
-                    "match": "\\b(allocator)\\b"
+                    "comment": "noalloc keyword",
+                    "name": "keyword.declaration.noalloc.june storage.type.june",
+                    "match": "\\b(noalloc)\\b"
                 },
                 {
                     "comment": "storage modifiers",

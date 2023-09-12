@@ -169,9 +169,12 @@ impl Compiler {
                 typename: name,
                 fields,
                 methods,
-                is_allocator,
+                explicit_no_alloc,
             } => {
-                println!("Struct:[{}] allocator: {}", node_id.0, is_allocator);
+                println!(
+                    "Struct:[{}] explicitly not an allocator: {}",
+                    node_id.0, explicit_no_alloc
+                );
                 self.print_helper(name, indent + 2);
                 for field in fields {
                     self.print_helper(&field.0, indent + 2);

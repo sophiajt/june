@@ -5,7 +5,7 @@ struct Node {
     next: Node?
 }
 
-struct allocator CircularList {
+struct CircularList {
     node: Node?
 
     fun default() -> CircularList {

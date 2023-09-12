@@ -159,7 +159,7 @@ impl Typechecker {
     }
 
     pub fn typecheck_typename(&mut self, node_id: NodeId) -> TypeId {
-        let AstNode::Type { name, optional, ..} = self.compiler.get_node(node_id) else {
+        let AstNode::Type { name, optional, .. } = self.compiler.get_node(node_id) else {
             self.error("expected type name", node_id);
             return VOID_TYPE_ID;
         };
@@ -421,8 +421,17 @@ impl Typechecker {
             let mut fun_ids = vec![];
 
             for method in methods {
-                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_node(method) else {
-                    self.error("internal error: can't find method definition during typecheck", method);
+                let AstNode::Fun {
+                    name,
+                    params,
+                    return_ty,
+                    block,
+                } = self.compiler.get_node(method)
+                else {
+                    self.error(
+                        "internal error: can't find method definition during typecheck",
+                        method,
+                    );
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
@@ -433,9 +442,7 @@ impl Typechecker {
                 fun_ids.push(self.typecheck_fun_predecl(name, params, return_ty, block));
             }
 
-            let Type::Struct {
-                methods, ..
-            } = self.compiler.get_type_mut(type_id) else {
+            let Type::Struct { methods, .. } = self.compiler.get_type_mut(type_id) else {
                 panic!("internal error: previously inserted struct can't be found");
             };
 
@@ -460,7 +467,7 @@ impl Typechecker {
         typename: NodeId,
         fields: Vec<(NodeId, NodeId)>,
         methods: Vec<NodeId>,
-        is_allocator: bool,
+        explicit_no_alloc: bool,
     ) -> TypeId {
         let AstNode::Type { name, params, .. } = self.compiler.get_node(typename) else {
             panic!("internal error: enum does not have type as name");
@@ -468,6 +475,8 @@ impl Typechecker {
 
         let name = *name;
         let params = *params;
+
+        let mut has_pointers = false;
 
         let mut generic_params = vec![];
 
@@ -483,6 +492,9 @@ impl Typechecker {
             for param in params {
                 let type_id = self.compiler.fresh_type_variable();
 
+                // be conservative and assume generic parameters might be pointers
+                has_pointers = true;
+
                 generic_params.push(type_id);
 
                 let type_var_name = self.compiler.get_source(param).to_vec();
@@ -497,7 +509,7 @@ impl Typechecker {
             generic_params,
             fields: vec![],
             methods: vec![],
-            is_allocator,
+            is_allocator: false, // will be replaced later
         });
 
         self.add_type_to_scope(struct_name.clone(), type_id);
@@ -508,16 +520,28 @@ impl Typechecker {
             let field_name = self.compiler.get_source(field_name).to_vec();
             let field_type = self.typecheck_typename(field_type);
 
+            if !self.compiler.is_copyable_type(field_type) {
+                has_pointers = true;
+            }
+
             output_fields.push((field_name, field_type));
         }
 
         let Type::Struct {
-            fields, ..
-        } = &mut self.compiler.get_type_mut(type_id) else {
+            fields,
+            is_allocator,
+            ..
+        } = &mut self.compiler.get_type_mut(type_id)
+        else {
             panic!("internal error: previously inserted struct can't be found");
         };
 
         *fields = output_fields;
+        *is_allocator = if explicit_no_alloc {
+            false
+        } else {
+            has_pointers
+        };
 
         // self.compiler
         //     .types
@@ -531,8 +555,17 @@ impl Typechecker {
             let mut fun_ids = vec![];
 
             for method in methods {
-                let AstNode::Fun { name, params, return_ty, block } = self.compiler.get_node(method) else {
-                    self.error("internal error: can't find method definition during typecheck", method);
+                let AstNode::Fun {
+                    name,
+                    params,
+                    return_ty,
+                    block,
+                } = self.compiler.get_node(method)
+                else {
+                    self.error(
+                        "internal error: can't find method definition during typecheck",
+                        method,
+                    );
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
@@ -543,9 +576,7 @@ impl Typechecker {
                 fun_ids.push(self.typecheck_fun_predecl(name, params, return_ty, block));
             }
 
-            let Type::Struct {
-                methods, ..
-            } = self.compiler.get_type_mut(type_id) else {
+            let Type::Struct { methods, .. } = self.compiler.get_type_mut(type_id) else {
                 panic!("internal error: previously inserted struct can't be found");
             };
 
@@ -587,9 +618,14 @@ impl Typechecker {
                     typename: name,
                     fields,
                     methods,
-                    is_allocator,
+                    explicit_no_alloc,
                 } => {
-                    self.typecheck_struct(*name, fields.clone(), methods.clone(), *is_allocator);
+                    self.typecheck_struct(
+                        *name,
+                        fields.clone(),
+                        methods.clone(),
+                        *explicit_no_alloc,
+                    );
                 }
 
                 AstNode::Enum {
@@ -1133,7 +1169,7 @@ impl Typechecker {
 
             let Some(type_id) = self.find_type_in_scope(head) else {
                 self.error("unknown type in allocation", head);
-                return UNKNOWN_TYPE_ID
+                return UNKNOWN_TYPE_ID;
             };
 
             let type_id = *type_id;
@@ -1163,9 +1199,10 @@ impl Typechecker {
                     }
 
                     'arg: for arg in args {
-                        let AstNode::NamedValue { name, value } = self.compiler.get_node(arg) else {
+                        let AstNode::NamedValue { name, value } = self.compiler.get_node(arg)
+                        else {
                             self.error("unexpected argument in allocation", arg);
-                            return UNKNOWN_TYPE_ID
+                            return UNKNOWN_TYPE_ID;
                         };
 
                         let name = *name;

@@ -98,7 +98,7 @@ pub enum AstNode {
         typename: NodeId,
         fields: Vec<(NodeId, NodeId)>,
         methods: Vec<NodeId>,
-        is_allocator: bool,
+        explicit_no_alloc: bool,
     },
 
     Enum {
@@ -788,7 +788,7 @@ impl Parser {
 
         self.keyword(b"struct");
 
-        let is_allocator = if self.is_keyword(b"allocator") {
+        let explicit_no_alloc = if self.is_keyword(b"noalloc") {
             self.next();
             true
         } else {
@@ -830,7 +830,7 @@ impl Parser {
                 typename: name,
                 fields,
                 methods,
-                is_allocator,
+                explicit_no_alloc,
             },
             span_start,
             span_end,

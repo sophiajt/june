@@ -1,6 +1,6 @@
 // output: 10
 
-struct allocator Box {
+struct Box {
     width: i64
 }
 

@@ -4,7 +4,7 @@ struct Stat {
     width: i64
 }
 
-struct allocator Box {
+struct Box {
     stat: Stat
 
     fun recreate_stat(mut self) {

@@ -4,7 +4,7 @@ struct Stats {
     age: i64
 }
 
-struct allocator Employee {
+struct Employee {
     name: string,
     stats: Stats,
 }
