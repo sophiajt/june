@@ -694,6 +694,16 @@
                     "match": "\\b(noalloc)\\b"
                 },
                 {
+                    "comment": "private keyword",
+                    "name": "keyword.declaration.private.june storage.type.june",
+                    "match": "\\b(private)\\b"
+                },
+                {
+                    "comment": "public keyword",
+                    "name": "keyword.declaration.public.june storage.type.june",
+                    "match": "\\b(public)\\b"
+                },
+                {
                     "comment": "storage modifiers",
                     "name": "storage.modifier.june",
                     "match": "\\b(abstract|static)\\b"

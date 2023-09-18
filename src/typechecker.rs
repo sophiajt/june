@@ -1348,10 +1348,11 @@ impl Typechecker {
                 target: type_id,
             });
 
-            // TODO: if pointer type is safe, check that type can be safe
+            // FIXME: remember the reason why something isn't alias-safe
+            // so we can give a better error
             if pointer_type == PointerType::AliasSafe && !self.type_is_alias_safe(type_id) {
                 self.error(
-                    "tried to create 'safe' pointer on type that isn't alias-safe",
+                    "tried to create safe pointer on type that isn't alias-safe",
                     node_id,
                 );
                 return UNKNOWN_TYPE_ID;

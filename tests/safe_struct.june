@@ -1,0 +1,11 @@
+// output: 88
+
+struct Foo {
+    x: i64
+}
+
+fun main() {
+    let foo = new safe Foo(x: 88)
+
+    println(foo.x)
+}

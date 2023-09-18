@@ -1,0 +1,23 @@
+// output: true
+
+struct Stats {
+    age: i64
+}
+
+struct Foo {
+    private stats: Stats
+
+    fun create(age: i64) -> safe Foo {
+        return new safe Foo(stats: new Stats(age: age))
+    }
+
+    fun same_age(self, stats: Stats) -> bool {
+        return .stats.age == stats.age
+    }
+}
+
+fun main() {
+    let foo = Foo::create(age: 88)
+
+    println(foo.same_age(new Stats(age: 88)))
+}
