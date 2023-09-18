@@ -1,0 +1,13 @@
+// error: tried to create safe pointer on type that isn't alias-safe
+
+struct Stats {
+    age: i64
+}
+
+struct Foo {
+    stats: Stats
+}
+
+fun main() {
+    let foo = new safe Foo(stats: new Stats(age: 88))
+}

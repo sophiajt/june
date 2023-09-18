@@ -402,6 +402,31 @@ fn return_value() -> TestResult {
 }
 
 #[test]
+fn safe_struct() -> TestResult {
+    test_example("safe_struct")
+}
+
+#[test]
+fn safe_struct_private() -> TestResult {
+    test_example("safe_struct_private")
+}
+
+#[test]
+fn safe_struct_private2() -> TestResult {
+    test_example("safe_struct_private2")
+}
+
+#[test]
+fn safe_struct_error() -> TestResult {
+    test_example("safe_struct_error")
+}
+
+#[test]
+fn safe_struct_error2() -> TestResult {
+    test_example("safe_struct_error2")
+}
+
+#[test]
 fn scope_struct() -> TestResult {
     test_example("scope_struct")
 }
@@ -538,11 +563,6 @@ fn struct_in_struct() -> TestResult {
 #[test]
 fn struct_new_field_error() -> TestResult {
     test_example("struct_new_field_error")
-}
-
-#[test]
-fn struct_raw() -> TestResult {
-    test_example("struct_raw")
 }
 
 #[test]

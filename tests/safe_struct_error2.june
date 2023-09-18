@@ -1,0 +1,21 @@
+// error: tried to create safe pointer on type that isn't alias-safe
+
+struct Stats {
+    age: i64
+}
+
+struct Foo {
+    private stats: Stats
+
+    fun create(age: i64) -> safe Foo {
+        return new safe Foo(stats: new Stats(age: age))
+    }
+
+    fun set_stats(mut self, stats: Stats) {
+        .stats = stats
+    }
+}
+
+fun main() {
+    let foo = Foo::create(age: 88)
+}
