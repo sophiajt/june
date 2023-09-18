@@ -1,0 +1,15 @@
+// error: 'new' used on private member field from outside struct
+
+struct Stats {
+    private age: i64
+
+    fun print_age(self) {
+        println(.age)
+    }
+}
+
+fun main() {
+    let stats = new Stats(age: 88)
+
+    stats.print_age()
+}

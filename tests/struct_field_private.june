@@ -1,0 +1,19 @@
+// output: 100
+
+struct Stats {
+    private age: i64
+
+    fun print_age(self) {
+        println(.age)
+    }
+
+    fun create(age: i64) -> Stats {
+        return new Stats(age: age)
+    }
+}
+
+fun main() {
+    let stats = Stats::create(100)
+
+    stats.print_age()
+}

@@ -1,0 +1,15 @@
+// error: modifying private member field
+
+struct Stats {
+    private age: i64
+
+    fun create(age: i64) -> Stats {
+        return new Stats(age: age)
+    }
+}
+
+fun main() {
+    mut stats = Stats::create(age: 88)
+
+    stats.age = 77
+}

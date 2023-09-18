@@ -1,0 +1,15 @@
+// error: access of private field
+
+struct Stats {
+    private age: i64
+
+    fun create(age: i64) -> Stats {
+        return new Stats(age: age)
+    }
+}
+
+fun main() {
+    let stats = Stats::create(age: 88)
+
+    println(stats.age)
+}

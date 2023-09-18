@@ -14,6 +14,12 @@ pub enum PointerType {
     Unknown,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum MemberAccess {
+    Public,
+    Private,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum AstNode {
     Int,
@@ -97,11 +103,15 @@ pub enum AstNode {
     },
     Struct {
         typename: NodeId,
-        fields: Vec<(NodeId, NodeId)>,
+        fields: Vec<NodeId>,
         methods: Vec<NodeId>,
         explicit_no_alloc: bool,
     },
-
+    Field {
+        member_access: MemberAccess,
+        name: NodeId,
+        typename: NodeId,
+    },
     Enum {
         typename: NodeId,
         cases: Vec<NodeId>,
@@ -815,6 +825,16 @@ impl Parser {
                 self.next();
             } else {
                 // field
+                let member_access = if self.is_keyword(b"private") {
+                    self.next();
+                    MemberAccess::Private
+                } else if self.is_keyword(b"public") {
+                    self.next();
+                    MemberAccess::Public
+                } else {
+                    MemberAccess::Public
+                };
+
                 let field_name = self.name();
                 self.colon();
                 let field_type = self.typename();
@@ -822,7 +842,16 @@ impl Parser {
                     self.comma();
                 }
 
-                fields.push((field_name, field_type));
+                let field = self.create_node(
+                    AstNode::Field {
+                        member_access,
+                        name: field_name,
+                        typename: field_type,
+                    },
+                    span_start,
+                    span_end,
+                );
+                fields.push(field);
             }
         }
 

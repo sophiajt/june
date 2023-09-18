@@ -79,5 +79,5 @@ fn main() {
 
     let output = codegen.codegen();
 
-    // println!("{}", String::from_utf8_lossy(&output));
+    println!("{}", String::from_utf8_lossy(&output));
 }

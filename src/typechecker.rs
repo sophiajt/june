@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::{CallTarget, CaseOffset, Compiler},
     errors::SourceError,
-    parser::{AstNode, BlockId, NodeId, PointerType},
+    parser::{AstNode, BlockId, MemberAccess, NodeId, PointerType},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -19,6 +19,13 @@ pub struct FunId(pub usize);
 pub struct ScopeId(pub usize);
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TypedField {
+    pub member_access: MemberAccess,
+    pub name: Vec<u8>,
+    pub ty: TypeId,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Unknown,
     Void,
@@ -29,7 +36,7 @@ pub enum Type {
     String,
     Struct {
         generic_params: Vec<TypeId>,
-        fields: Vec<(Vec<u8>, TypeId)>,
+        fields: Vec<TypedField>,
         methods: Vec<FunId>,
         is_allocator: bool,
     },
@@ -472,7 +479,7 @@ impl Typechecker {
     pub fn typecheck_struct(
         &mut self,
         typename: NodeId,
-        fields: Vec<(NodeId, NodeId)>,
+        fields: Vec<NodeId>,
         methods: Vec<NodeId>,
         explicit_no_alloc: bool,
     ) -> TypeId {
@@ -520,10 +527,24 @@ impl Typechecker {
         });
 
         self.add_type_to_scope(struct_name.clone(), type_id);
+        self.add_type_to_scope(b"Self".to_vec(), type_id);
 
         let mut output_fields = vec![];
 
-        for (field_name, field_type) in fields {
+        for field in fields {
+            let AstNode::Field {
+                member_access,
+                name: field_name,
+                typename: field_type,
+            } = self.compiler.get_node(field)
+            else {
+                panic!("internal error: field expected inside of struct typechecking");
+            };
+
+            let field_name = *field_name;
+            let field_type = *field_type;
+            let member_access = *member_access;
+
             let field_name = self.compiler.get_source(field_name).to_vec();
             let field_type = self.typecheck_typename(field_type);
 
@@ -531,7 +552,11 @@ impl Typechecker {
                 has_pointers = true;
             }
 
-            output_fields.push((field_name, field_type));
+            output_fields.push(TypedField {
+                member_access,
+                name: field_name,
+                ty: field_type,
+            });
         }
 
         let Type::Struct {
@@ -870,14 +895,27 @@ impl Typechecker {
 
                 let type_id = self.typecheck_node(target);
 
+                let target_name = self.compiler.get_source(target);
+
                 let type_id = self.get_underlying_type_id(type_id);
 
                 match self.compiler.get_type(type_id) {
                     Type::Struct { fields, .. } => {
                         let field_name = self.compiler.get_source(field);
-                        for known_field in fields {
-                            if known_field.0 == field_name {
-                                let type_id = known_field.1;
+                        for TypedField {
+                            member_access,
+                            name,
+                            ty,
+                        } in fields
+                        {
+                            let type_id = *ty;
+
+                            if name == field_name {
+                                if member_access == &MemberAccess::Private && target_name != b"." {
+                                    // We're private and not accessing 'self'
+                                    self.error("access of private field", field);
+                                }
+
                                 self.compiler.set_node_type(node_id, type_id);
                                 self.compiler.set_node_type(field, type_id);
                                 return type_id;
@@ -1137,13 +1175,26 @@ impl Typechecker {
 
                 let field_name = self.compiler.get_source(field);
 
+                let target_name = self.compiler.get_source(target);
+
                 let target_type_id = self.get_underlying_type_id(head_type_id);
 
                 match self.compiler.get_type(target_type_id) {
                     Type::Struct { fields, .. } => {
-                        for f in fields {
-                            if f.0 == field_name {
-                                return f.1;
+                        for TypedField {
+                            member_access,
+                            name,
+                            ty,
+                        } in fields
+                        {
+                            if name == field_name {
+                                let ty = *ty;
+
+                                if member_access == &MemberAccess::Private && target_name != b"." {
+                                    // Private and not accessing 'self'
+                                    self.error("modifying private member field", field);
+                                }
+                                return ty;
                             }
                         }
                         self.error("could not find field", field);
@@ -1174,7 +1225,7 @@ impl Typechecker {
             Type::Enum {
                 generic_params,
                 variants,
-                methods,
+                ..
             } => {
                 for generic_param in generic_params {
                     if !self.type_is_alias_safe(*generic_param) {
@@ -1205,7 +1256,7 @@ impl Typechecker {
                 generic_params,
                 fields,
                 methods,
-                is_allocator,
+                ..
             } => {
                 for generic_param in generic_params {
                     if !self.type_is_alias_safe(*generic_param) {
@@ -1213,10 +1264,52 @@ impl Typechecker {
                     }
                 }
 
-                // FIXME: make fields public/private
-                for (field_name, field_type) in fields {
-                    if !self.type_is_alias_safe(*field_type) {
+                for TypedField {
+                    member_access,
+                    ty: field_type,
+                    ..
+                } in fields
+                {
+                    if member_access == &MemberAccess::Public
+                        && !self.type_is_alias_safe(*field_type)
+                    {
                         return false;
+                    }
+                }
+
+                for method in methods {
+                    let fun = &self.compiler.functions[method.0];
+
+                    let mut self_is_mutable = false;
+
+                    for param in &fun.params {
+                        if param.name == b"self" {
+                            let var_id = param.var_id;
+
+                            let var = &self.compiler.variables[var_id.0];
+
+                            if var.is_mutable {
+                                self_is_mutable = true;
+                            }
+                        }
+                    }
+
+                    if self_is_mutable {
+                        for param in &fun.params {
+                            let var_id = param.var_id;
+
+                            let var = &self.compiler.variables[var_id.0];
+
+                            let var_type_id = var.ty;
+
+                            if !self.type_is_alias_safe(var_type_id) {
+                                return false;
+                            }
+                        }
+
+                        if !self.type_is_alias_safe(fun.return_type) {
+                            return false;
+                        }
                     }
                 }
 
@@ -1294,9 +1387,29 @@ impl Typechecker {
                         let value = *value;
 
                         let field_name = self.compiler.get_source(name);
-                        for known_field in &fields {
-                            if known_field.0 == field_name {
-                                let known_field_type = known_field.1;
+
+                        for TypedField {
+                            name,
+                            ty,
+                            member_access,
+                        } in &fields
+                        {
+                            if name == field_name {
+                                let member_access = *member_access;
+
+                                if member_access == MemberAccess::Private {
+                                    let result = self.find_type_in_scope_by_name(b"Self");
+
+                                    if let Some(scoped_type_id) = result {
+                                        if scoped_type_id != &type_id {
+                                            // FIXME: add a hint to say you need to create your own constructor
+                                            self.error("'new' used on private member field from outside struct", arg)
+                                        }
+                                    } else {
+                                        self.error("'new' used on private member field from outside struct", arg)
+                                    }
+                                }
+                                let known_field_type = *ty;
 
                                 if self.is_type_variable(known_field_type) {
                                     let value_type = self.typecheck_node(value);
@@ -1975,6 +2088,16 @@ impl Typechecker {
         None
     }
 
+    pub fn find_type_in_scope_by_name(&self, name: &[u8]) -> Option<&TypeId> {
+        for scope in self.scope.iter().rev() {
+            if let Some(value) = scope.types.get(name) {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
     pub fn find_expected_return_type(&self) -> Option<TypeId> {
         for scope in self.scope.iter().rev() {
             if let Some(ret_type) = scope.expected_return_type {
@@ -2052,10 +2175,19 @@ impl Typechecker {
                 let mut new_fields = vec![];
                 let new_methods = methods.clone();
 
-                for field in fields {
+                for TypedField {
+                    member_access,
+                    name,
+                    ty,
+                } in fields
+                {
                     for replacement in replacements {
-                        if field.1 == replacement.0 {
-                            new_fields.push((field.0.clone(), replacement.1));
+                        if ty == &replacement.0 {
+                            new_fields.push(TypedField {
+                                member_access: *member_access,
+                                name: name.clone(),
+                                ty: replacement.1,
+                            });
                             break;
                         }
                     }
