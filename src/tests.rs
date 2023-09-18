@@ -461,6 +461,31 @@ fn struct_field_math() -> TestResult {
 }
 
 #[test]
+fn struct_field_private_error() -> TestResult {
+    test_example("struct_field_private_error")
+}
+
+#[test]
+fn struct_field_private_error2() -> TestResult {
+    test_example("struct_field_private_error2")
+}
+
+#[test]
+fn struct_field_private() -> TestResult {
+    test_example("struct_field_private")
+}
+
+#[test]
+fn struct_field_private2() -> TestResult {
+    test_example("struct_field_private2")
+}
+
+#[test]
+fn struct_field_private3() -> TestResult {
+    test_example("struct_field_private3")
+}
+
+#[test]
 fn struct_field() -> TestResult {
     test_example("struct_field")
 }

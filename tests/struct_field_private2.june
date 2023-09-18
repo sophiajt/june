@@ -1,0 +1,21 @@
+// output: 77
+
+struct Stats {
+    private age: i64
+
+    fun set_age(mut self, new_age: i64) {
+        .age = new_age
+    }
+
+    fun print_age(self) {
+        println(.age)
+    }
+}
+
+fun main() {
+    let stats = new Stats(age: 88)
+
+    stats.set_age(77)
+
+    stats.print_age()
+}

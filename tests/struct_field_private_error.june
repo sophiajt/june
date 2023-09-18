@@ -1,0 +1,11 @@
+// error: access of private field
+
+struct Stats {
+    private age: i64
+}
+
+fun main() {
+    let stats = new Stats(age: 88)
+
+    println(stats.age)
+}

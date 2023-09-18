@@ -1,0 +1,15 @@
+// output: 88
+
+struct Stats {
+    private age: i64
+
+    fun get_age(mut self) -> i64 {
+        return .age
+    }
+}
+
+fun main() {
+    let stats = new Stats(age: 88)
+
+    println(stats.get_age())
+}

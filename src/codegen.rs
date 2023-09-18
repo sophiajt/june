@@ -3,8 +3,8 @@ use crate::{
     lifetime_checker::AllocationLifetime,
     parser::{AstNode, NodeId},
     typechecker::{
-        EnumVariant, FunId, Function, Param, Type, TypeId, BOOL_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID,
-        STRING_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
+        EnumVariant, FunId, Function, Param, Type, TypeId, TypedField, BOOL_TYPE_ID, F64_TYPE_ID,
+        I64_TYPE_ID, STRING_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
     },
 };
 
@@ -56,11 +56,15 @@ impl Codegen {
     pub fn codegen_allocator_function(
         &self,
         type_id: TypeId,
-        fields: &[(Vec<u8>, TypeId)],
+        fields: &[TypedField],
         is_allocator: bool,
         output: &mut Vec<u8>,
     ) {
-        let Type::Pointer { target: inner_type_id, ..} = self.compiler.get_type(type_id) else {
+        let Type::Pointer {
+            target: inner_type_id,
+            ..
+        } = self.compiler.get_type(type_id)
+        else {
             panic!("internal error: pointer to unknown type");
         };
 
@@ -71,11 +75,11 @@ impl Codegen {
         output.push(b'(');
         output.extend_from_slice(b"long allocation_id");
 
-        for field in fields {
+        for TypedField { name, ty, .. } in fields {
             output.extend_from_slice(b", ");
-            self.codegen_typename(field.1, output);
+            self.codegen_typename(*ty, output);
             output.push(b' ');
-            output.extend_from_slice(&field.0);
+            output.extend_from_slice(name);
         }
         output.extend_from_slice(b") {\n");
 
@@ -90,11 +94,11 @@ impl Codegen {
             output.extend_from_slice(b"tmp->__allocation_id__ = allocation_id;\n");
         }
 
-        for field in fields {
+        for TypedField { name, .. } in fields {
             output.extend_from_slice(b"tmp->");
-            output.extend_from_slice(&field.0);
+            output.extend_from_slice(name);
             output.extend_from_slice(b" = ");
-            output.extend_from_slice(&field.0);
+            output.extend_from_slice(name);
             output.extend_from_slice(b";\n");
         }
 
@@ -122,10 +126,10 @@ impl Codegen {
                         output.push(b' ');
                         output.extend_from_slice(b"__allocation_id__;\n");
                     }
-                    for field in fields {
-                        self.codegen_typename(field.1, output);
+                    for TypedField { name, ty, .. } in fields {
+                        self.codegen_typename(*ty, output);
                         output.push(b' ');
-                        output.extend_from_slice(&field.0);
+                        output.extend_from_slice(name);
                         output.extend_from_slice(b";\n");
                     }
 
@@ -550,8 +554,14 @@ impl Codegen {
             AstNode::New(_, allocation_call) => {
                 let type_id = self.compiler.get_node_type(node_id);
 
-                let Type::Pointer { target: type_id, ..} = self.compiler.get_type(type_id) else {
-                    panic!("internal error: 'new' creating non-pointer type: {:?}", self.compiler.get_type(type_id))
+                let Type::Pointer {
+                    target: type_id, ..
+                } = self.compiler.get_type(type_id)
+                else {
+                    panic!(
+                        "internal error: 'new' creating non-pointer type: {:?}",
+                        self.compiler.get_type(type_id)
+                    )
                 };
                 let type_id = *type_id;
 
@@ -785,8 +795,12 @@ impl Codegen {
                         AstNode::NamespacedLookup { item, .. } => {
                             match self.compiler.get_node(*item) {
                                 AstNode::Name | AstNode::Variable => {
-                                    let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
-                                        panic!("internal error: match arm unresolved at codegen time")
+                                    let Some(resolution) =
+                                        self.compiler.call_resolution.get(match_arm)
+                                    else {
+                                        panic!(
+                                            "internal error: match arm unresolved at codegen time"
+                                        )
                                     };
 
                                     match resolution {
@@ -806,8 +820,12 @@ impl Codegen {
                                     }
                                 }
                                 AstNode::Call { args, .. } => {
-                                    let Some(resolution) = self.compiler.call_resolution.get(match_arm) else {
-                                        panic!("internal error: match arm unresolved at codegen time")
+                                    let Some(resolution) =
+                                        self.compiler.call_resolution.get(match_arm)
+                                    else {
+                                        panic!(
+                                            "internal error: match arm unresolved at codegen time"
+                                        )
                                     };
 
                                     match resolution {

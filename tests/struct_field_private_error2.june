@@ -1,0 +1,11 @@
+// error: modifying private member field
+
+struct Stats {
+    private age: i64
+}
+
+fun main() {
+    mut stats = new Stats(age: 88)
+
+    stats.age = 77
+}

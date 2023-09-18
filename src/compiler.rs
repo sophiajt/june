@@ -177,8 +177,7 @@ impl Compiler {
                 );
                 self.print_helper(name, indent + 2);
                 for field in fields {
-                    self.print_helper(&field.0, indent + 2);
-                    self.print_helper(&field.1, indent + 2);
+                    self.print_helper(field, indent + 2);
                 }
                 for method in methods {
                     self.print_helper(method, indent + 2);
