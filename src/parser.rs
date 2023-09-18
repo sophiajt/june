@@ -8,9 +8,10 @@ pub struct Parser {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum AllocationType {
-    Normal,
-    Raw,
+pub enum PointerType {
+    Shared,
+    AliasSafe,
+    Unknown,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -23,7 +24,7 @@ pub enum AstNode {
         name: NodeId,
         params: Option<NodeId>,
         optional: bool,
-        raw: bool,
+        pointer_type: PointerType,
     },
     Variable,
 
@@ -152,7 +153,7 @@ pub enum AstNode {
         target: NodeId,
         match_arms: Vec<(NodeId, NodeId)>,
     },
-    New(AllocationType, NodeId),
+    New(PointerType, NodeId),
     Statement(NodeId),
     Garbage,
 }
@@ -1349,11 +1350,11 @@ impl Parser {
     }
 
     pub fn typename(&mut self) -> NodeId {
-        let raw = if self.is_keyword(b"raw") {
+        let pointer_type = if self.is_keyword(b"safe") {
             self.next();
-            true
+            PointerType::AliasSafe
         } else {
-            false
+            PointerType::Shared
         };
 
         match self.peek() {
@@ -1383,7 +1384,7 @@ impl Parser {
                         name,
                         params,
                         optional,
-                        raw,
+                        pointer_type,
                     },
                     span_start,
                     span_end,
@@ -1488,7 +1489,7 @@ impl Parser {
                             name,
                             params: None,
                             optional: false,
-                            raw: false,
+                            pointer_type: PointerType::Unknown,
                         },
                         span_start,
                         span_end,
@@ -1516,21 +1517,17 @@ impl Parser {
         let span_start = self.position();
         self.keyword(b"new");
 
-        let allocation_type = if self.is_keyword(b"raw") {
+        let pointer_type = if self.is_keyword(b"safe") {
             self.next();
-            AllocationType::Raw
+            PointerType::AliasSafe
         } else {
-            AllocationType::Normal
+            PointerType::Shared
         };
 
         let allocated = self.variable_or_call();
         let span_end = self.get_span_end(allocated);
 
-        self.create_node(
-            AstNode::New(allocation_type, allocated),
-            span_start,
-            span_end,
-        )
+        self.create_node(AstNode::New(pointer_type, allocated), span_start, span_end)
     }
 
     pub fn match_expression(&mut self) -> NodeId {

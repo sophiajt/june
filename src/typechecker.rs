@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::{CallTarget, CaseOffset, Compiler},
     errors::SourceError,
-    parser::{AllocationType, AstNode, BlockId, NodeId},
+    parser::{AstNode, BlockId, NodeId, PointerType},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,7 +39,7 @@ pub enum Type {
         methods: Vec<FunId>,
     },
     Pointer {
-        allocation_type: AllocationType,
+        pointer_type: PointerType,
         optional: bool,
         target: TypeId,
     },
@@ -159,13 +159,20 @@ impl Typechecker {
     }
 
     pub fn typecheck_typename(&mut self, node_id: NodeId) -> TypeId {
-        let AstNode::Type { name, optional, .. } = self.compiler.get_node(node_id) else {
+        let AstNode::Type {
+            name,
+            optional,
+            pointer_type,
+            ..
+        } = self.compiler.get_node(node_id)
+        else {
             self.error("expected type name", node_id);
             return VOID_TYPE_ID;
         };
 
         let name_node_id = *name;
         let optional = *optional;
+        let pointer_type = *pointer_type;
 
         let name = self.compiler.get_source(name_node_id);
 
@@ -182,7 +189,7 @@ impl Typechecker {
                     } else {
                         // Assume custom types are pointers
                         self.compiler.find_or_create_type(Type::Pointer {
-                            allocation_type: AllocationType::Normal,
+                            pointer_type,
                             optional,
                             target: *type_id,
                         })
@@ -406,7 +413,7 @@ impl Typechecker {
         });
 
         self.compiler.push_type(Type::Pointer {
-            allocation_type: AllocationType::Normal,
+            pointer_type: PointerType::Shared,
             optional: false,
             target: type_id,
         });
@@ -659,17 +666,17 @@ impl Typechecker {
         match (self.compiler.get_type(lhs), self.compiler.get_type(rhs)) {
             (
                 Type::Pointer {
-                    allocation_type: allocation_type_lhs,
+                    pointer_type: pointer_type_lhs,
                     optional: optional_lhs,
                     target: target_lhs,
                 },
                 Type::Pointer {
-                    allocation_type: allocation_type_rhs,
+                    pointer_type: pointer_type_rhs,
                     optional: optional_rhs,
                     target: target_rhs,
                 },
             ) => {
-                allocation_type_lhs == allocation_type_rhs
+                (pointer_type_lhs == &PointerType::Unknown || pointer_type_lhs == pointer_type_rhs)
                     && target_lhs == target_rhs
                     && (*optional_lhs || optional_lhs == optional_rhs)
             }
@@ -756,7 +763,7 @@ impl Typechecker {
                     let arg_type = self.typecheck_node(arg);
                     let variable = &self.compiler.variables[param.var_id.0];
 
-                    if !self.is_type_compatible(arg_type, variable.ty) {
+                    if !self.is_type_compatible(variable.ty, arg_type) {
                         // FIXME: make this a better type error
                         self.error("type mismatch for arg", arg);
                         return return_type;
@@ -1161,7 +1168,76 @@ impl Typechecker {
         }
     }
 
-    pub fn typecheck_new(&mut self, allocation_type: AllocationType, node_id: NodeId) -> TypeId {
+    pub fn type_is_alias_safe(&self, type_id: TypeId) -> bool {
+        match self.compiler.get_type(type_id) {
+            Type::Bool | Type::F64 | Type::I64 | Type::Void => true,
+            Type::Enum {
+                generic_params,
+                variants,
+                methods,
+            } => {
+                for generic_param in generic_params {
+                    if !self.type_is_alias_safe(*generic_param) {
+                        return false;
+                    }
+                }
+
+                for variant in variants {
+                    match variant {
+                        EnumVariant::Single { param, .. } => {
+                            if !self.type_is_alias_safe(*param) {
+                                return false;
+                            }
+                        }
+                        EnumVariant::Struct { params, .. } => {
+                            for (_, param_type) in params {
+                                if !self.type_is_alias_safe(*param_type) {
+                                    return false;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                true
+            }
+            Type::Struct {
+                generic_params,
+                fields,
+                methods,
+                is_allocator,
+            } => {
+                for generic_param in generic_params {
+                    if !self.type_is_alias_safe(*generic_param) {
+                        return false;
+                    }
+                }
+
+                // FIXME: make fields public/private
+                for (field_name, field_type) in fields {
+                    if !self.type_is_alias_safe(*field_type) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            Type::Pointer {
+                pointer_type,
+                target,
+                ..
+            } => {
+                if pointer_type != &PointerType::AliasSafe {
+                    return false;
+                }
+
+                return self.type_is_alias_safe(*target);
+            }
+            _ => true,
+        }
+    }
+
+    pub fn typecheck_new(&mut self, pointer_type: PointerType, node_id: NodeId) -> TypeId {
         if let AstNode::Call { head, args } = self.compiler.get_node(node_id) {
             // FIXME: remove clone
             let head = *head;
@@ -1174,10 +1250,19 @@ impl Typechecker {
 
             let type_id = *type_id;
             let output_type = self.compiler.find_or_create_type(Type::Pointer {
-                allocation_type,
+                pointer_type,
                 optional: false,
                 target: type_id,
             });
+
+            // TODO: if pointer type is safe, check that type can be safe
+            if pointer_type == PointerType::AliasSafe && !self.type_is_alias_safe(type_id) {
+                self.error(
+                    "tried to create 'safe' pointer on type that isn't alias-safe",
+                    node_id,
+                );
+                return UNKNOWN_TYPE_ID;
+            }
 
             let type_id = self.get_underlying_type_id(type_id);
 
@@ -1254,7 +1339,7 @@ impl Typechecker {
                 let type_id = self.instantiate_generic(type_id, &replacements);
 
                 self.compiler.find_or_create_type(Type::Pointer {
-                    allocation_type,
+                    pointer_type,
                     optional: false,
                     target: type_id,
                 })
@@ -1344,7 +1429,7 @@ impl Typechecker {
 
                                             return self.compiler.find_or_create_type(
                                                 Type::Pointer {
-                                                    allocation_type: AllocationType::Normal,
+                                                    pointer_type: PointerType::Shared,
                                                     optional: false,
                                                     target: type_id,
                                                 },
@@ -1421,7 +1506,7 @@ impl Typechecker {
 
                                             return self.compiler.find_or_create_type(
                                                 Type::Pointer {
-                                                    allocation_type: AllocationType::Normal,
+                                                    pointer_type: PointerType::Shared,
                                                     optional: false,
                                                     target: type_id,
                                                 },
@@ -1458,7 +1543,7 @@ impl Typechecker {
                                         );
 
                                         return self.compiler.find_or_create_type(Type::Pointer {
-                                            allocation_type: AllocationType::Normal,
+                                            pointer_type: PointerType::Shared,
                                             optional: false,
                                             target: type_id,
                                         });

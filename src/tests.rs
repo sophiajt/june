@@ -511,11 +511,6 @@ fn struct_new_field_error() -> TestResult {
 }
 
 #[test]
-fn struct_raw() -> TestResult {
-    test_example("struct_raw")
-}
-
-#[test]
 fn struct_() -> TestResult {
     test_example("struct")
 }
