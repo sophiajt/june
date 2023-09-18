@@ -10,10 +10,14 @@ struct Stats {
     fun print_age(self) {
         println(.age)
     }
+
+    fun create(age: i64) -> Stats {
+        return new Stats(age: age)
+    }
 }
 
 fun main() {
-    let stats = new Stats(age: 88)
+    let stats = Stats::create(age: 88)
 
     stats.set_age(77)
 

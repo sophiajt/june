@@ -471,6 +471,11 @@ fn struct_field_private_error2() -> TestResult {
 }
 
 #[test]
+fn struct_field_private_error3() -> TestResult {
+    test_example("struct_field_private_error2")
+}
+
+#[test]
 fn struct_field_private() -> TestResult {
     test_example("struct_field_private")
 }

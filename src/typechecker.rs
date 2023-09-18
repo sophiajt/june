@@ -520,6 +520,7 @@ impl Typechecker {
         });
 
         self.add_type_to_scope(struct_name.clone(), type_id);
+        self.add_type_to_scope(b"Self".to_vec(), type_id);
 
         let mut output_fields = vec![];
 
@@ -1260,9 +1261,27 @@ impl Typechecker {
 
                         let field_name = self.compiler.get_source(name);
 
-                        // FIXME: do we want to reject private fields here?
-                        for TypedField { name, ty, .. } in &fields {
+                        for TypedField {
+                            name,
+                            ty,
+                            member_access,
+                        } in &fields
+                        {
                             if name == field_name {
+                                let member_access = *member_access;
+
+                                if member_access == MemberAccess::Private {
+                                    let result = self.find_type_in_scope_by_name(b"Self");
+
+                                    if let Some(scoped_type_id) = result {
+                                        if scoped_type_id != &type_id {
+                                            // FIXME: add a hint to say you need to create your own constructor
+                                            self.error("'new' used on private member field from outside struct", arg)
+                                        }
+                                    } else {
+                                        self.error("'new' used on private member field from outside struct", arg)
+                                    }
+                                }
                                 let known_field_type = *ty;
 
                                 if self.is_type_variable(known_field_type) {
@@ -1933,6 +1952,16 @@ impl Typechecker {
     pub fn find_type_in_scope(&self, type_name: NodeId) -> Option<&TypeId> {
         let name = &self.compiler.source
             [self.compiler.span_start[type_name.0]..self.compiler.span_end[type_name.0]];
+        for scope in self.scope.iter().rev() {
+            if let Some(value) = scope.types.get(name) {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
+    pub fn find_type_in_scope_by_name(&self, name: &[u8]) -> Option<&TypeId> {
         for scope in self.scope.iter().rev() {
             if let Some(value) = scope.types.get(name) {
                 return Some(value);

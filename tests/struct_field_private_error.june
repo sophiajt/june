@@ -2,10 +2,14 @@
 
 struct Stats {
     private age: i64
+
+    fun create(age: i64) -> Stats {
+        return new Stats(age: age)
+    }
 }
 
 fun main() {
-    let stats = new Stats(age: 88)
+    let stats = Stats::create(age: 88)
 
     println(stats.age)
 }
