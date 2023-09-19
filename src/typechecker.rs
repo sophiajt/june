@@ -914,7 +914,10 @@ impl Typechecker {
                             let type_id = *ty;
 
                             if name == field_name {
-                                if member_access == &MemberAccess::Private && target_name != b"." {
+                                if member_access == &MemberAccess::Private
+                                    && target_name != b"."
+                                    && target_name != b"self"
+                                {
                                     // We're private and not accessing 'self'
                                     self.error("access of private field", field);
                                 }
@@ -1194,7 +1197,10 @@ impl Typechecker {
                             if name == field_name {
                                 let ty = *ty;
 
-                                if member_access == &MemberAccess::Private && target_name != b"." {
+                                if member_access == &MemberAccess::Private
+                                    && target_name != b"."
+                                    && target_name != b"self"
+                                {
                                     // Private and not accessing 'self'
                                     self.error("modifying private member field", field);
                                 }
