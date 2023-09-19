@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AllocationLifetime {
-    Caller,
+    Return,
     Param { var_id: VarId },
     Scope { level: usize },
     Unknown,
@@ -69,6 +69,14 @@ impl LifetimeChecker {
             message: message.into(),
             node_id,
             severity: Severity::Error,
+        });
+    }
+
+    pub fn note(&mut self, message: impl Into<String>, node_id: NodeId) {
+        self.compiler.errors.push(SourceError {
+            message: message.into(),
+            node_id,
+            severity: Severity::Note,
         });
     }
 
@@ -132,23 +140,40 @@ impl LifetimeChecker {
                         var_id: incoming_var_id,
                     } => {
                         let param_name1 =
-                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id))
+                                .to_string();
                         let param_name2 = String::from_utf8_lossy(
                             self.compiler.get_variable_name(incoming_var_id),
-                        );
+                        )
+                        .to_string();
                         if incoming_var_id != var_id {
+                            self.note(
+                                format!(
+                                    "add a lifetime annotation, e.g. [{} == {}]",
+                                    param_name1, param_name2
+                                ),
+                                node_id,
+                            );
                             self.error(format!("can't find compatible lifetime between param '{}' and param '{}'", param_name1, param_name2), node_id)
                         }
                     }
                     AllocationLifetime::Scope { .. } => {
                         // Params outlive all scopes
                     }
-                    AllocationLifetime::Caller => {
+                    AllocationLifetime::Return => {
                         let param_name1 =
-                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+                            String::from_utf8_lossy(self.compiler.get_variable_name(var_id))
+                                .to_string();
+                        self.note(
+                            format!(
+                                "add a lifetime annotation, e.g. [{} == return]",
+                                param_name1
+                            ),
+                            node_id,
+                        );
                         self.error(
                             format!(
-                                "can't find compatible lifetime between param '{}' and caller",
+                                "can't find compatible lifetime between param '{}' and return",
                                 param_name1
                             ),
                             node_id,
@@ -159,12 +184,12 @@ impl LifetimeChecker {
                             String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
                         self.error(
                             format!("can't find compatible lifetime for param '{}'", param_name),
-                            lifetime_from_node,
+                            node_id,
                         );
                     }
                 }
             }
-            AllocationLifetime::Caller => {
+            AllocationLifetime::Return => {
                 // TODO: add fix to check for raw and custom lifetimes
 
                 match lifetime {
@@ -174,22 +199,22 @@ impl LifetimeChecker {
 
                         self.error(
                             format!("can't find compatible lifetime for param '{}'", param_name),
-                            lifetime_from_node,
+                            node_id,
                         );
                     }
                     AllocationLifetime::Scope { .. } => {
-                        // Caller is larger than scope, so ignore
+                        // Return is larger than all scopes, so ignore
                     }
-                    AllocationLifetime::Caller => {
-                        // Already caller
+                    AllocationLifetime::Return => {
+                        // Already return
                     }
                     _ => {
                         self.error(
                             format!(
-                                "can't find compatible lifetime for caller, found {:?}",
+                                "can't find compatible lifetime for return, found {:?}",
                                 lifetime
                             ),
-                            lifetime_from_node,
+                            node_id,
                         );
                     }
                 }
@@ -228,7 +253,7 @@ impl LifetimeChecker {
                         self.increment_lifetime_inferences();
                     }
                 }
-                AllocationLifetime::Caller => {
+                AllocationLifetime::Return => {
                     self.compiler.set_node_lifetime(node_id, lifetime);
 
                     self.increment_lifetime_inferences();
@@ -239,7 +264,7 @@ impl LifetimeChecker {
                             "can't find compatible lifetime for scoped expression, found {:?}",
                             lifetime
                         ),
-                        lifetime_from_node,
+                        node_id,
                     );
                 }
             },
@@ -514,7 +539,7 @@ impl LifetimeChecker {
                 if let Some(return_expr) = return_expr {
                     let return_expr = *return_expr;
 
-                    self.expand_lifetime(return_expr, return_expr, AllocationLifetime::Caller);
+                    self.expand_lifetime(return_expr, return_expr, AllocationLifetime::Return);
                     self.check_node_lifetime(return_expr, scope_level);
                 }
             }

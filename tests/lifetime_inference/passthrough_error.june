@@ -1,0 +1,11 @@
+// error: can't find compatible lifetime between param 'x' and return
+
+struct Stats {
+    age: i64
+}
+
+fun identity(x: Stats) -> Stats {
+    return x
+}
+
+identity(new Stats(age: 88))

@@ -324,6 +324,11 @@ fn hello_world() -> TestResult {
 }
 
 #[test]
+fn incompatible_param_error() -> TestResult {
+    test_example("lifetime_inference/incompatible_param_error")
+}
+
+#[test]
 fn int_math_main() -> TestResult {
     test_example("math/int_math_main")
 }
@@ -436,6 +441,11 @@ fn multiple_method_calls_on_self() -> TestResult {
 #[test]
 fn mutability_mismatch_error() -> TestResult {
     test_example("typechecking/mutability_mismatch_error")
+}
+
+#[test]
+fn passthrough_error() -> TestResult {
+    test_example("lifetime_inference/passthrough_error")
 }
 
 #[test]

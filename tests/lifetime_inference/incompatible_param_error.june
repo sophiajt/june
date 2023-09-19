@@ -1,0 +1,17 @@
+// error: can't find compatible lifetime between param 'person' and param 'stats'
+
+struct Stats {
+    age: i64
+}
+
+struct Person {
+    stats: Stats
+}
+
+fun assign(mut person: Person, stats: Stats) {
+    person.stats = stats
+}
+
+mut person = new Person(stats: new Stats(age: 33))
+
+assign(person, new Stats(age: 44))
