@@ -1,4 +1,4 @@
-// error: param is not alias-safe, and self is mutable
+// error: return type is not alias-safe
 
 struct Stats {
     age: i64
@@ -11,8 +11,8 @@ struct Foo {
         return new safe Foo(stats: new Stats(age: age))
     }
 
-    fun set_stats(mut self, stats: Stats) {
-        .stats = stats
+    fun get_stats(self) -> Stats {
+        return .stats
     }
 }
 

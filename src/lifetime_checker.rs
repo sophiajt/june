@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     compiler::{CallTarget, Compiler},
-    errors::SourceError,
+    errors::{Severity, SourceError},
     parser::{AstNode, BlockId, NodeId},
     typechecker::{FunId, VarId},
 };
@@ -38,10 +38,12 @@ impl LifetimeChecker {
         // FIXME: remove clone
         let block = self.compiler.blocks[block_id.0].clone();
 
-        // Run lifetime inference to fixpoint
+        // Run lifetime inference to fixpoint or error
         loop {
             let num_lifetime_inferences_before =
                 *self.num_lifetime_inferences.entry(block_id).or_default();
+
+            let num_errors_before = self.compiler.errors.len();
 
             for node_id in block.nodes.iter().rev() {
                 self.check_node_lifetime(*node_id, scope_level);
@@ -50,7 +52,11 @@ impl LifetimeChecker {
             let num_lifetime_inferences_after =
                 *self.num_lifetime_inferences.entry(block_id).or_default();
 
-            if num_lifetime_inferences_after == num_lifetime_inferences_before {
+            let num_errors_after = self.compiler.errors.len();
+
+            if num_lifetime_inferences_after == num_lifetime_inferences_before
+                || num_errors_before != num_errors_after
+            {
                 break;
             }
         }
@@ -61,10 +67,18 @@ impl LifetimeChecker {
     pub fn error(&mut self, message: impl Into<String>, node_id: NodeId) {
         self.compiler.errors.push(SourceError {
             message: message.into(),
-
             node_id,
+            severity: Severity::Error,
         });
     }
+
+    // pub fn note(&mut self, message: impl Into<String>, node_id: NodeId) {
+    //     self.compiler.errors.push(SourceError {
+    //         message: message.into(),
+    //         node_id,
+    //         severity: Severity::Note,
+    //     });
+    // }
 
     pub fn increment_lifetime_inferences(&mut self) {
         let current_block_id = self

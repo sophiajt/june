@@ -1,4 +1,4 @@
-// error: tried to create safe pointer on type that isn't alias-safe
+// error: public field is not alias-safe
 
 struct Stats {
     age: i64

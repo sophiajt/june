@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::errors::SourceError;
+use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, NodeId};
 use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, STRING_TYPE_ID};
@@ -348,7 +348,11 @@ impl Compiler {
     }
 
     pub fn print_error(&self, error: &SourceError) {
-        let SourceError { node_id, message } = error;
+        let SourceError {
+            node_id,
+            message,
+            severity,
+        } = error;
 
         let span_start = self.span_start[node_id.0];
         let span_end = self.span_end[node_id.0];
@@ -425,11 +429,22 @@ impl Compiler {
             eprint!(" ");
         }
 
-        eprint!("\x1b[0;31m");
-        for _ in span_start..span_end {
-            eprint!("▰");
+        match severity {
+            Severity::Error => {
+                eprint!("\x1b[0;31m");
+                for _ in span_start..span_end {
+                    eprint!("▰");
+                }
+                eprintln!(" error: {}", message);
+            }
+            Severity::Note => {
+                eprint!("\x1b[0;34m");
+                for _ in span_start..span_end {
+                    eprint!("=");
+                }
+                eprintln!(" note: {}", message);
+            }
         }
-        eprintln!(" error: {}", message);
         eprint!("\x1b[0m");
 
         // Next line after error, for context

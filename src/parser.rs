@@ -1,5 +1,5 @@
 use crate::compiler::Compiler;
-use crate::errors::SourceError;
+use crate::errors::{Severity, SourceError};
 
 pub struct Parser {
     pub compiler: Compiler,
@@ -659,8 +659,8 @@ impl Parser {
     pub fn error_on_node(&mut self, message: impl Into<String>, node_id: NodeId) {
         self.compiler.errors.push(SourceError {
             message: message.into(),
-
             node_id,
+            severity: Severity::Error,
         });
     }
 
@@ -674,8 +674,8 @@ impl Parser {
             let node_id = self.create_node(AstNode::Garbage, span_start, span_end);
             self.compiler.errors.push(SourceError {
                 message: message.into(),
-
                 node_id,
+                severity: Severity::Error,
             });
 
             node_id
@@ -684,8 +684,8 @@ impl Parser {
                 self.create_node(AstNode::Garbage, self.content_length, self.content_length);
             self.compiler.errors.push(SourceError {
                 message: message.into(),
-
                 node_id,
+                severity: Severity::Error,
             });
 
             node_id

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     compiler::{CallTarget, CaseOffset, Compiler},
-    errors::SourceError,
+    errors::{Severity, SourceError},
     parser::{AstNode, BlockId, MemberAccess, NodeId, PointerType},
 };
 
@@ -23,6 +23,7 @@ pub struct TypedField {
     pub member_access: MemberAccess,
     pub name: Vec<u8>,
     pub ty: TypeId,
+    pub where_defined: NodeId,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -545,7 +546,7 @@ impl Typechecker {
             let field_type = *field_type;
             let member_access = *member_access;
 
-            let field_name = self.compiler.get_source(field_name).to_vec();
+            let field_name_text = self.compiler.get_source(field_name).to_vec();
             let field_type = self.typecheck_typename(field_type);
 
             if !self.compiler.is_copyable_type(field_type) {
@@ -554,8 +555,9 @@ impl Typechecker {
 
             output_fields.push(TypedField {
                 member_access,
-                name: field_name,
+                name: field_name_text,
                 ty: field_type,
+                where_defined: field_name,
             });
         }
 
@@ -906,6 +908,7 @@ impl Typechecker {
                             member_access,
                             name,
                             ty,
+                            ..
                         } in fields
                         {
                             let type_id = *ty;
@@ -1185,6 +1188,7 @@ impl Typechecker {
                             member_access,
                             name,
                             ty,
+                            ..
                         } in fields
                         {
                             if name == field_name {
@@ -1219,7 +1223,7 @@ impl Typechecker {
         }
     }
 
-    pub fn type_is_alias_safe(&self, type_id: TypeId) -> bool {
+    pub fn type_is_alias_safe(&mut self, type_id: TypeId) -> bool {
         match self.compiler.get_type(type_id) {
             Type::Bool | Type::F64 | Type::I64 | Type::Void => true,
             Type::Enum {
@@ -1227,8 +1231,12 @@ impl Typechecker {
                 variants,
                 ..
             } => {
+                // FIXME: clone
+                let generic_params = generic_params.clone();
+                let variants = variants.clone();
+
                 for generic_param in generic_params {
-                    if !self.type_is_alias_safe(*generic_param) {
+                    if !self.type_is_alias_safe(generic_param) {
                         return false;
                     }
                 }
@@ -1236,13 +1244,13 @@ impl Typechecker {
                 for variant in variants {
                     match variant {
                         EnumVariant::Single { param, .. } => {
-                            if !self.type_is_alias_safe(*param) {
+                            if !self.type_is_alias_safe(param) {
                                 return false;
                             }
                         }
                         EnumVariant::Struct { params, .. } => {
                             for (_, param_type) in params {
-                                if !self.type_is_alias_safe(*param_type) {
+                                if !self.type_is_alias_safe(param_type) {
                                     return false;
                                 }
                             }
@@ -1258,8 +1266,13 @@ impl Typechecker {
                 methods,
                 ..
             } => {
+                // FIXME: clone
+                let generic_params = generic_params.clone();
+                let fields = fields.clone();
+                let methods = methods.clone();
+
                 for generic_param in generic_params {
-                    if !self.type_is_alias_safe(*generic_param) {
+                    if !self.type_is_alias_safe(generic_param) {
                         return false;
                     }
                 }
@@ -1267,12 +1280,13 @@ impl Typechecker {
                 for TypedField {
                     member_access,
                     ty: field_type,
+                    where_defined,
                     ..
                 } in fields
                 {
-                    if member_access == &MemberAccess::Public
-                        && !self.type_is_alias_safe(*field_type)
+                    if member_access == MemberAccess::Public && !self.type_is_alias_safe(field_type)
                     {
+                        self.note("public field is not alias-safe", where_defined);
                         return false;
                     }
                 }
@@ -1280,9 +1294,14 @@ impl Typechecker {
                 for method in methods {
                     let fun = &self.compiler.functions[method.0];
 
+                    let return_node = fun.return_node;
+
                     let mut self_is_mutable = false;
 
-                    for param in &fun.params {
+                    // FIXME: clone
+                    let params = fun.params.clone();
+
+                    for param in &params {
                         if param.name == b"self" {
                             let var_id = param.var_id;
 
@@ -1294,37 +1313,43 @@ impl Typechecker {
                         }
                     }
 
+                    let return_type = fun.return_type;
                     if self_is_mutable {
-                        for param in &fun.params {
+                        for param in &params {
                             let var_id = param.var_id;
 
                             let var = &self.compiler.variables[var_id.0];
 
                             let var_type_id = var.ty;
+                            let where_defined = var.where_defined;
 
-                            if !self.type_is_alias_safe(var_type_id) {
+                            if !self.type_is_alias_safe(var_type_id) && param.name != b"self" {
+                                self.note(
+                                    "param is not alias-safe, and self is mutable",
+                                    where_defined,
+                                );
                                 return false;
                             }
                         }
+                    }
 
-                        if !self.type_is_alias_safe(fun.return_type) {
-                            return false;
+                    if !self.type_is_alias_safe(return_type) {
+                        if let Some(return_node) = return_node {
+                            self.note("return type is not alias-safe", return_node);
                         }
+
+                        return false;
                     }
                 }
 
                 true
             }
-            Type::Pointer {
-                pointer_type,
-                target,
-                ..
-            } => {
+            Type::Pointer { pointer_type, .. } => {
                 if pointer_type != &PointerType::AliasSafe {
-                    return false;
+                    false
+                } else {
+                    true
                 }
-
-                return self.type_is_alias_safe(*target);
             }
             _ => true,
         }
@@ -1355,7 +1380,6 @@ impl Typechecker {
                     "tried to create safe pointer on type that isn't alias-safe",
                     node_id,
                 );
-                return UNKNOWN_TYPE_ID;
             }
 
             let type_id = self.get_underlying_type_id(type_id);
@@ -1393,6 +1417,7 @@ impl Typechecker {
                             name,
                             ty,
                             member_access,
+                            ..
                         } in &fields
                         {
                             if name == field_name {
@@ -2180,6 +2205,7 @@ impl Typechecker {
                     member_access,
                     name,
                     ty,
+                    where_defined,
                 } in fields
                 {
                     for replacement in replacements {
@@ -2188,6 +2214,7 @@ impl Typechecker {
                                 member_access: *member_access,
                                 name: name.clone(),
                                 ty: replacement.1,
+                                where_defined: *where_defined,
                             });
                             break;
                         }
@@ -2269,8 +2296,16 @@ impl Typechecker {
     pub fn error(&mut self, message: impl Into<String>, node_id: NodeId) {
         self.compiler.errors.push(SourceError {
             message: message.into(),
-
             node_id,
+            severity: Severity::Error,
+        });
+    }
+
+    pub fn note(&mut self, message: impl Into<String>, node_id: NodeId) {
+        self.compiler.errors.push(SourceError {
+            message: message.into(),
+            node_id,
+            severity: Severity::Note,
         });
     }
 }

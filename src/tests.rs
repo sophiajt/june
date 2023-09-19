@@ -427,6 +427,11 @@ fn safe_struct_error2() -> TestResult {
 }
 
 #[test]
+fn safe_struct_error3() -> TestResult {
+    test_example("safe_struct_error3")
+}
+
+#[test]
 fn scope_struct() -> TestResult {
     test_example("scope_struct")
 }
