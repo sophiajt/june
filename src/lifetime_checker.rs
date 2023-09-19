@@ -417,20 +417,6 @@ impl LifetimeChecker {
 
                     // Make sure any new lifetimes get back to the variable declaration
                     self.check_node_lifetime(rhs, scope_level);
-
-                    // let rhs_ty = self.compiler.get_node_type(rhs);
-                    // if self.compiler.get_node_lifetime(lhs) != self.compiler.get_node_lifetime(rhs)
-                    //     && !self.compiler.is_copyable_type(rhs_ty)
-                    // {
-                    //     self.error(
-                    //         format!(
-                    //             "assignment has incompatible lifetimes. {:?} vs {:?}",
-                    //             self.compiler.get_node_lifetime(lhs),
-                    //             self.compiler.get_node_lifetime(rhs)
-                    //         ),
-                    //         lhs,
-                    //     )
-                    // }
                 } else {
                     self.expand_lifetime_with_node(lhs, node_id);
                     self.expand_lifetime_with_node(rhs, node_id);
