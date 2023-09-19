@@ -17,7 +17,7 @@ struct Stats {
 }
 
 fun main() {
-    let stats = Stats::create(age: 88)
+    mut stats = Stats::create(age: 88)
 
     stats.set_age(77)
 

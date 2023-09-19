@@ -9,7 +9,7 @@ struct Box {
 }
 
 fun main() {
-    let box = new Box(width: 10)
+    mut box = new Box(width: 10)
     box.grow_width(5)
 
     println(box.width)

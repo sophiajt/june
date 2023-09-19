@@ -3,7 +3,7 @@
 struct Stats {
     private age: i64
 
-    fun get_age(mut self) -> i64 {
+    fun get_age(self) -> i64 {
         return .age
     }
 

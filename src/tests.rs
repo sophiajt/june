@@ -404,8 +404,38 @@ fn method_simple() -> TestResult {
 }
 
 #[test]
-fn method_simple_error() -> TestResult {
+fn move_ptr() -> TestResult {
     test_example("structs/method_simple_error")
+}
+
+#[test]
+fn moved_safe_var_error() -> TestResult {
+    test_example("safe_abstractions/moved_safe_var_error")
+}
+
+#[test]
+fn moved_safe_var_error2() -> TestResult {
+    test_example("safe_abstractions/moved_safe_var_error2")
+}
+
+#[test]
+fn moved_safe_var_error3() -> TestResult {
+    test_example("safe_abstractions/moved_safe_var_error3")
+}
+
+#[test]
+fn moved_safe_var_into_shared_error() -> TestResult {
+    test_example("safe_abstractions/moved_safe_var_into_shared_error")
+}
+
+#[test]
+fn multiple_method_calls_on_self() -> TestResult {
+    test_example("safe_abstractions/multiple_method_calls_on_self")
+}
+
+#[test]
+fn mutability_mismatch_error() -> TestResult {
+    test_example("typechecking/mutability_mismatch_error")
 }
 
 #[test]
@@ -426,6 +456,11 @@ fn return_top_level_error() -> TestResult {
 #[test]
 fn return_value() -> TestResult {
     test_example("typechecking/return_value")
+}
+
+#[test]
+fn safe_method_doesnt_permanently_move() -> TestResult {
+    test_example("safe_abstractions/safe_method_doesnt_permanently_move")
 }
 
 #[test]

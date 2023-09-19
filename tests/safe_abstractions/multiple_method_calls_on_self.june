@@ -1,0 +1,24 @@
+// output: 88
+
+struct Foo {
+    x: i64
+    y: i64
+
+    fun set_x(mut self, new_x: i64) {
+        .x = new_x
+    }
+
+    fun set_y(mut self, new_y: i64) {
+        .y = new_y
+    }
+
+    fun create() -> safe Foo {
+        return new safe Foo(x: 0, y: 0)
+    }
+}
+
+mut abc = Foo::create()
+abc.set_x(88)
+abc.set_y(99)
+
+println(abc.x)

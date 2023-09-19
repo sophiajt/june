@@ -13,7 +13,7 @@ struct Box {
 }
 
 fun main() {
-    let box = new Box(stat: new Stat(width: 22))
+    mut box = new Box(stat: new Stat(width: 22))
     box.recreate_stat()
 
     println(box.stat.width)

@@ -1,0 +1,18 @@
+// error: argument to function needs to be mutable
+
+struct Foo {
+    x: i64
+
+    fun set_x(mut self, new_x: i64) {
+        .x = new_x
+    }
+
+    fun create() -> safe Foo {
+        return new safe Foo(x: 0)
+    }
+}
+
+let abc = Foo::create()
+abc.set_x(88)
+
+println(abc.x)

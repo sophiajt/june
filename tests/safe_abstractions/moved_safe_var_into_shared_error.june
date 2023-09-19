@@ -1,0 +1,11 @@
+// error: moved variable accessed after move
+
+struct Foo {
+    z: i64
+}
+
+let foo = new safe Foo(z: 100)
+
+let y: Foo = foo
+
+println(foo.z)

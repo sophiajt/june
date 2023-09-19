@@ -1,0 +1,15 @@
+// output: 100
+
+struct Foo {
+    z: i64
+
+    fun bar(self) {
+
+    }
+}
+
+let foo = new safe Foo(z: 100)
+
+foo.bar()
+
+println(foo.z)
