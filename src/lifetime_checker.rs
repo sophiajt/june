@@ -405,25 +405,32 @@ impl LifetimeChecker {
 
                     self.check_node_lifetime(rhs, scope_level);
 
+                    let num_errors_before = self.compiler.errors.len();
                     self.expand_lifetime_with_node(rhs, lhs);
-                    self.expand_lifetime_with_node(lhs, rhs);
+                    let num_errors_after = self.compiler.errors.len();
+
+                    // a tiny bit hackish, but we don't need to check
+                    // both directions if we've already errored
+                    if num_errors_before == num_errors_after {
+                        self.expand_lifetime_with_node(lhs, rhs);
+                    }
 
                     // Make sure any new lifetimes get back to the variable declaration
                     self.check_node_lifetime(rhs, scope_level);
 
-                    let rhs_ty = self.compiler.get_node_type(rhs);
-                    if self.compiler.get_node_lifetime(lhs) != self.compiler.get_node_lifetime(rhs)
-                        && !self.compiler.is_copyable_type(rhs_ty)
-                    {
-                        self.error(
-                            format!(
-                                "assignment has incompatible lifetimes. {:?} vs {:?}",
-                                self.compiler.get_node_lifetime(lhs),
-                                self.compiler.get_node_lifetime(rhs)
-                            ),
-                            lhs,
-                        )
-                    }
+                    // let rhs_ty = self.compiler.get_node_type(rhs);
+                    // if self.compiler.get_node_lifetime(lhs) != self.compiler.get_node_lifetime(rhs)
+                    //     && !self.compiler.is_copyable_type(rhs_ty)
+                    // {
+                    //     self.error(
+                    //         format!(
+                    //             "assignment has incompatible lifetimes. {:?} vs {:?}",
+                    //             self.compiler.get_node_lifetime(lhs),
+                    //             self.compiler.get_node_lifetime(rhs)
+                    //         ),
+                    //         lhs,
+                    //     )
+                    // }
                 } else {
                     self.expand_lifetime_with_node(lhs, node_id);
                     self.expand_lifetime_with_node(rhs, node_id);

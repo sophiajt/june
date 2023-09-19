@@ -1,4 +1,4 @@
-// error: can't find compatible lifetime between param 'person' and param 'stats'
+// error: can't find compatible lifetime between param 'stats' and param 'person'
 
 struct Stats {
     age: i64
