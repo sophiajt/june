@@ -703,7 +703,15 @@ impl Typechecker {
                     target: target_rhs,
                 },
             ) => {
-                (pointer_type_lhs == &PointerType::Unknown || pointer_type_lhs == pointer_type_rhs)
+                // We allow for unknown pointer types to assign in from the other types,
+                // which allows us to not have to guess how `self` will be used
+                // Also, if a safe pointer is assigned to a shared pointer, then we'll
+                // allow the move into a shared pointer, effectively removing the alias-safety.
+                // We can do this because the ownership will move.
+                (pointer_type_lhs == &PointerType::Unknown
+                    || pointer_type_lhs == pointer_type_rhs
+                    || (pointer_type_lhs == &PointerType::Shared
+                        && pointer_type_rhs == &PointerType::AliasSafe))
                     && target_lhs == target_rhs
                     && (*optional_lhs || optional_lhs == optional_rhs)
             }

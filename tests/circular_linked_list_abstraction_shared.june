@@ -1,0 +1,56 @@
+// output: 132132
+
+struct Node {
+    data: i64
+    next: Node?
+}
+
+struct CircularList {
+    private node: Node?
+
+    fun default() -> safe CircularList {
+        return new safe CircularList(node: none)
+    }
+
+    fun push(mut self, data: i64) {
+        if self.node != none {
+            let next = self.node.next
+            self.node.next = new Node(data: data, next: next)
+        } else {
+            self.node = new Node(data: data, next: none)
+            self.node.next = self.node
+        }
+    }
+
+    fun next(mut self) -> i64 {
+        if self.node != none {
+            let ret = self.node.data
+
+            self.node = self.node.next
+            return ret
+        } else {
+            return 0
+        }
+    }
+}
+
+fun helper() -> safe CircularList {
+    let list = CircularList::default()
+
+    return list
+}
+
+fun main() {
+    mut list: CircularList = helper()
+
+    list.push(1)
+    list.push(2)
+    list.push(3)
+
+    println(list.next())
+    println(list.next())
+    println(list.next())
+    println(list.next())
+    println(list.next())
+    println(list.next())
+}

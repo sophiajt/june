@@ -167,6 +167,11 @@ fn circular_linked_list_abstraction() -> TestResult {
 }
 
 #[test]
+fn circular_linked_list_abstraction_shared() -> TestResult {
+    test_example("circular_linked_list_abstraction_shared")
+}
+
+#[test]
 fn circular_linked_list_abstraction_shorthand() -> TestResult {
     test_example("circular_linked_list_abstraction_shorthand")
 }
