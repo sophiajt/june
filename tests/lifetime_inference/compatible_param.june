@@ -1,0 +1,19 @@
+// output: 44
+
+struct Stats {
+    age: i64
+}
+
+struct Person {
+    stats: Stats
+}
+
+fun assign(mut person: Person, stats: Stats) [stats == person] {
+    person.stats = stats
+}
+
+mut person = new Person(stats: new Stats(age: 33))
+
+assign(person, new Stats(age: 44))
+
+println(person.stats.age)

@@ -490,7 +490,7 @@ impl Codegen {
                                     self.codegen_node(args[0], output);
                                 }
                                 I64_TYPE_ID => {
-                                    output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                                    output.extend_from_slice(b"printf(\"%li\\n\", ");
                                     self.codegen_node(args[0], output);
                                 }
                                 F64_TYPE_ID => {

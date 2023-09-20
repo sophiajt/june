@@ -204,6 +204,11 @@ fn circular_linked_list_helper() -> TestResult {
 }
 
 #[test]
+fn compatible_param() -> TestResult {
+    test_example("lifetime_inference/compatible_param")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("data_types/double")
 }
@@ -329,6 +334,11 @@ fn incompatible_param_error() -> TestResult {
 }
 
 #[test]
+fn incompatible_param_error2() -> TestResult {
+    test_example("lifetime_inference/incompatible_param_error2")
+}
+
+#[test]
 fn int_math_main() -> TestResult {
     test_example("math/int_math_main")
 }
@@ -446,6 +456,16 @@ fn mutability_mismatch_error() -> TestResult {
 #[test]
 fn passthrough_error() -> TestResult {
     test_example("lifetime_inference/passthrough_error")
+}
+
+#[test]
+fn passthrough_error2() -> TestResult {
+    test_example("lifetime_inference/passthrough_error2")
+}
+
+#[test]
+fn passthrough() -> TestResult {
+    test_example("lifetime_inference/passthrough")
 }
 
 #[test]

@@ -38,6 +38,9 @@ pub enum AstNode {
     True,
     False,
 
+    // Special lifetimes
+    ReturnLifetime,
+
     // Empty optional values
     None,
 
@@ -92,6 +95,7 @@ pub enum AstNode {
     Fun {
         name: NodeId,
         params: NodeId,
+        lifetime_annotations: Vec<NodeId>,
         return_ty: Option<NodeId>,
         block: NodeId,
     },
@@ -392,15 +396,15 @@ impl Parser {
         )
     }
 
-    // pub fn is_lsquare(&mut self) -> bool {
-    //     matches!(
-    //         self.peek(),
-    //         Some(Token {
-    //             token_type: TokenType::LSquare,
-    //             ..
-    //         })
-    //     )
-    // }
+    pub fn is_lsquare(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::LSquare,
+                ..
+            })
+        )
+    }
 
     pub fn is_rsquare(&mut self) -> bool {
         matches!(
@@ -767,6 +771,51 @@ impl Parser {
 
         let params = self.params();
 
+        let mut lifetime_annotations = vec![];
+
+        if self.is_lsquare() {
+            // we have lifetime constraints/annotations
+
+            self.lsquare();
+
+            loop {
+                if self.is_rsquare() {
+                    self.rsquare();
+                    break;
+                } else if self.is_newline() {
+                    self.newline();
+                } else if self.is_comma() {
+                    self.next();
+                } else if self.is_name() {
+                    let lhs = if self.is_keyword(b"return") {
+                        self.return_lifetime()
+                    } else {
+                        self.variable()
+                    };
+
+                    let op = self.equalsequals();
+
+                    let rhs = if self.is_keyword(b"return") {
+                        self.return_lifetime()
+                    } else {
+                        self.variable()
+                    };
+
+                    let span_start = self.compiler.span_start[lhs.0];
+                    let span_end = self.compiler.span_end[rhs.0];
+
+                    lifetime_annotations.push(self.create_node(
+                        AstNode::BinaryOp { lhs, op, rhs },
+                        span_start,
+                        span_end,
+                    ));
+                } else {
+                    self.error("expected lifetime annotation");
+                    break;
+                }
+            }
+        }
+
         let return_ty = if self.is_thin_arrow() {
             self.next();
             Some(self.typename())
@@ -782,6 +831,7 @@ impl Parser {
             AstNode::Fun {
                 name,
                 params,
+                lifetime_annotations,
                 return_ty,
                 block,
             },
@@ -1378,6 +1428,21 @@ impl Parser {
         }
     }
 
+    pub fn equalsequals(&mut self) -> NodeId {
+        match self.peek() {
+            Some(Token {
+                token_type: TokenType::EqualsEquals,
+                span_start,
+                span_end,
+                ..
+            }) => {
+                self.next();
+                self.create_node(AstNode::Equal, span_start, span_end)
+            }
+            _ => self.error("expect name"),
+        }
+    }
+
     pub fn typename(&mut self) -> NodeId {
         let pointer_type = if self.is_keyword(b"safe") {
             self.next();
@@ -1848,6 +1913,19 @@ impl Parser {
         }
     }
 
+    pub fn return_lifetime(&mut self) -> NodeId {
+        if self.is_keyword(b"return") {
+            let name = self
+                .next()
+                .expect("internal error: missing token that was expected to be there");
+            let name_start = name.span_start;
+            let name_end = name.span_end;
+            self.create_node(AstNode::ReturnLifetime, name_start, name_end)
+        } else {
+            self.error("expected 'return' lifetime")
+        }
+    }
+
     pub fn lparen(&mut self) {
         match self.peek() {
             Some(Token {
@@ -1872,6 +1950,34 @@ impl Parser {
             }
             _ => {
                 self.error("expected: right paren ')'");
+            }
+        }
+    }
+
+    pub fn lsquare(&mut self) {
+        match self.peek() {
+            Some(Token {
+                token_type: TokenType::LSquare,
+                ..
+            }) => {
+                self.next();
+            }
+            _ => {
+                self.error("expected: left bracket '['");
+            }
+        }
+    }
+
+    pub fn rsquare(&mut self) {
+        match self.peek() {
+            Some(Token {
+                token_type: TokenType::RSquare,
+                ..
+            }) => {
+                self.next();
+            }
+            _ => {
+                self.error("expected: right bracket ']'");
             }
         }
     }

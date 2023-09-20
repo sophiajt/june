@@ -1,0 +1,21 @@
+// error: can't find compatible lifetime between param 'stats' and param 'person'
+
+struct Stats {
+    age: i64
+}
+
+struct Person {
+    stats: Stats
+}
+
+fun helper(mut person: Person, stats: Stats) {
+    assign(person, stats)
+}
+
+fun assign(mut person: Person, stats: Stats) [stats == person] {
+    person.stats = stats
+}
+
+mut person = new Person(stats: new Stats(age: 33))
+
+helper(person, new Stats(age: 44))

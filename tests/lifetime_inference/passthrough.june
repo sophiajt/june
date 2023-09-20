@@ -1,0 +1,11 @@
+// output: 88
+
+struct Stats {
+    age: i64
+}
+
+fun identity(x: Stats) [x == return] -> Stats {
+    return x
+}
+
+println(identity(new Stats(age: 88)).age)

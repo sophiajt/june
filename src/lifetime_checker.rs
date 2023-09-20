@@ -4,7 +4,7 @@ use crate::{
     compiler::{CallTarget, Compiler},
     errors::{Severity, SourceError},
     parser::{AstNode, BlockId, NodeId},
-    typechecker::{FunId, Type, VarId},
+    typechecker::{Lifetime, LifetimeAnnotation, Type, VarId},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -476,15 +476,48 @@ impl LifetimeChecker {
                 let call_target = self.compiler.call_resolution.get(&head);
 
                 // note: fun_id 0 is currently the built-in print
-                if !matches!(call_target, Some(CallTarget::Function(FunId(0)))) {
-                    for arg in args {
-                        self.check_node_lifetime(arg, scope_level)
-                    }
+                match call_target {
+                    Some(CallTarget::Function(fun_id)) if fun_id.0 != 0 => {
+                        let fun_id = *fun_id;
+                        let params = self.compiler.functions[fun_id.0].params.clone();
 
-                    self.current_block_may_allocate(scope_level, node_id);
-                } else {
-                    for arg in args {
-                        self.check_node_lifetime(arg, scope_level)
+                        for (param, arg) in params.iter().zip(args.iter()) {
+                            let param_node_id =
+                                self.compiler.variables[param.var_id.0].where_defined;
+
+                            let expected_lifetime = self.compiler.get_node_lifetime(param_node_id);
+
+                            match expected_lifetime {
+                                AllocationLifetime::Return => {
+                                    // This is actually the lifetime of the call itself, which is where
+                                    // we are tracking the lifetime of the return value of the call
+                                    self.expand_lifetime_with_node(*arg, node_id);
+                                    self.check_node_lifetime(*arg, scope_level);
+                                }
+                                AllocationLifetime::Param { var_id } => {
+                                    // figure out which arg corresponds to this var_id
+                                    for (param2, arg2) in params.iter().zip(args.iter()) {
+                                        if param2.var_id == var_id && arg != arg2 {
+                                            self.expand_lifetime_with_node(*arg, *arg2);
+                                            break;
+                                        }
+                                    }
+
+                                    // self.expand_lifetime(arg, param_node_id, expected_lifetime);
+                                    self.check_node_lifetime(*arg, scope_level);
+                                }
+                                _ => {
+                                    self.check_node_lifetime(*arg, scope_level);
+                                }
+                            }
+                        }
+
+                        self.current_block_may_allocate(scope_level, node_id);
+                    }
+                    _ => {
+                        for arg in args {
+                            self.check_node_lifetime(arg, scope_level)
+                        }
                     }
                 }
             }
@@ -608,11 +641,43 @@ impl LifetimeChecker {
         self.compiler
             .resize_node_lifetimes(num_nodes, AllocationLifetime::Unknown);
 
-        // Check functions, skipping over our built-in print
+        // Set up param lifetimes, skipping over our built-in print
         for fun_id in 1..self.compiler.functions.len() {
             let fun = self.compiler.functions[fun_id].clone();
-            for param in &fun.params {
+            'param: for param in &fun.params {
                 let param_node_id = self.compiler.variables[param.var_id.0].where_defined;
+
+                for lifetime_annotation in &fun.lifetime_annotations {
+                    match lifetime_annotation {
+                        LifetimeAnnotation::Equality(
+                            Lifetime::Return,
+                            Lifetime::Variable(var_id),
+                        ) if var_id == &param.var_id => {
+                            self.compiler
+                                .set_node_lifetime(param_node_id, AllocationLifetime::Return);
+                            continue 'param;
+                        }
+                        LifetimeAnnotation::Equality(
+                            Lifetime::Variable(var_id),
+                            Lifetime::Return,
+                        ) if var_id == &param.var_id => {
+                            self.compiler
+                                .set_node_lifetime(param_node_id, AllocationLifetime::Return);
+                            continue 'param;
+                        }
+                        LifetimeAnnotation::Equality(
+                            Lifetime::Variable(lhs),
+                            Lifetime::Variable(rhs),
+                        ) if lhs == &param.var_id => {
+                            self.compiler.set_node_lifetime(
+                                param_node_id,
+                                AllocationLifetime::Param { var_id: *rhs },
+                            );
+                            continue 'param;
+                        }
+                        _ => {}
+                    }
+                }
 
                 self.compiler.set_node_lifetime(
                     param_node_id,
@@ -621,6 +686,11 @@ impl LifetimeChecker {
                     },
                 );
             }
+        }
+
+        // Check function bodies, skipping over our built-in print
+        for fun_id in 1..self.compiler.functions.len() {
+            let fun = self.compiler.functions[fun_id].clone();
 
             let body = fun.body;
             self.check_node_lifetime(body, 0);

@@ -89,10 +89,22 @@ impl Param {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Lifetime {
+    Variable(VarId),
+    Return,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LifetimeAnnotation {
+    Equality(Lifetime, Lifetime),
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: NodeId,
     pub params: Vec<Param>,
+    pub lifetime_annotations: Vec<LifetimeAnnotation>,
     pub return_node: Option<NodeId>,
     pub return_type: TypeId,
     pub body: NodeId,
@@ -144,6 +156,7 @@ impl Typechecker {
             name: NodeId(0),
             params: vec![Param::new(b"input".to_vec(), VarId(0))],
             body: NodeId(0),
+            lifetime_annotations: vec![],
             return_node: None,
             return_type: VOID_TYPE_ID,
         });
@@ -219,6 +232,7 @@ impl Typechecker {
         &mut self,
         name: NodeId,
         params: NodeId,
+        lifetime_annotations: &[NodeId],
         return_ty: Option<NodeId>,
         block: NodeId,
     ) -> FunId {
@@ -254,6 +268,47 @@ impl Typechecker {
             self.error("expected function parameters", params)
         }
 
+        let mut checked_lifetime_annotations = vec![];
+
+        for lifetime_annotation in lifetime_annotations {
+            let AstNode::BinaryOp { lhs, rhs, .. } = self.compiler.get_node(*lifetime_annotation)
+            else {
+                panic!("internal error: lifetime anotation is not a binary op")
+            };
+
+            let lhs = match self.compiler.get_node(*lhs) {
+                AstNode::Variable => {
+                    if let Some(var_id) = self.find_variable_in_scope(*lhs) {
+                        Lifetime::Variable(*var_id)
+                    } else {
+                        self.error("couldn't find parameter for lifetime", *lhs);
+                        continue;
+                    }
+                }
+                AstNode::ReturnLifetime => Lifetime::Return,
+                _ => {
+                    panic!("internal error: non-variable and non-return lifetime")
+                }
+            };
+
+            let rhs = match self.compiler.get_node(*rhs) {
+                AstNode::Variable => {
+                    if let Some(var_id) = self.find_variable_in_scope(*rhs) {
+                        Lifetime::Variable(*var_id)
+                    } else {
+                        self.error("couldn't find parameter for lifetime", *rhs);
+                        continue;
+                    }
+                }
+                AstNode::ReturnLifetime => Lifetime::Return,
+                _ => {
+                    panic!("internal error: non-variable and non-return lifetime")
+                }
+            };
+
+            checked_lifetime_annotations.push(LifetimeAnnotation::Equality(lhs, rhs));
+        }
+
         let return_type = if let Some(return_ty) = return_ty {
             self.typecheck_typename(return_ty)
         } else {
@@ -263,6 +318,7 @@ impl Typechecker {
         self.compiler.functions.push(Function {
             name,
             params: fun_params,
+            lifetime_annotations: checked_lifetime_annotations,
             return_type,
             return_node: return_ty,
             body: block,
@@ -286,6 +342,7 @@ impl Typechecker {
             return_type,
             return_node,
             name,
+            ..
         } = self.compiler.functions[fun_id.0].clone();
 
         self.enter_scope();
@@ -441,6 +498,7 @@ impl Typechecker {
                 let AstNode::Fun {
                     name,
                     params,
+                    lifetime_annotations,
                     return_ty,
                     block,
                 } = self.compiler.get_node(method)
@@ -453,10 +511,17 @@ impl Typechecker {
                 };
                 let name = *name;
                 let params = *params;
+                let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
                 let block = *block;
 
-                fun_ids.push(self.typecheck_fun_predecl(name, params, return_ty, block));
+                fun_ids.push(self.typecheck_fun_predecl(
+                    name,
+                    params,
+                    &lifetime_annotations,
+                    return_ty,
+                    block,
+                ));
             }
 
             let Type::Struct { methods, .. } = self.compiler.get_type_mut(type_id) else {
@@ -594,6 +659,7 @@ impl Typechecker {
                 let AstNode::Fun {
                     name,
                     params,
+                    lifetime_annotations,
                     return_ty,
                     block,
                 } = self.compiler.get_node(method)
@@ -606,10 +672,17 @@ impl Typechecker {
                 };
                 let name = *name;
                 let params = *params;
+                let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
                 let block = *block;
 
-                fun_ids.push(self.typecheck_fun_predecl(name, params, return_ty, block));
+                fun_ids.push(self.typecheck_fun_predecl(
+                    name,
+                    params,
+                    &lifetime_annotations,
+                    return_ty,
+                    block,
+                ));
             }
 
             let Type::Struct { methods, .. } = self.compiler.get_type_mut(type_id) else {
@@ -644,10 +717,18 @@ impl Typechecker {
                 AstNode::Fun {
                     name,
                     params,
+                    lifetime_annotations,
                     return_ty,
                     block,
                 } => {
-                    funs.push(self.typecheck_fun_predecl(*name, *params, *return_ty, *block));
+                    let lifetime_annotations = lifetime_annotations.clone();
+                    funs.push(self.typecheck_fun_predecl(
+                        *name,
+                        *params,
+                        &lifetime_annotations,
+                        *return_ty,
+                        *block,
+                    ));
                 }
 
                 AstNode::Struct {
@@ -2162,6 +2243,7 @@ impl Typechecker {
             self.compiler.functions.push(Function {
                 name: main_node,
                 params: vec![],
+                lifetime_annotations: vec![],
                 return_type: top_level_type,
                 return_node: None,
                 body: top_level,

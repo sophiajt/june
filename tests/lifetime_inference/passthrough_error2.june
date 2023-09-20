@@ -1,0 +1,15 @@
+// error: can't find compatible lifetime between param 'x' and return
+
+struct Stats {
+    age: i64
+}
+
+fun helper(x: Stats) -> Stats {
+    return identity(x)
+}
+
+fun identity(x: Stats) [x == return] -> Stats {
+    return x
+}
+
+helper(new Stats(age: 88))
