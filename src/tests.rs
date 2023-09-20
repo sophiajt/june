@@ -164,6 +164,16 @@ fn alias_return_error() -> TestResult {
 }
 
 #[test]
+fn annotation_param_compatible() -> TestResult {
+    test_example("lifetime_inference/annotation_param_compatible")
+}
+
+#[test]
+fn annotation_return_compatible() -> TestResult {
+    test_example("lifetime_inference/annotation_return_compatible")
+}
+
+#[test]
 fn bad_condition() -> TestResult {
     test_example("parsing/bad_condition")
 }
@@ -201,11 +211,6 @@ fn circular_linked_list_abstraction_shorthand() -> TestResult {
 #[test]
 fn circular_linked_list_helper() -> TestResult {
     test_example("data_structures/circular_linked_list_helper")
-}
-
-#[test]
-fn compatible_param() -> TestResult {
-    test_example("lifetime_inference/compatible_param")
 }
 
 #[test]
@@ -461,11 +466,6 @@ fn passthrough_error() -> TestResult {
 #[test]
 fn passthrough_error2() -> TestResult {
     test_example("lifetime_inference/passthrough_error2")
-}
-
-#[test]
-fn passthrough() -> TestResult {
-    test_example("lifetime_inference/passthrough")
 }
 
 #[test]
