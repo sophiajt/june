@@ -1025,7 +1025,7 @@ impl Typechecker {
 
                 let target_name = self.compiler.get_source(target);
 
-                let type_id = self.get_underlying_type_id(type_id);
+                let type_id = self.compiler.get_underlying_type_id(type_id);
 
                 match self.compiler.get_type(type_id) {
                     Type::Struct { fields, .. } => {
@@ -1310,7 +1310,7 @@ impl Typechecker {
 
                 let target_name = self.compiler.get_source(target);
 
-                let target_type_id = self.get_underlying_type_id(head_type_id);
+                let target_type_id = self.compiler.get_underlying_type_id(head_type_id);
 
                 match self.compiler.get_type(target_type_id) {
                     Type::Struct { fields, .. } => {
@@ -1515,7 +1515,7 @@ impl Typechecker {
                 );
             }
 
-            let type_id = self.get_underlying_type_id(type_id);
+            let type_id = self.compiler.get_underlying_type_id(type_id);
 
             let mut replacements = vec![];
 
@@ -2113,7 +2113,7 @@ impl Typechecker {
         let name = self.compiler.get_source(head).to_vec();
         let type_id = self.typecheck_node(target);
 
-        let type_id = self.get_underlying_type_id(type_id);
+        let type_id = self.compiler.get_underlying_type_id(type_id);
 
         match self.compiler.get_type(type_id) {
             Type::Struct { methods, .. } => {
@@ -2412,14 +2412,6 @@ impl Typechecker {
         }
     }
 
-    pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
-        match self.compiler.get_type(type_id) {
-            Type::Pointer {
-                target: type_id, ..
-            } => *type_id,
-            _ => type_id,
-        }
-    }
     pub fn enter_scope(&mut self) {
         self.scope.push(Scope::new())
     }

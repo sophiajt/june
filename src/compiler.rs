@@ -546,6 +546,15 @@ impl Compiler {
         TypeId(self.types.len() - 1)
     }
 
+    pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
+        match self.get_type(type_id) {
+            Type::Pointer {
+                target: type_id, ..
+            } => *type_id,
+            _ => type_id,
+        }
+    }
+
     pub fn fresh_type_variable(&mut self) -> TypeId {
         self.types.push(Type::TypeVariable);
 

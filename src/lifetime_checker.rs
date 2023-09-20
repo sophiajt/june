@@ -4,7 +4,7 @@ use crate::{
     compiler::{CallTarget, Compiler},
     errors::{Severity, SourceError},
     parser::{AstNode, BlockId, NodeId},
-    typechecker::{FunId, VarId},
+    typechecker::{FunId, Type, VarId},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -149,7 +149,7 @@ impl LifetimeChecker {
                         if incoming_var_id != var_id {
                             self.note(
                                 format!(
-                                    "add a lifetime annotation, e.g. [{} == {}]",
+                                    "add a lifetime annotation to the function, e.g. [{} == {}]",
                                     param_name1, param_name2
                                 ),
                                 node_id,
@@ -166,7 +166,7 @@ impl LifetimeChecker {
                                 .to_string();
                         self.note(
                             format!(
-                                "add a lifetime annotation, e.g. [{} == return]",
+                                "add a lifetime annotation to the function, e.g. [{} == return]",
                                 param_name1
                             ),
                             node_id,
@@ -478,7 +478,6 @@ impl LifetimeChecker {
                 // note: fun_id 0 is currently the built-in print
                 if !matches!(call_target, Some(CallTarget::Function(FunId(0)))) {
                     for arg in args {
-                        self.expand_lifetime_with_node(arg, node_id);
                         self.check_node_lifetime(arg, scope_level)
                     }
 
@@ -555,9 +554,31 @@ impl LifetimeChecker {
 
                 if matches!(self.compiler.get_node(item), AstNode::Variable) {
                     self.expand_lifetime_with_node(item, node_id);
-                } else if matches!(self.compiler.get_node(item), AstNode::Call { .. }) {
-                    self.expand_lifetime_with_node(item, node_id);
-                    self.check_node_lifetime(item, scope_level);
+                } else {
+                    match self.compiler.get_node(item) {
+                        AstNode::Call { args, .. } => {
+                            let node_type_id = self.compiler.get_node_type(node_id);
+                            let node_type = self
+                                .compiler
+                                .get_type(self.compiler.get_underlying_type_id(node_type_id));
+                            if matches!(node_type, Type::Enum { .. }) {
+                                // FIXME: clone
+                                let args = args.clone();
+
+                                self.expand_lifetime_with_node(item, node_id);
+                                self.check_node_lifetime(item, scope_level);
+
+                                for arg in args {
+                                    self.expand_lifetime_with_node(arg, item);
+                                    self.check_node_lifetime(arg, scope_level);
+                                }
+                            } else {
+                                self.expand_lifetime_with_node(item, node_id);
+                                self.check_node_lifetime(item, scope_level);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             AstNode::Match { target, match_arms } => {
