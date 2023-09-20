@@ -174,6 +174,11 @@ fn annotation_return_compatible() -> TestResult {
 }
 
 #[test]
+fn annotation_return_compatible2() -> TestResult {
+    test_example("lifetime_inference/annotation_return_compatible2")
+}
+
+#[test]
 fn bad_condition() -> TestResult {
     test_example("parsing/bad_condition")
 }

@@ -1,0 +1,16 @@
+// output: 77
+
+struct Stats {
+    age: i64
+}
+
+
+fun helper(y: Stats) [y == return] -> Stats {
+    return identity(y)
+}
+
+fun identity(x: Stats) [x == return] -> Stats {
+    return x
+}
+
+println(helper(new Stats(age: 77)).age)
