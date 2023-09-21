@@ -1,0 +1,9 @@
+// error: can't find variable
+
+let x = 123
+
+fun foo() {
+    println(x)
+}
+
+foo()

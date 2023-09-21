@@ -314,6 +314,11 @@ fn generic_struct() -> TestResult {
 }
 
 #[test]
+fn global_variable_error() -> TestResult {
+    test_example("typechecking/global_variable_error")
+}
+
+#[test]
 fn hello_fun_rev_order() -> TestResult {
     test_example("hello_world/hello_fun_rev_order")
 }
