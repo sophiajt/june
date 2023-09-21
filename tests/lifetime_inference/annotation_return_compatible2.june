@@ -4,7 +4,6 @@ struct Stats {
     age: i64
 }
 
-
 fun helper(y: Stats) [y == return] -> Stats {
     return identity(y)
 }
