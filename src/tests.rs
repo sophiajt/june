@@ -239,6 +239,11 @@ fn enum_multi_arm() -> TestResult {
 }
 
 #[test]
+fn enum_same_name() -> TestResult {
+    test_example("enums/enum_same_name")
+}
+
+#[test]
 fn enum_simple() -> TestResult {
     test_example("enums/enum_simple")
 }

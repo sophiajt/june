@@ -1,0 +1,17 @@
+// output: 2
+
+enum State {
+    Foo { x: i64, y: i64 }
+    Bar { x: i64, y: i64 }
+}
+
+let state = State::Bar(x: 1, y: 2)
+
+match state {
+    State::Foo(x, y) => {
+        println(x)
+    }
+    State::Bar(x, y) => {
+        println(y)
+    }
+}
