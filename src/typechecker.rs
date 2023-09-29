@@ -1412,6 +1412,9 @@ impl Typechecker {
                                     // Private and not accessing 'self'
                                     self.error("modifying private member field", field);
                                 }
+
+                                self.compiler.set_node_type(lvalue, ty);
+                                self.compiler.set_node_type(field, ty);
                                 return ty;
                             }
                         }

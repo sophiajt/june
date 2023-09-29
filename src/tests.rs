@@ -731,3 +731,13 @@ fn variable() -> TestResult {
 fn unicode() -> TestResult {
     test_example("parsing/unicode")
 }
+
+#[test]
+fn unicode2() -> TestResult {
+    test_example("parsing/unicode2")
+}
+
+#[test]
+fn unicode3() -> TestResult {
+    test_example("parsing/unicode3")
+}

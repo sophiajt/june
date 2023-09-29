@@ -75,11 +75,14 @@ impl Codegen {
         output.push(b'(');
         output.extend_from_slice(b"long allocation_id");
 
-        for TypedField { name, ty, .. } in fields {
+        for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
             output.extend_from_slice(b", ");
             self.codegen_typename(*ty, output);
             output.push(b' ');
+            output.extend_from_slice(format!("field_{}", idx).as_bytes());
+            output.extend_from_slice(b" /* ");
             output.extend_from_slice(name);
+            output.extend_from_slice(b" */ ");
         }
         output.extend_from_slice(b") {\n");
 
@@ -94,12 +97,10 @@ impl Codegen {
             output.extend_from_slice(b"tmp->__allocation_id__ = allocation_id;\n");
         }
 
-        for TypedField { name, .. } in fields {
-            output.extend_from_slice(b"tmp->");
+        for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
+            output.extend_from_slice(format!("tmp->field_{} = field_{} /* ", idx, idx).as_bytes());
             output.extend_from_slice(name);
-            output.extend_from_slice(b" = ");
-            output.extend_from_slice(name);
-            output.extend_from_slice(b";\n");
+            output.extend_from_slice(b" */ ;\n");
         }
 
         output.extend_from_slice(b"return tmp;\n}\n");
@@ -126,11 +127,13 @@ impl Codegen {
                         output.push(b' ');
                         output.extend_from_slice(b"__allocation_id__;\n");
                     }
-                    for TypedField { name, ty, .. } in fields {
+                    for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
                         self.codegen_typename(*ty, output);
                         output.push(b' ');
+                        output.extend_from_slice(format!("field_{} ", idx).as_bytes());
+                        output.extend_from_slice(b"/* ");
                         output.extend_from_slice(name);
-                        output.extend_from_slice(b";\n");
+                        output.extend_from_slice(b"*/ ;\n");
                     }
 
                     output.extend_from_slice(b"};\n");
@@ -156,25 +159,29 @@ impl Codegen {
                     output.extend_from_slice(b"{\n");
                     output.extend_from_slice(b"int arm_id;\n");
                     output.extend_from_slice(b"union {\n");
-                    for case in cases {
+                    for (idx, case) in cases.iter().enumerate() {
                         match case {
                             EnumVariant::Single { name, param: arg } => {
                                 self.codegen_typename(*arg, output);
                                 output.push(b' ');
+                                output.extend_from_slice(format!("case_{} /* ", idx).as_bytes());
                                 output.extend_from_slice(name);
-                                output.extend_from_slice(b";\n");
+                                output.extend_from_slice(b" */ ;\n");
                             }
                             EnumVariant::Struct { name, params: args } => {
                                 // FIXME!! This will name collide because of C naming resolution
-                                output.extend_from_slice(b"struct /*");
+                                output.extend_from_slice(b"struct /* ");
                                 output.extend_from_slice(name);
-                                output.extend_from_slice(b"*/ {\n");
+                                output.extend_from_slice(b" */ {\n");
 
-                                for arg in args {
+                                for (arg_idx, arg) in args.iter().enumerate() {
                                     self.codegen_typename(arg.1, output);
                                     output.push(b' ');
+                                    output.extend_from_slice(
+                                        format!("case_{}_{} /* ", idx, arg_idx).as_bytes(),
+                                    );
                                     output.extend_from_slice(&arg.0);
-                                    output.extend_from_slice(b";\n");
+                                    output.extend_from_slice(b" */ ;\n");
                                 }
 
                                 output.extend_from_slice(b"};\n");
@@ -204,11 +211,18 @@ impl Codegen {
                                 output.extend_from_slice(b" arg");
                             }
                             EnumVariant::Struct { params, .. } => {
-                                for (param_name, param_type) in params {
+                                for (param_idx, (param_name, param_type)) in
+                                    params.iter().enumerate()
+                                {
                                     output.extend_from_slice(b", ");
                                     self.codegen_typename(*param_type, output);
                                     output.push(b' ');
+                                    output.extend_from_slice(
+                                        format!("case_{}_{} /* ", case_offset, param_idx)
+                                            .as_bytes(),
+                                    );
                                     output.extend_from_slice(param_name);
+                                    output.extend_from_slice(b" */ ");
                                 }
                             }
                             EnumVariant::Simple { .. } => {}
@@ -228,19 +242,27 @@ impl Codegen {
 
                         match case {
                             EnumVariant::Single { name, .. } => {
-                                output.extend_from_slice(b"tmp->");
-                                output.extend_from_slice(name);
+                                output.extend_from_slice(
+                                    format!("tmp->case_{}", case_offset).as_bytes(),
+                                );
                                 output.extend_from_slice(b" = ");
-                                output.extend_from_slice(b"arg");
-                                output.extend_from_slice(b";\n");
+                                output.extend_from_slice(b"arg; /* ");
+                                output.extend_from_slice(name);
+                                output.extend_from_slice(b" */\n");
                             }
                             EnumVariant::Struct { params, .. } => {
-                                for (param_name, _) in params {
-                                    output.extend_from_slice(b"tmp->");
-                                    output.extend_from_slice(param_name);
+                                for (param_idx, (param_name, _)) in params.iter().enumerate() {
+                                    output.extend_from_slice(
+                                        format!("tmp->case_{}_{}", case_offset, param_idx)
+                                            .as_bytes(),
+                                    );
                                     output.extend_from_slice(b" = ");
+                                    output.extend_from_slice(
+                                        format!("case_{}_{}; /* ", case_offset, param_idx)
+                                            .as_bytes(),
+                                    );
                                     output.extend_from_slice(param_name);
-                                    output.extend_from_slice(b";\n");
+                                    output.extend_from_slice(b" */\n");
                                 }
                             }
                             EnumVariant::Simple { .. } => {}
@@ -679,7 +701,35 @@ impl Codegen {
             AstNode::MemberAccess { target, field } => {
                 self.codegen_node(*target, output);
                 output.extend_from_slice(b"->");
-                self.codegen_node(*field, output);
+
+                let field_name = self.compiler.get_source(*field);
+                let type_id = self
+                    .compiler
+                    .get_underlying_type_id(self.compiler.get_node_type(*target));
+
+                // FIXME: we can do this because the fields are unique, but we probably want
+                // the resolution to tell us which one to use
+                match self.compiler.get_type(type_id) {
+                    Type::Struct { fields, .. } => {
+                        let mut found = false;
+                        for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
+                            if name == field_name {
+                                output.extend_from_slice(format!("field_{} /* ", idx).as_bytes());
+                                output.extend_from_slice(name);
+                                output.extend_from_slice(b" */ ");
+
+                                found = true;
+                            }
+                        }
+
+                        if !found {
+                            panic!("internal error: field could not be codegen'd: {:?}", target);
+                        }
+                    }
+                    x => {
+                        panic!("internal error: field access on non-struct: {:?}", x)
+                    }
+                }
             }
             AstNode::MethodCall { call, .. } => {
                 self.codegen_node(*call, output);
@@ -868,21 +918,28 @@ impl Codegen {
                                                             Type::Enum { variants, .. } => {
                                                                 match &variants[case_offset.0] {
                                                                     EnumVariant::Single {
-                                                                        name,
                                                                         ..
                                                                     } => {
                                                                         variable_assignments
                                                                             .extend_from_slice(
-                                                                                name,
+                                                                                format!(
+                                                                                    "case_{}",
+                                                                                    case_offset.0
+                                                                                )
+                                                                                .as_bytes(),
                                                                             );
                                                                     }
                                                                     EnumVariant::Struct {
-                                                                        params,
                                                                         ..
                                                                     } => {
                                                                         variable_assignments
                                                                             .extend_from_slice(
-                                                                                &params[arg_idx].0,
+                                                                                format!(
+                                                                                    "case_{}_{}",
+                                                                                    case_offset.0,
+                                                                                    arg_idx
+                                                                                )
+                                                                                .as_bytes(),
                                                                             );
                                                                     }
                                                                     _ => panic!(

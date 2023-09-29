@@ -1,0 +1,9 @@
+// output: 3.140000
+
+struct 🦈 {
+    🥧:f64
+}
+
+let shark = new 🦈(🥧: 3.14)
+
+println(shark.🥧)
