@@ -1017,8 +1017,11 @@ impl Codegen {
                     if let Some(scope_level) = self.compiler.blocks[block_id.0].may_locally_allocate
                     {
                         output.extend_from_slice(
-                            format!("deallocate(allocator, allocation_id + {});\n", scope_level)
-                                .as_bytes(),
+                            format!(
+                                "free_allocator_level(allocator, allocation_id + {});\n",
+                                scope_level
+                            )
+                            .as_bytes(),
                         );
                     }
                     if return_expr.is_some() {
@@ -1034,7 +1037,11 @@ impl Codegen {
             }
             if let Some(scope_level) = self.compiler.blocks[block_id.0].may_locally_allocate {
                 output.extend_from_slice(
-                    format!("deallocate(allocator, allocation_id + {});\n", scope_level).as_bytes(),
+                    format!(
+                        "free_allocator_level(allocator, allocation_id + {});\n",
+                        scope_level
+                    )
+                    .as_bytes(),
                 );
             }
         } else {
@@ -1059,7 +1066,7 @@ impl Codegen {
 
             if name == b"main" {
                 output.extend_from_slice(b"int main() {\n");
-                output.extend_from_slice(b"allocator = create_allocator(DEFAULT_PAGE_SIZE);\n");
+                output.extend_from_slice(b"allocator = create_allocator(100);\n");
                 output.extend_from_slice(b"function_");
                 output.extend_from_slice(idx.to_string().as_bytes());
                 output.extend_from_slice(b"(0);\n}\n");
