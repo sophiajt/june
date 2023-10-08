@@ -6,7 +6,7 @@
 #include <string.h>
 
 const long DEFAULT_PAGE_SIZE = 1024;
-const int DEBUG_ZEROING = 1;
+const bool DEBUG_ZEROING = true;
 
 struct ResourceCleanup
 {
