@@ -7,7 +7,7 @@ struct Employee {
 
 fun main() {
     mut x = 1
-    while x < 12 {
+    while x < 10000000 {
         let employee = new Employee(name: "Bob", age: 123)
         x = x + 1
     }

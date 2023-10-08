@@ -1,226 +1,307 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
-const int DEFAULT_PAGE_SIZE = 1024;
-#define max_of(x, y) (x) >= (y) ? (x) : (y)
+const long DEFAULT_PAGE_SIZE = 1024;
+const int DEBUG_ZEROING = 1;
+
+struct ResourceCleanup
+{
+    void *resource;
+    void (*cleanup_fun)(void *);
+
+    struct ResourceCleanup *next;
+};
+
+struct AllocatorPage
+{
+    void *block;
+    void *next_free;
+    long amt_free;
+};
+
+struct AllocatorLevel
+{
+    int num_pages;
+    struct AllocatorPage **pages;
+    struct ResourceCleanup *cleanups;
+};
 
 struct Allocator
 {
-    void *contents;
-    long capacity;
-    struct Allocator *next;
+    int num_levels;
+    struct AllocatorLevel **levels;
 };
+
+void print_allocator_level(struct AllocatorLevel *allocator_level)
+{
+    printf("  Resource cleanup: %p\n", allocator_level->cleanups);
+    printf("  Number of pages: %i\n", allocator_level->num_pages);
+
+    for (int i = 0; i < allocator_level->num_pages; ++i)
+    {
+        printf("    Page: %i\n", i);
+        printf("      Block: %p\n", allocator_level->pages[i]->block);
+        printf("      Next free: %p\n", allocator_level->pages[i]->next_free);
+        printf("      Remaining: %li\n", allocator_level->pages[i]->amt_free);
+    }
+}
 
 void print_allocator(struct Allocator *allocator)
 {
     long index = 0;
     long page = 0;
 
-    do
+    printf("--[Allocator]--\n");
+
+    for (int i = 0; i < allocator->num_levels; ++i)
     {
-        long current_offset = 0;
-
-        // FIXME: we should have the allocator capacity here?
-        while (current_offset < allocator->capacity)
+        if (allocator->levels[i] != NULL)
         {
-            long id = *(long *)(allocator->contents + current_offset);
-            long size = *(long *)(allocator->contents + current_offset + sizeof(id));
-            void *contents = (allocator->contents + current_offset + sizeof(id) + sizeof(size));
-
-            printf("-------\n");
-            printf("page: %li\n", page);
-            printf("index: %li\n", index);
-            if (id == 0)
-            {
-                printf("FREE MEM\n");
-            }
-            else
-            {
-                printf("id: %li\n", id);
-            }
-            printf("size: %li\n", size);
-            printf("contents: %p\n", contents);
-            printf("-------\n");
-
-            current_offset += sizeof(id) + sizeof(size) + size;
-            ++index;
+            printf("Allocator level: %i\n", i);
+            print_allocator_level(allocator->levels[i]);
         }
-
-        ++page;
-
-        allocator = allocator->next;
-    } while (allocator != NULL);
+    }
 }
 
-struct Allocator *create_allocator(long size)
+struct Allocator *create_allocator(int num_default_levels)
 {
     struct Allocator *allocator = (struct Allocator *)malloc(sizeof(struct Allocator));
 
-    allocator->contents = malloc(size);
-    allocator->capacity = size;
-
-    // ID: 0 means the unused identifier
-    *((long *)allocator->contents) = 0;
-    *((long *)(allocator->contents + sizeof(long))) = size - sizeof(long) - sizeof(long);
-
-    // printf("new allocator page of size: %li\n", size);
-
-    allocator->next = NULL;
+    allocator->levels = (struct AllocatorLevel **)malloc(num_default_levels * sizeof(struct AllocatorLevel *));
+    memset(allocator->levels, 0, num_default_levels * sizeof(struct AllocatorLevel *));
+    allocator->num_levels = num_default_levels;
 
     return allocator;
 }
 
-void delete_allocator(struct Allocator *allocator)
+void grow_allocator_levels(struct Allocator *allocator, int level)
 {
-    free(allocator->contents);
-    free(allocator);
+    // keep levels at a multiple of 10 as we grow to cut down on the number
+    // of times we do this, plus one because of zero-base
+    level += (10 - level % 10) + 1;
+
+    allocator->levels = (struct AllocatorLevel **)realloc(allocator->levels, level * sizeof(struct AllocatorLevel *));
+    memset(allocator->levels + allocator->num_levels * sizeof(struct Allocator *), 0, (level - allocator->num_levels) * sizeof(struct AllocatorLevel *));
 }
 
-void *allocate(struct Allocator *allocator, long size, long id)
+void create_allocator_level(struct Allocator *allocator, int level)
 {
-    if (size % 8 != 0)
+    if (allocator->num_levels <= level)
     {
-        // align to 64-bit
-        size = size + (8 - (size % 8));
+        grow_allocator_levels(allocator, level);
     }
 
-    struct Allocator *current = allocator;
+    // don't want to create a level where there already is one
+    assert(allocator->levels[level] == NULL);
 
-    while (1)
+    allocator->levels[level] = (struct AllocatorLevel *)malloc(sizeof(struct AllocatorLevel));
+    allocator->levels[level]->num_pages = 0;
+    allocator->levels[level]->pages = NULL;
+    allocator->levels[level]->cleanups = NULL;
+}
+
+void add_resource_cleanup(struct Allocator *allocator, int level, void *resource, void (*cleanup_fun)(void *))
+{
+    if (allocator->num_levels <= level)
     {
-        long offset = 0;
+        grow_allocator_levels(allocator, level);
+    }
 
-        while (offset < current->capacity)
-        {
-            long current_id = *(long *)(current->contents + offset);
-            long current_size = *(long *)(current->contents + offset + sizeof(id));
+    if (allocator->levels[level] == NULL)
+    {
+        create_allocator_level(allocator, level);
+    }
 
-            if ((current_id == 0) && (current_size >= size))
-            {
-                // We have found sufficient space
-                void *output = current->contents + offset + sizeof(id) + sizeof(size);
-                *(long *)(current->contents + offset) = id;
-                *(long *)(current->contents + offset + sizeof(id)) = size;
+    if (allocator->levels[level]->cleanups == NULL)
+    {
+        allocator->levels[level]->cleanups = (struct ResourceCleanup *)malloc(sizeof(struct ResourceCleanup));
+        allocator->levels[level]->cleanups->cleanup_fun = cleanup_fun;
+        allocator->levels[level]->cleanups->resource = resource;
+        allocator->levels[level]->cleanups->next = NULL;
+    }
+    else
+    {
+        struct ResourceCleanup *current = allocator->levels[level]->cleanups;
 
-                if (current_size >= size + sizeof(id) + sizeof(size))
-                {
-                    // Mark the remainder
-                    *(long *)(current->contents + offset + size + sizeof(id) + sizeof(size)) = 0;
-                    *(long *)(current->contents + offset + size + sizeof(id) + sizeof(size) + sizeof(id)) = current_size - (size + sizeof(id) + sizeof(size));
-                }
-
-                return output;
-            }
-            else
-            {
-                offset += *(long *)(current->contents + offset + sizeof(id)) + sizeof(id) + sizeof(size);
-            }
-        }
-
-        if (current->next != NULL)
+        while (current->next != NULL)
         {
             current = current->next;
         }
-        else
-        {
-            break;
-        }
+
+        current->next = (struct ResourceCleanup *)malloc(sizeof(struct ResourceCleanup));
+        current->next->cleanup_fun = cleanup_fun;
+        current->next->resource = resource;
+        current->next->next = NULL;
     }
-
-    // If we get here, we need to create a new page
-    long page_size = max_of(DEFAULT_PAGE_SIZE, size + sizeof(id) + sizeof(size));
-    struct Allocator *new_allocator = create_allocator(page_size);
-    current->next = new_allocator;
-
-    current = current->next;
-
-    *(long *)(current->contents) = id;
-    *(long *)(current->contents + sizeof(id)) = size;
-    void *output = current->contents + sizeof(id) + sizeof(size);
-
-    if (page_size == DEFAULT_PAGE_SIZE)
-    {
-        *(long *)(current->contents + sizeof(id) + sizeof(size) + size) = 0;
-        *(long *)(current->contents + sizeof(id) + sizeof(size) + size + sizeof(id)) = DEFAULT_PAGE_SIZE - sizeof(id) - sizeof(size) - size - sizeof(id) - sizeof(size);
-    }
-
-    return (current->contents + sizeof(id) + sizeof(size));
 }
 
-void deallocate(struct Allocator *allocator, long id)
+struct AllocatorPage *create_allocator_page()
 {
-    struct Allocator *current = allocator;
+    struct AllocatorPage *output = (struct AllocatorPage *)malloc(sizeof(struct AllocatorPage));
 
-    while (current != NULL)
+    output->block = NULL;
+    output->next_free = NULL;
+    output->amt_free = 0;
+
+    return output;
+}
+
+long calculate_default_size(long size)
+{
+    if (size < DEFAULT_PAGE_SIZE)
     {
-        long offset = 0;
-        long prev_empty_offset = 0;
+        return DEFAULT_PAGE_SIZE;
+    }
+    else if (size > (4 * 1024 * 1024))
+    {
+        // large allocation, just fit the allocation instead of having extra
+        return size;
+    }
+    else
+    {
+        // a note on alignment: in theory, since we're using structs/unions
+        // I *hope* the C requirements will keep us memory aligned even
+        // though we're doing our own allocations by requesting aligned sizes.
+        return size + 1024;
+    }
+}
 
-        while (offset < current->capacity)
-        {
-            long current_id = *(long *)(current->contents + offset);
-            long current_size = *(long *)(current->contents + offset + sizeof(id));
+void *allocate_on_allocator_level(struct AllocatorLevel *allocator_level, long size)
+{
+    if (allocator_level->num_pages == 0)
+    {
+        allocator_level->pages = (struct AllocatorPage **)malloc(sizeof(struct AllocatorPage *));
+        allocator_level->pages[0] = create_allocator_page();
 
-            if (current_id == id)
-            {
-                *(long *)(current->contents + offset) = 0;
-                // For debug purposes, totally clear the memory
-                memset((current->contents + offset + sizeof(id) + sizeof(current_size)), 0, current_size);
-
-                if (prev_empty_offset != offset)
-                {
-                    *(long *)(current->contents + prev_empty_offset + sizeof(id)) += current_size + sizeof(id) + sizeof(current_size);
-                }
-                offset += *(long *)(current->contents + offset + sizeof(id)) + sizeof(id) + sizeof(current_size);
-            }
-            else if (current_id == 0)
-            {
-                // Remember this, because we might compact the empty space
-                if (prev_empty_offset != offset)
-                {
-                    *(long *)(current->contents + prev_empty_offset + sizeof(id)) += current_size + sizeof(id) + sizeof(current_size);
-                }
-
-                prev_empty_offset = offset;
-                offset += *(long *)(current->contents + offset + sizeof(id)) + sizeof(id) + sizeof(current_size);
-            }
-            else
-            {
-                offset += *(long *)(current->contents + offset + sizeof(id)) + sizeof(id) + sizeof(current_size);
-                prev_empty_offset = offset;
-            }
-        }
-
-        current = current->next;
+        allocator_level->num_pages = 1;
     }
 
-    // Last compaction step, deallocate pages which are no longer needed
-    current = allocator;
-    struct Allocator *next = current->next;
-
-    while (next != NULL)
+    for (int i = 0; i < allocator_level->num_pages; ++i)
     {
-        long current_id = *(long *)(next->contents);
-        long current_size = *(long *)(next->contents + sizeof(id));
-
-        if ((current_id == 0) && (current_size == (next->capacity - sizeof(current_id) - sizeof(current_size))))
+        if (allocator_level->pages[i]->block == NULL)
         {
-            // The whole page is empty
-            current->next = next->next;
-            delete_allocator(next);
-            next = current->next;
+            // We have a page that hasn't been used yet
+            long default_size = calculate_default_size(size);
+            allocator_level->pages[i]->block = malloc(default_size);
+            void *output = allocator_level->pages[i]->block;
+            allocator_level->pages[i]->next_free = allocator_level->pages[i]->block + size;
+            allocator_level->pages[i]->amt_free = default_size - size;
+
+            return output;
+        }
+        else if (allocator_level->pages[i]->amt_free >= size)
+        {
+            void *output = allocator_level->pages[i]->next_free;
+            allocator_level->pages[i]->next_free += size;
+            allocator_level->pages[i]->amt_free -= size;
+
+            return output;
+        }
+    }
+
+    // We can't find any pages that can hold what we have, so let's make a new one
+    allocator_level->pages = realloc(allocator_level->pages, sizeof(struct AllocatorPage *) * (allocator_level->num_pages + 1));
+    allocator_level->pages[allocator_level->num_pages] = create_allocator_page();
+
+    long default_size = calculate_default_size(size);
+    allocator_level->pages[allocator_level->num_pages]->block = malloc(default_size);
+    void *output = allocator_level->pages[allocator_level->num_pages]->block;
+    allocator_level->pages[allocator_level->num_pages]->next_free = allocator_level->pages[allocator_level->num_pages]->block + size;
+    allocator_level->pages[allocator_level->num_pages]->amt_free = default_size - size;
+
+    ++allocator_level->num_pages;
+
+    return output;
+}
+
+void free_allocator_level(struct Allocator *allocator, int level)
+{
+    if (allocator->levels[level] == NULL)
+    {
+        return;
+    }
+
+    struct AllocatorLevel *allocator_level = allocator->levels[level];
+
+    // 1) Start with the resource cleanup
+
+    while (allocator_level->cleanups != NULL)
+    {
+        allocator_level->cleanups->cleanup_fun(allocator_level->cleanups->resource);
+        struct ResourceCleanup *old = allocator_level->cleanups;
+        allocator_level->cleanups = allocator_level->cleanups->next;
+
+        free(old);
+    }
+
+    // 2) Then, do memory cleanup
+
+    if (allocator_level->num_pages == 0)
+    {
+        return;
+    }
+
+    // Only free the first page if it's too big
+    if ((allocator_level->pages[0]->next_free - allocator_level->pages[0]->block + allocator_level->pages[0]->amt_free) > DEFAULT_PAGE_SIZE)
+    {
+        if (DEBUG_ZEROING)
+        {
+            memset(allocator_level->pages[0]->block, 0, allocator_level->pages[0]->next_free - allocator_level->pages[0]->block);
+            allocator_level->pages[0]->amt_free += allocator_level->pages[0]->next_free - allocator_level->pages[0]->block;
+            allocator_level->pages[0]->next_free = allocator_level->pages[0]->block;
         }
         else
         {
-            current = next;
-            next = current->next;
+            free(allocator_level->pages[0]->block);
+            allocator_level->pages[0]->block = NULL;
+            allocator_level->pages[0]->next_free = NULL;
+            allocator_level->pages[0]->amt_free = 0;
+        }
+    }
+    else
+    {
+        // Reuse the previous block if it's small enough
+        if (DEBUG_ZEROING)
+        {
+            memset(allocator_level->pages[0]->block, 0, allocator_level->pages[0]->next_free - allocator_level->pages[0]->block);
+        }
+        allocator_level->pages[0]->amt_free += (allocator_level->pages[0]->next_free - allocator_level->pages[0]->block);
+        allocator_level->pages[0]->next_free = allocator_level->pages[0]->block;
+    }
+
+    for (int i = 1; i < allocator_level->num_pages; ++i)
+    {
+        if (DEBUG_ZEROING)
+        {
+            memset(allocator_level->pages[i]->block, 0, allocator_level->pages[i]->next_free - allocator_level->pages[i]->block);
+            allocator_level->pages[i]->amt_free += allocator_level->pages[i]->next_free - allocator_level->pages[i]->block;
+            allocator_level->pages[i]->next_free = allocator_level->pages[i]->block;
+        }
+        else
+        {
+            free(allocator_level->pages[i]->block);
+            allocator_level->pages[i]->block = NULL;
+            allocator_level->pages[i]->next_free = NULL;
+            allocator_level->pages[i]->amt_free = 0;
         }
     }
 }
 
-// ===================
-// ==== USER CODE ====
-// ===================
+void *allocate(struct Allocator *allocator, long size, int level)
+{
+    if (level >= allocator->num_levels)
+    {
+        grow_allocator_levels(allocator, level);
+    }
+
+    if (allocator->levels[level] == NULL)
+    {
+        create_allocator_level(allocator, level);
+    }
+
+    return allocate_on_allocator_level(allocator->levels[level], size);
+}
