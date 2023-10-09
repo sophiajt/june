@@ -1,5 +1,10 @@
 # June, a safe, gradual systems language
 
+## Release TODO
+
+- [ ] Cleanup the VSCode directory
+- [ ] Write docs on June's design and usage
+
 ## Pointer types
 
 June has two fundamental pointer types: shared and owned.
