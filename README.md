@@ -1,4 +1,4 @@
-# June, a safe, gradual systems language
+# June, a gradual, safe systems language
 
 ## Release TODO
 
