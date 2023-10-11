@@ -779,30 +779,24 @@ impl Typechecker {
     }
 
     pub fn maybe_move_variable(&mut self, node_id: NodeId) {
-        match self.compiler.get_node(node_id) {
-            AstNode::Variable => {
-                let var = self.compiler.var_resolution.get(&node_id);
+        if let AstNode::Variable = self.compiler.get_node(node_id) {
+            let var = self.compiler.var_resolution.get(&node_id);
 
-                // Assume the mistyped variable error has already been reported
-                if let Some(var) = var {
-                    let var_type = self.compiler.variables[var.0].ty;
-                    let var_ty = self.compiler.get_type(var_type);
+            // Assume the mistyped variable error has already been reported
+            if let Some(var) = var {
+                let var_type = self.compiler.variables[var.0].ty;
+                let var_ty = self.compiler.get_type(var_type);
 
-                    match var_ty {
-                        Type::Pointer { pointer_type, .. } => {
-                            if pointer_type == &PointerType::Owned {
-                                self.scope
-                                    .last_mut()
-                                    .expect("internal error: missing scope frame")
-                                    .moved_owned_values
-                                    .insert(*var, node_id);
-                            }
-                        }
-                        _ => {}
+                if let Type::Pointer { pointer_type, .. } = var_ty {
+                    if pointer_type == &PointerType::Owned {
+                        self.scope
+                            .last_mut()
+                            .expect("internal error: missing scope frame")
+                            .moved_owned_values
+                            .insert(*var, node_id);
                     }
                 }
             }
-            _ => {}
         }
     }
 
@@ -849,9 +843,7 @@ impl Typechecker {
 
                 false
             }
-            AstNode::MemberAccess { target, .. } => {
-                return self.is_binding_mutable(*target);
-            }
+            AstNode::MemberAccess { target, .. } => self.is_binding_mutable(*target),
             _ => false,
         }
     }
@@ -1560,13 +1552,7 @@ impl Typechecker {
 
                 true
             }
-            Type::Pointer { pointer_type, .. } => {
-                if pointer_type != &PointerType::Owned {
-                    false
-                } else {
-                    true
-                }
-            }
+            Type::Pointer { pointer_type, .. } => pointer_type == &PointerType::Owned,
             _ => true,
         }
     }
@@ -1690,7 +1676,7 @@ impl Typechecker {
                 }
             }
 
-            let output_type = if !replacements.is_empty() {
+            if !replacements.is_empty() {
                 let type_id = self.instantiate_generic(type_id, &replacements);
 
                 self.compiler.find_or_create_type(Type::Pointer {
@@ -1700,9 +1686,7 @@ impl Typechecker {
                 })
             } else {
                 output_type
-            };
-
-            output_type
+            }
         } else {
             self.error("expected an allocation call", node_id);
             UNKNOWN_TYPE_ID
@@ -1886,25 +1870,22 @@ impl Typechecker {
                         let case_name = self.compiler.get_source(item);
 
                         for (case_offset, case) in cases.iter().enumerate() {
-                            match case {
-                                EnumVariant::Simple { name } => {
-                                    if name == case_name {
-                                        self.compiler.call_resolution.insert(
-                                            item,
-                                            CallTarget::EnumConstructor(
-                                                type_id,
-                                                CaseOffset(case_offset),
-                                            ),
-                                        );
+                            if let EnumVariant::Simple { name } = case {
+                                if name == case_name {
+                                    self.compiler.call_resolution.insert(
+                                        item,
+                                        CallTarget::EnumConstructor(
+                                            type_id,
+                                            CaseOffset(case_offset),
+                                        ),
+                                    );
 
-                                        return self.compiler.find_or_create_type(Type::Pointer {
-                                            pointer_type: PointerType::Shared,
-                                            optional: false,
-                                            target: type_id,
-                                        });
-                                    }
+                                    return self.compiler.find_or_create_type(Type::Pointer {
+                                        pointer_type: PointerType::Shared,
+                                        optional: false,
+                                        target: type_id,
+                                    });
                                 }
-                                _ => {}
                             }
                         }
 
@@ -1966,11 +1947,7 @@ impl Typechecker {
             Type::Enum { variants, .. } => {
                 let variants = variants.clone();
 
-                let mut seen_variants = vec![];
-
-                for _ in 0..variants.len() {
-                    seen_variants.push(false);
-                }
+                let mut seen_variants = vec![false; variants.len()];
 
                 'arm: for (arm_pattern, arm_result) in match_arms {
                     self.enter_scope();
@@ -2017,23 +1994,22 @@ impl Typechecker {
                                             let arm_name = self.compiler.get_source(item);
 
                                             for (idx, variant) in variants.iter().enumerate() {
-                                                match variant {
-                                                    EnumVariant::Simple { name: variant_name } => {
-                                                        if variant_name == arm_name {
-                                                            self.compiler.call_resolution.insert(
-                                                                arm_pattern,
-                                                                CallTarget::EnumConstructor(
-                                                                    inner_type_id,
-                                                                    CaseOffset(idx),
-                                                                ),
-                                                            );
-                                                            self.typecheck_node(arm_result);
-                                                            seen_variants[idx] = true;
-                                                            self.exit_scope();
-                                                            continue 'arm;
-                                                        }
+                                                if let EnumVariant::Simple { name: variant_name } =
+                                                    variant
+                                                {
+                                                    if variant_name == arm_name {
+                                                        self.compiler.call_resolution.insert(
+                                                            arm_pattern,
+                                                            CallTarget::EnumConstructor(
+                                                                inner_type_id,
+                                                                CaseOffset(idx),
+                                                            ),
+                                                        );
+                                                        self.typecheck_node(arm_result);
+                                                        seen_variants[idx] = true;
+                                                        self.exit_scope();
+                                                        continue 'arm;
                                                     }
-                                                    _ => {}
                                                 }
                                             }
 
@@ -2144,21 +2120,21 @@ impl Typechecker {
                             EnumVariant::Simple { name } => self.error(
                                 format!(
                                     "missing pattern match for {}",
-                                    String::from_utf8_lossy(&name)
+                                    String::from_utf8_lossy(name)
                                 ),
                                 target,
                             ),
                             EnumVariant::Single { name, .. } => self.error(
                                 format!(
                                     "missing pattern match for {}(..)",
-                                    String::from_utf8_lossy(&name)
+                                    String::from_utf8_lossy(name)
                                 ),
                                 target,
                             ),
                             EnumVariant::Struct { name, .. } => self.error(
                                 format!(
                                     "missing pattern match for {}(..)",
-                                    String::from_utf8_lossy(&name)
+                                    String::from_utf8_lossy(name)
                                 ),
                                 target,
                             ),

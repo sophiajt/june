@@ -2215,7 +2215,7 @@ impl Parser {
         }
 
         if self.span_offset == span_position {
-            return None;
+            None
         } else {
             let output = Some(Token {
                 token_type: TokenType::Newline,
@@ -2223,7 +2223,7 @@ impl Parser {
                 span_end: span_position,
             });
             self.span_offset = span_position;
-            return output;
+            output
         }
     }
 

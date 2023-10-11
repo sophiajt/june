@@ -587,30 +587,25 @@ impl LifetimeChecker {
 
                 if matches!(self.compiler.get_node(item), AstNode::Variable) {
                     self.expand_lifetime_with_node(item, node_id);
-                } else {
-                    match self.compiler.get_node(item) {
-                        AstNode::Call { args, .. } => {
-                            let node_type_id = self.compiler.get_node_type(node_id);
-                            let node_type = self
-                                .compiler
-                                .get_type(self.compiler.get_underlying_type_id(node_type_id));
-                            if matches!(node_type, Type::Enum { .. }) {
-                                // FIXME: clone
-                                let args = args.clone();
+                } else if let AstNode::Call { args, .. } = self.compiler.get_node(item) {
+                    let node_type_id = self.compiler.get_node_type(node_id);
+                    let node_type = self
+                        .compiler
+                        .get_type(self.compiler.get_underlying_type_id(node_type_id));
+                    if matches!(node_type, Type::Enum { .. }) {
+                        // FIXME: clone
+                        let args = args.clone();
 
-                                self.expand_lifetime_with_node(item, node_id);
-                                self.check_node_lifetime(item, scope_level);
+                        self.expand_lifetime_with_node(item, node_id);
+                        self.check_node_lifetime(item, scope_level);
 
-                                for arg in args {
-                                    self.expand_lifetime_with_node(arg, item);
-                                    self.check_node_lifetime(arg, scope_level);
-                                }
-                            } else {
-                                self.expand_lifetime_with_node(item, node_id);
-                                self.check_node_lifetime(item, scope_level);
-                            }
+                        for arg in args {
+                            self.expand_lifetime_with_node(arg, item);
+                            self.check_node_lifetime(arg, scope_level);
                         }
-                        _ => {}
+                    } else {
+                        self.expand_lifetime_with_node(item, node_id);
+                        self.check_node_lifetime(item, scope_level);
                     }
                 }
             }

@@ -497,10 +497,12 @@ impl Codegen {
                 output.push(b')');
             }
             AstNode::Call { head, args } => {
-                let call_target = self.compiler.call_resolution.get(head).expect(&format!(
-                    "internal error: missing call resolution in codegen: {:?}",
-                    head
-                ));
+                let call_target = self.compiler.call_resolution.get(head).unwrap_or_else(|| {
+                    panic!(
+                        "internal error: missing call resolution in codegen: {:?}",
+                        head
+                    )
+                });
 
                 match call_target {
                     CallTarget::Function(fun_id) => {
