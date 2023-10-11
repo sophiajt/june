@@ -1,0 +1,13 @@
+// error: public field is a shared pointer
+
+struct Stats {
+    age: i64
+}
+
+struct Foo {
+    stats: Stats
+}
+
+fun main() {
+    let foo = new owned Foo(stats: new Stats(age: 88))
+}

@@ -1,4 +1,4 @@
-// error: return type is not alias-safe
+// error: return type is a shared pointer
 
 struct Stats {
     age: i64
@@ -7,8 +7,8 @@ struct Stats {
 struct Foo {
     private stats: Stats
 
-    fun create(age: i64) -> safe Foo {
-        return new safe Foo(stats: new Stats(age: age))
+    fun create(age: i64) -> owned Foo {
+        return new owned Foo(stats: new Stats(age: age))
     }
 
     fun get_stats(self) -> Stats {

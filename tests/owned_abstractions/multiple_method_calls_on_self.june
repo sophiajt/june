@@ -12,8 +12,8 @@ struct Foo {
         .y = new_y
     }
 
-    fun create() -> safe Foo {
-        return new safe Foo(x: 0, y: 0)
+    fun create() -> owned Foo {
+        return new owned Foo(x: 0, y: 0)
     }
 }
 

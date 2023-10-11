@@ -8,8 +8,8 @@ struct Node {
 struct CircularList {
     private node: Node?
 
-    fun default() -> safe CircularList {
-        return new safe CircularList(node: none)
+    fun default() -> owned CircularList {
+        return new owned CircularList(node: none)
     }
 
     fun push(mut self, data: i64) {
@@ -34,7 +34,7 @@ struct CircularList {
     }
 }
 
-fun helper() -> safe CircularList {
+fun helper() -> owned CircularList {
     let list = CircularList::default()
 
     return list

@@ -9,7 +9,7 @@ struct Foo {
 }
 
 
-let foo = new safe Foo(z: 100)
+let foo = new owned Foo(z: 100)
 
 foo.bar(foo)
 

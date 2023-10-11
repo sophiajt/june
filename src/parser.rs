@@ -10,7 +10,7 @@ pub struct Parser {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PointerType {
     Shared,
-    AliasSafe,
+    Owned,
     Unknown,
 }
 
@@ -1444,9 +1444,9 @@ impl Parser {
     }
 
     pub fn typename(&mut self) -> NodeId {
-        let pointer_type = if self.is_keyword(b"safe") {
+        let pointer_type = if self.is_keyword(b"owned") {
             self.next();
-            PointerType::AliasSafe
+            PointerType::Owned
         } else {
             PointerType::Shared
         };
@@ -1611,9 +1611,9 @@ impl Parser {
         let span_start = self.position();
         self.keyword(b"new");
 
-        let pointer_type = if self.is_keyword(b"safe") {
+        let pointer_type = if self.is_keyword(b"owned") {
             self.next();
-            PointerType::AliasSafe
+            PointerType::Owned
         } else {
             PointerType::Shared
         };

@@ -444,28 +444,28 @@ fn move_ptr() -> TestResult {
 }
 
 #[test]
-fn moved_safe_var_error() -> TestResult {
-    test_example("safe_abstractions/moved_safe_var_error")
+fn moved_owned_var_error() -> TestResult {
+    test_example("owned_abstractions/moved_owned_var_error")
 }
 
 #[test]
-fn moved_safe_var_error2() -> TestResult {
-    test_example("safe_abstractions/moved_safe_var_error2")
+fn moved_owned_var_error2() -> TestResult {
+    test_example("owned_abstractions/moved_owned_var_error2")
 }
 
 #[test]
-fn moved_safe_var_error3() -> TestResult {
-    test_example("safe_abstractions/moved_safe_var_error3")
+fn moved_owned_var_error3() -> TestResult {
+    test_example("owned_abstractions/moved_owned_var_error3")
 }
 
 #[test]
-fn moved_safe_var_into_shared_error() -> TestResult {
-    test_example("safe_abstractions/moved_safe_var_into_shared_error")
+fn moved_owned_var_into_shared_error() -> TestResult {
+    test_example("owned_abstractions/moved_owned_var_into_shared_error")
 }
 
 #[test]
 fn multiple_method_calls_on_self() -> TestResult {
-    test_example("safe_abstractions/multiple_method_calls_on_self")
+    test_example("owned_abstractions/multiple_method_calls_on_self")
 }
 
 #[test]
@@ -504,38 +504,38 @@ fn return_value() -> TestResult {
 }
 
 #[test]
-fn safe_method_doesnt_permanently_move() -> TestResult {
-    test_example("safe_abstractions/safe_method_doesnt_permanently_move")
+fn owned_method_doesnt_permanently_move() -> TestResult {
+    test_example("owned_abstractions/owned_method_doesnt_permanently_move")
 }
 
 #[test]
-fn safe_struct() -> TestResult {
-    test_example("safe_abstractions/safe_struct")
+fn owned_struct() -> TestResult {
+    test_example("owned_abstractions/owned_struct")
 }
 
 #[test]
-fn safe_struct_private() -> TestResult {
-    test_example("safe_abstractions/safe_struct_private")
+fn owned_struct_private() -> TestResult {
+    test_example("owned_abstractions/owned_struct_private")
 }
 
 #[test]
-fn safe_struct_private2() -> TestResult {
-    test_example("safe_abstractions/safe_struct_private2")
+fn owned_struct_private2() -> TestResult {
+    test_example("owned_abstractions/owned_struct_private2")
 }
 
 #[test]
-fn safe_struct_error() -> TestResult {
-    test_example("safe_abstractions/safe_struct_error")
+fn owned_struct_error() -> TestResult {
+    test_example("owned_abstractions/owned_struct_error")
 }
 
 #[test]
-fn safe_struct_error2() -> TestResult {
-    test_example("safe_abstractions/safe_struct_error2")
+fn owned_struct_error2() -> TestResult {
+    test_example("owned_abstractions/owned_struct_error2")
 }
 
 #[test]
-fn safe_struct_error3() -> TestResult {
-    test_example("safe_abstractions/safe_struct_error3")
+fn owned_struct_error3() -> TestResult {
+    test_example("owned_abstractions/owned_struct_error3")
 }
 
 #[test]

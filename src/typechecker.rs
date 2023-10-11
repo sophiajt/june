@@ -115,7 +115,7 @@ pub struct Scope {
     functions: HashMap<Vec<u8>, FunId>,
     types: HashMap<Vec<u8>, TypeId>,
     expected_return_type: Option<TypeId>,
-    moved_safe_values: HashMap<VarId, NodeId>,
+    moved_owned_values: HashMap<VarId, NodeId>,
 }
 
 impl Scope {
@@ -125,7 +125,7 @@ impl Scope {
             functions: HashMap::new(),
             types: HashMap::new(),
             expected_return_type: None,
-            moved_safe_values: HashMap::new(),
+            moved_owned_values: HashMap::new(),
         }
     }
 }
@@ -770,7 +770,7 @@ impl Typechecker {
 
     pub fn var_was_previously_moved(&self, var_id: VarId) -> Option<NodeId> {
         for scope_frame in self.scope.iter().rev() {
-            if let Some(where_moved) = scope_frame.moved_safe_values.get(&var_id) {
+            if let Some(where_moved) = scope_frame.moved_owned_values.get(&var_id) {
                 return Some(*where_moved);
             }
         }
@@ -790,11 +790,11 @@ impl Typechecker {
 
                     match var_ty {
                         Type::Pointer { pointer_type, .. } => {
-                            if pointer_type == &PointerType::AliasSafe {
+                            if pointer_type == &PointerType::Owned {
                                 self.scope
                                     .last_mut()
                                     .expect("internal error: missing scope frame")
-                                    .moved_safe_values
+                                    .moved_owned_values
                                     .insert(*var, node_id);
                             }
                         }
@@ -826,13 +826,13 @@ impl Typechecker {
             ) => {
                 // We allow for unknown pointer types to assign in from the other types,
                 // which allows us to not have to guess how `self` will be used
-                // Also, if a safe pointer is assigned to a shared pointer, then we'll
-                // allow the move into a shared pointer, effectively removing the alias-safety.
+                // Also, if an owned pointer is assigned to a shared pointer, then we'll
+                // allow the move into a shared pointer, effectively removing the owned-ness.
                 // We can do this because the ownership will move.
                 (pointer_type_lhs == &PointerType::Unknown
                     || pointer_type_lhs == pointer_type_rhs
                     || (pointer_type_lhs == &PointerType::Shared
-                        && pointer_type_rhs == &PointerType::AliasSafe))
+                        && pointer_type_rhs == &PointerType::Owned))
                     && target_lhs == target_rhs
                     && (*optional_lhs || optional_lhs == optional_rhs)
             }
@@ -1440,7 +1440,7 @@ impl Typechecker {
         }
     }
 
-    pub fn type_is_alias_safe(&mut self, type_id: TypeId) -> bool {
+    pub fn type_is_owned(&mut self, type_id: TypeId) -> bool {
         match self.compiler.get_type(type_id) {
             Type::Bool | Type::F64 | Type::I64 | Type::Void => true,
             Type::Enum {
@@ -1453,7 +1453,7 @@ impl Typechecker {
                 let variants = variants.clone();
 
                 for generic_param in generic_params {
-                    if !self.type_is_alias_safe(generic_param) {
+                    if !self.type_is_owned(generic_param) {
                         return false;
                     }
                 }
@@ -1461,13 +1461,13 @@ impl Typechecker {
                 for variant in variants {
                     match variant {
                         EnumVariant::Single { param, .. } => {
-                            if !self.type_is_alias_safe(param) {
+                            if !self.type_is_owned(param) {
                                 return false;
                             }
                         }
                         EnumVariant::Struct { params, .. } => {
                             for (_, param_type) in params {
-                                if !self.type_is_alias_safe(param_type) {
+                                if !self.type_is_owned(param_type) {
                                     return false;
                                 }
                             }
@@ -1489,7 +1489,7 @@ impl Typechecker {
                 let methods = methods.clone();
 
                 for generic_param in generic_params {
-                    if !self.type_is_alias_safe(generic_param) {
+                    if !self.type_is_owned(generic_param) {
                         return false;
                     }
                 }
@@ -1501,9 +1501,8 @@ impl Typechecker {
                     ..
                 } in fields
                 {
-                    if member_access == MemberAccess::Public && !self.type_is_alias_safe(field_type)
-                    {
-                        self.note("public field is not alias-safe", where_defined);
+                    if member_access == MemberAccess::Public && !self.type_is_owned(field_type) {
+                        self.note("public field is a shared pointer", where_defined);
                         return false;
                     }
                 }
@@ -1540,9 +1539,9 @@ impl Typechecker {
                             let var_type_id = var.ty;
                             let where_defined = var.where_defined;
 
-                            if !self.type_is_alias_safe(var_type_id) && param.name != b"self" {
+                            if !self.type_is_owned(var_type_id) && param.name != b"self" {
                                 self.note(
-                                    "param is not alias-safe, and self is mutable",
+                                    "param is a shared pointer, and self is mutable",
                                     where_defined,
                                 );
                                 return false;
@@ -1550,9 +1549,9 @@ impl Typechecker {
                         }
                     }
 
-                    if !self.type_is_alias_safe(return_type) {
+                    if !self.type_is_owned(return_type) {
                         if let Some(return_node) = return_node {
-                            self.note("return type is not alias-safe", return_node);
+                            self.note("return type is a shared pointer", return_node);
                         }
 
                         return false;
@@ -1562,7 +1561,7 @@ impl Typechecker {
                 true
             }
             Type::Pointer { pointer_type, .. } => {
-                if pointer_type != &PointerType::AliasSafe {
+                if pointer_type != &PointerType::Owned {
                     false
                 } else {
                     true
@@ -1590,11 +1589,11 @@ impl Typechecker {
                 target: type_id,
             });
 
-            // FIXME: remember the reason why something isn't alias-safe
+            // FIXME: remember the reason why something isn't safe to be owned
             // so we can give a better error
-            if pointer_type == PointerType::AliasSafe && !self.type_is_alias_safe(type_id) {
+            if pointer_type == PointerType::Owned && !self.type_is_owned(type_id) {
                 self.error(
-                    "tried to create safe pointer on type that isn't alias-safe",
+                    "tried to create owned pointer on type that shares its pointers",
                     node_id,
                 );
             }

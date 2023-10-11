@@ -5,7 +5,7 @@ struct Foo {
 }
 
 fun main() {
-    let foo = new safe Foo(x: 88)
+    let foo = new owned Foo(x: 88)
 
     println(foo.x)
 }

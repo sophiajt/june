@@ -734,6 +734,11 @@
                     "match": "\\bnew\\b"
                 },
                 {
+                    "comment": "owned",
+                    "name": "storage.modifier.owned.june",
+                    "match": "\\bowned\\b"
+                },
+                {
                     "comment": "logical operators",
                     "name": "keyword.operator.logical.june",
                     "match": "(\\^|\\||\\|\\||&&|<<|>>|!)(?!=)"

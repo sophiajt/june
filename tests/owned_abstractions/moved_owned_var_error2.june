@@ -4,8 +4,12 @@ struct Foo {
     z: i64
 }
 
-let foo = new safe Foo(z: 100)
+fun bar(abc: Foo) {
 
-let y = foo
+}
+
+let foo = new owned Foo(z: 100)
+
+bar(foo)
 
 println(foo.z)
