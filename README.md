@@ -1,4 +1,9 @@
-# June, a safe, gradual systems language
+# June, a gradual, safe systems language
+
+## Release TODO
+
+- [ ] Cleanup the VSCode directory
+- [ ] Write docs on June's design and usage
 
 ## Pointer types
 
