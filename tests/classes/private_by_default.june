@@ -1,0 +1,7 @@
+// error: 'new' used on private member field from outside struct or class
+
+class Foo {
+    x: i64
+}
+
+let foo = new Foo(x: 100)

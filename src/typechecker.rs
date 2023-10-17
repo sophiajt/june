@@ -1631,10 +1631,10 @@ impl Typechecker {
                                     if let Some(scoped_type_id) = result {
                                         if scoped_type_id != &type_id {
                                             // FIXME: add a hint to say you need to create your own constructor
-                                            self.error("'new' used on private member field from outside struct", arg)
+                                            self.error("'new' used on private member field from outside struct or class", arg)
                                         }
                                     } else {
-                                        self.error("'new' used on private member field from outside struct", arg)
+                                        self.error("'new' used on private member field from outside struct or class", arg)
                                     }
                                 }
                                 let known_field_type = *ty;

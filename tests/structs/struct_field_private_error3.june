@@ -1,4 +1,4 @@
-// error: 'new' used on private member field from outside struct
+// error: 'new' used on private member field from outside struct or class
 
 struct Stats {
     private age: i64

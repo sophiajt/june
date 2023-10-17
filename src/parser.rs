@@ -722,7 +722,9 @@ impl Parser {
             } else if self.is_keyword(b"fun") {
                 code_body.push(self.fun_definition());
             } else if self.is_keyword(b"struct") {
-                code_body.push(self.struct_definition());
+                code_body.push(self.class_struct_definition(false));
+            } else if self.is_keyword(b"class") {
+                code_body.push(self.class_struct_definition(true));
             } else if self.is_keyword(b"enum") {
                 code_body.push(self.enum_definition());
             } else if self.is_keyword(b"let") {
@@ -840,14 +842,18 @@ impl Parser {
         )
     }
 
-    pub fn struct_definition(&mut self) -> NodeId {
+    pub fn class_struct_definition(&mut self, private_by_default: bool) -> NodeId {
         let mut fields = vec![];
         let mut methods = vec![];
 
         let span_start = self.position();
         let mut span_end = self.position();
 
-        self.keyword(b"struct");
+        if private_by_default {
+            self.keyword(b"class");
+        } else {
+            self.keyword(b"struct");
+        }
 
         let explicit_no_alloc = if self.is_keyword(b"noalloc") {
             self.next();
@@ -881,6 +887,8 @@ impl Parser {
                 } else if self.is_keyword(b"public") {
                     self.next();
                     MemberAccess::Public
+                } else if private_by_default {
+                    MemberAccess::Private
                 } else {
                     MemberAccess::Public
                 };
