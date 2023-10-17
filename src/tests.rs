@@ -484,6 +484,11 @@ fn passthrough_error2() -> TestResult {
 }
 
 #[test]
+fn private_by_default() -> TestResult {
+    test_example("classes/private_by_default")
+}
+
+#[test]
 fn return_missing_error() -> TestResult {
     test_example("typechecking/return_missing_error")
 }
