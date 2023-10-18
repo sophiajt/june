@@ -357,7 +357,9 @@ repository:
       - comment: struct keyword
         name: keyword.declaration.struct.june storage.type.june
         match: \b(struct)\b
-      - comment: noalloc keyword
+      - comment: class keyword
+        name: keyword.declaration.class.june storage.type.june
+        match: \b(class)\b      - comment: noalloc keyword
         name: keyword.declaration.noalloc.june storage.type.june
         match: \b(noalloc)\b
       - comment: private keyword
@@ -545,6 +547,13 @@ repository:
             name: keyword.declaration.struct.june storage.type.june
           2:
             name: entity.name.type.struct.june
+      - comment: class declarations
+        match: \b(class)\s+([A-Z][A-Za-z0-9]*)\b
+        captures:
+          1:
+            name: keyword.declaration.class.june storage.type.june
+          2:
+            name: entity.name.type.class.june
       - comment: enum declarations
         match: \b(enum)\s+([A-Z][A-Za-z0-9_]*)\b
         captures:

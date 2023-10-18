@@ -5,8 +5,8 @@ struct Node {
     next: Node?
 }
 
-struct CircularList {
-    private node: Node?
+class CircularList {
+    node: Node?
 
     fun default() -> owned CircularList {
         return new owned CircularList(node: none)

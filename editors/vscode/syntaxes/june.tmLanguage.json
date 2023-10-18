@@ -1013,6 +1013,18 @@
                     }
                 },
                 {
+                    "comment": "class declarations",
+                    "match": "\\b(class)\\s+([A-Z][A-Za-z0-9]*)\\b",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.declaration.class.june storage.type.june"
+                        },
+                        "2": {
+                            "name": "entity.name.type.class.june"
+                        }
+                    }
+                },
+                {
                     "comment": "enum declarations",
                     "match": "\\b(enum)\\s+([A-Z][A-Za-z0-9_]*)\\b",
                     "captures": {
