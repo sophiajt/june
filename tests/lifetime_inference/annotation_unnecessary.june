@@ -1,0 +1,7 @@
+// output: 100
+
+fun f(x: i64) -> i64 {
+    return x
+}
+
+println(f(100))

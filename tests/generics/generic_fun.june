@@ -1,0 +1,5 @@
+fun identity<T>(x: T) [x == return] -> T  {
+    return x
+}
+
+println(identity(10))

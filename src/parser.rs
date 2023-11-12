@@ -94,6 +94,7 @@ pub enum AstNode {
     // Definitions
     Fun {
         name: NodeId,
+        generic_params: Option<NodeId>,
         params: NodeId,
         lifetime_annotations: Vec<NodeId>,
         return_ty: Option<NodeId>,
@@ -721,6 +722,8 @@ impl Parser {
                 continue;
             } else if self.is_keyword(b"fun") {
                 code_body.push(self.fun_definition());
+            } else if self.is_keyword(b"fn") {
+                return self.error("use 'fun' instead of 'fn' to create a function");
             } else if self.is_keyword(b"struct") {
                 code_body.push(self.class_struct_definition(false));
             } else if self.is_keyword(b"class") {
@@ -770,6 +773,12 @@ impl Parser {
         self.keyword(b"fun");
 
         let name = self.name();
+
+        let generic_params = if self.is_less_than() {
+            Some(self.generic_params())
+        } else {
+            None
+        };
 
         let params = self.params();
 
@@ -832,6 +841,7 @@ impl Parser {
         self.create_node(
             AstNode::Fun {
                 name,
+                generic_params,
                 params,
                 lifetime_annotations,
                 return_ty,
@@ -877,6 +887,8 @@ impl Parser {
                 let fun = self.fun_definition();
 
                 methods.push(fun);
+            } else if self.is_keyword(b"fn") {
+                return self.error("use 'fun' instead of 'fn' to create a function");
             } else if self.is_newline() {
                 self.next();
             } else {
@@ -949,6 +961,8 @@ impl Parser {
                 let fun = self.fun_definition();
 
                 methods.push(fun);
+            } else if self.is_keyword(b"fn") {
+                return self.error("use 'fun' instead of 'fn' to create a function");
             } else if self.is_newline() {
                 self.next();
             } else {
@@ -1524,6 +1538,31 @@ impl Parser {
         };
 
         self.create_node(AstNode::Params(param_list), span_start, span_end)
+    }
+
+    pub fn generic_params(&mut self) -> NodeId {
+        let span_start = self.position();
+        self.less_than();
+
+        let mut generics = vec![];
+
+        while self.has_tokens() {
+            if self.is_greater_than() {
+                break;
+            }
+            if self.is_name() {
+                generics.push(self.name())
+            }
+        }
+
+        let span_end = if self.is_greater_than() {
+            self.greater_than();
+            self.position() + 1
+        } else {
+            self.position()
+        };
+
+        self.create_node(AstNode::Params(generics), span_start, span_end)
     }
 
     pub fn params(&mut self) -> NodeId {

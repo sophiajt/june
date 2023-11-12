@@ -231,6 +231,7 @@ impl Typechecker {
     pub fn typecheck_fun_predecl(
         &mut self,
         name: NodeId,
+        generic_params: Option<NodeId>,
         params: NodeId,
         lifetime_annotations: &[NodeId],
         return_ty: Option<NodeId>,
@@ -240,6 +241,22 @@ impl Typechecker {
         let fun_name = self.compiler.source
             [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
             .to_vec();
+
+        self.enter_scope();
+
+        if let Some(generic_params) = generic_params {
+            if let AstNode::Params(type_vars) = self.compiler.get_node(generic_params).clone() {
+                for type_var in &type_vars {
+                    let name = self.compiler.get_source(*type_var).to_vec();
+
+                    let type_id = self.compiler.fresh_type_variable();
+
+                    self.add_type_to_scope(name, type_id);
+                }
+            } else {
+                self.error("expected type variables", generic_params);
+            }
+        }
 
         //FIXME: remove clone?
         if let AstNode::Params(unchecked_params) = self.compiler.get_node(params).clone() {
@@ -325,6 +342,8 @@ impl Typechecker {
         });
 
         let fun_id = self.compiler.functions.len() - 1;
+
+        self.exit_scope();
 
         self.scope
             .last_mut()
@@ -497,6 +516,7 @@ impl Typechecker {
             for method in methods {
                 let AstNode::Fun {
                     name,
+                    generic_params,
                     params,
                     lifetime_annotations,
                     return_ty,
@@ -510,6 +530,7 @@ impl Typechecker {
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
+                let generic_params = *generic_params;
                 let params = *params;
                 let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
@@ -517,6 +538,7 @@ impl Typechecker {
 
                 fun_ids.push(self.typecheck_fun_predecl(
                     name,
+                    generic_params,
                     params,
                     &lifetime_annotations,
                     return_ty,
@@ -658,6 +680,7 @@ impl Typechecker {
             for method in methods {
                 let AstNode::Fun {
                     name,
+                    generic_params,
                     params,
                     lifetime_annotations,
                     return_ty,
@@ -671,6 +694,7 @@ impl Typechecker {
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
+                let generic_params = *generic_params;
                 let params = *params;
                 let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
@@ -678,6 +702,7 @@ impl Typechecker {
 
                 fun_ids.push(self.typecheck_fun_predecl(
                     name,
+                    generic_params,
                     params,
                     &lifetime_annotations,
                     return_ty,
@@ -716,6 +741,7 @@ impl Typechecker {
             match &self.compiler.get_node(*node_id) {
                 AstNode::Fun {
                     name,
+                    generic_params,
                     params,
                     lifetime_annotations,
                     return_ty,
@@ -724,6 +750,7 @@ impl Typechecker {
                     let lifetime_annotations = lifetime_annotations.clone();
                     funs.push(self.typecheck_fun_predecl(
                         *name,
+                        *generic_params,
                         *params,
                         &lifetime_annotations,
                         *return_ty,
@@ -848,6 +875,44 @@ impl Typechecker {
         }
     }
 
+    pub fn is_generic(&self, type_id: TypeId) -> bool {
+        matches!(self.compiler.get_type(type_id), Type::TypeVariable)
+    }
+
+    fn instantiate_fun(
+        &mut self,
+        fun_id: FunId,
+        instantiations: &HashMap<TypeId, TypeId>,
+    ) -> FunId {
+        let mut new_fun = self.compiler.functions[fun_id.0].clone();
+
+        let mut var_instantiations = HashMap::new();
+
+        for param in new_fun.params.iter_mut() {
+            let var = &self.compiler.variables[param.var_id.0];
+
+            // FIXME: do deeper type instantiations for containers
+            if let Some(replacement) = instantiations.get(&var.ty) {
+                let new_var = self.define_variable(
+                    var.where_defined,
+                    *replacement,
+                    var.is_mutable,
+                    var.where_defined,
+                );
+
+                var_instantiations.insert(param.var_id, new_var);
+
+                param.var_id = new_var;
+            }
+        }
+
+        if let Some(replacement) = instantiations.get(&new_fun.return_type) {
+            new_fun.return_type = *replacement;
+        }
+
+        fun_id
+    }
+
     pub fn typecheck_call_with_fun_id(
         &mut self,
         name: NodeId,
@@ -887,15 +952,11 @@ impl Typechecker {
             return return_type;
         }
 
-        // TODO: do we want to wait until all params are checked
-        // before we mark this as resolved?
-        self.compiler
-            .call_resolution
-            .insert(name, CallTarget::Function(fun_id));
-
         if method_target.is_some() {
             self.enter_scope();
         }
+
+        let mut instantiations = HashMap::new();
 
         for (idx, (arg, param)) in args.iter().zip(params).enumerate() {
             let arg = *arg;
@@ -930,7 +991,10 @@ impl Typechecker {
                         self.error("argument to function needs to be mutable", value);
                     }
 
-                    if !self.is_type_compatible(arg_ty, self.compiler.variables[param.var_id.0].ty)
+                    if self.is_generic(self.compiler.variables[param.var_id.0].ty) {
+                        instantiations.insert(self.compiler.variables[param.var_id.0].ty, arg_ty);
+                    } else if !self
+                        .is_type_compatible(arg_ty, self.compiler.variables[param.var_id.0].ty)
                     {
                         // FIXME: make this a better error
                         self.note(
@@ -965,7 +1029,9 @@ impl Typechecker {
 
                     let variable = &self.compiler.variables[param.var_id.0];
 
-                    if !self.is_type_compatible(variable.ty, arg_type) {
+                    if self.is_generic(self.compiler.variables[param.var_id.0].ty) {
+                        instantiations.insert(self.compiler.variables[param.var_id.0].ty, arg_type);
+                    } else if !self.is_type_compatible(variable.ty, arg_type) {
                         // FIXME: make this a better type error
                         self.note(
                             "parameter defined here",
@@ -991,6 +1057,16 @@ impl Typechecker {
         if method_target.is_some() {
             self.exit_scope();
         }
+
+        let fun_id = if !instantiations.is_empty() {
+            self.instantiate_fun(fun_id, &instantiations)
+        } else {
+            fun_id
+        };
+
+        self.compiler
+            .call_resolution
+            .insert(name, CallTarget::Function(fun_id));
 
         return_type
     }

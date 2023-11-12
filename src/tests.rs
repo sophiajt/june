@@ -179,8 +179,18 @@ fn annotation_return_compatible2() -> TestResult {
 }
 
 #[test]
+fn annotation_unnecessary() -> TestResult {
+    test_example("lifetime_inference/annotation_unnecessary.june")
+}
+
+#[test]
 fn bad_condition() -> TestResult {
     test_example("parsing/bad_condition")
+}
+
+#[test]
+fn bad_function() -> TestResult {
+    test_example("parsing/bad_function")
 }
 
 #[test]
