@@ -60,7 +60,7 @@ sjt: do we want to call this "bloat" or give it a nicer name?
 
 ## Non-goal: RAII
 
-RAII, or Resource Acquisition Is Inititalisation, is a common pattern with C++ and Rust developers.
+RAII, or Resource Acquisition Is Initialisation, is a common pattern with C++ and Rust developers.
 
 In June, however, it is not the goal of the language to support this pattern. There are a few reasons for this.
 
