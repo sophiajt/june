@@ -383,6 +383,9 @@ repository:
       - comment: mut
         name: storage.modifier.mut.june
         match: \bmut\b
+      - comment: local
+        name: storage.modifier.local.june
+        match: \blocal\b
       - comment: new
         name: storage.modifier.new.june
         match: \bnew\b

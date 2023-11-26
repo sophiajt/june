@@ -294,6 +294,11 @@ fn escaping_local_error() -> TestResult {
 }
 
 #[test]
+fn escaping_local_error2() -> TestResult {
+    test_example("lifetime_inference/escaping_local_error2")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("control_flow/for_range")
 }

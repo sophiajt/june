@@ -1,0 +1,22 @@
+// error: error: allocation is not local, lifetime inferred to be param 'employee'
+
+struct Stats {
+    age: i64
+}
+
+struct Employee {
+    name: string,
+    stats: Stats,
+}
+
+fun set_stats(mut employee: Employee) {
+    employee.stats = local Stats(age: 33)
+}
+
+fun main() {
+    mut employee = new Employee(name: "Sophia", stats: new Stats(age: 22))
+
+    set_stats(employee)
+
+    println(employee.stats.age)
+}

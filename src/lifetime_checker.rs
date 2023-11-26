@@ -284,6 +284,23 @@ impl LifetimeChecker {
             .push((self.current_blocks.clone(), scope_level, node_id))
     }
 
+    pub fn lifetime_name(&self, lifetime: AllocationLifetime) -> String {
+        match lifetime {
+            AllocationLifetime::Return => "return".into(),
+            AllocationLifetime::Scope { .. } => {
+                // FIXME: This is good for now, but future errors may want to be more precise
+                "local".into()
+            }
+            AllocationLifetime::Unknown => {
+                unimplemented!("Can't create a name for an unknown lifetime")
+            }
+            AllocationLifetime::Param { var_id } => {
+                let var_name = String::from_utf8_lossy(self.compiler.get_variable_name(var_id));
+                format!("param '{}'", var_name)
+            }
+        }
+    }
+
     pub fn check_lvalue_lifetime(&mut self, lvalue: NodeId) {
         match &self.compiler.get_node(lvalue) {
             AstNode::Variable => {
@@ -569,8 +586,8 @@ impl LifetimeChecker {
                             // We're not one of the local scopes, we're escaping but this is required to be a local allocation
                             self.error(
                                 format!(
-                                    "allocation is not local, lifetime inferred to be {:?}",
-                                    self.compiler.get_node_lifetime(node_id)
+                                    "allocation is not local, lifetime inferred to be {}",
+                                    self.lifetime_name(self.compiler.get_node_lifetime(node_id))
                                 ),
                                 node_id,
                             )
