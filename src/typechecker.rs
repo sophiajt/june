@@ -1216,6 +1216,19 @@ impl Typechecker {
                                 op,
                             );
                         }
+
+                        let lhs_ty = self.compiler.get_type(lhs_ty).clone();
+
+                        if matches!(
+                            lhs_ty,
+                            Type::Pointer {
+                                pointer_type: PointerType::Shared,
+                                ..
+                            }
+                        ) {
+                            self.warning("overwriting a shared pointer may waste space", node_id)
+                        }
+
                         VOID_TYPE_ID
                     }
                     x => panic!("unsupported operator: {:?}", x),
@@ -2485,6 +2498,14 @@ impl Typechecker {
             message: message.into(),
             node_id,
             severity: Severity::Error,
+        });
+    }
+
+    pub fn warning(&mut self, message: impl Into<String>, node_id: NodeId) {
+        self.compiler.warnings.push(SourceError {
+            message: message.into(),
+            node_id,
+            severity: Severity::Warning,
         });
     }
 

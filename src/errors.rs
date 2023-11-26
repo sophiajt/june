@@ -4,6 +4,7 @@ use crate::parser::NodeId;
 pub enum Severity {
     Error,
     Note,
+    Warning,
 }
 
 #[derive(Debug)]

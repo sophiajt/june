@@ -38,7 +38,12 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     }
 
     let typechecker = Typechecker::new(compiler);
-    let compiler = typechecker.typecheck();
+    let mut compiler = typechecker.typecheck();
+
+    for warning in &compiler.warnings {
+        compiler.print_error(warning)
+    }
+    compiler.warnings.clear();
 
     for error in &compiler.errors {
         compiler.print_error(error)
@@ -49,7 +54,12 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     }
 
     let lifetime_checker = LifetimeChecker::new(compiler);
-    let compiler = lifetime_checker.check_lifetimes();
+    let mut compiler = lifetime_checker.check_lifetimes();
+
+    for warning in &compiler.warnings {
+        compiler.print_error(warning)
+    }
+    compiler.warnings.clear();
 
     for error in &compiler.errors {
         compiler.print_error(error)

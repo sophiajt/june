@@ -1,4 +1,4 @@
-// error: error: allocation is not local, lifetime inferred to be return
+// error: allocation is not local, lifetime inferred to be return
 
 struct Stats {
     age: i64

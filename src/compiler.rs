@@ -43,6 +43,7 @@ pub struct Compiler {
     pub var_resolution: HashMap<NodeId, VarId>,
     pub type_resolution: HashMap<NodeId, TypeId>,
 
+    pub warnings: Vec<SourceError>,
     pub errors: Vec<SourceError>,
 }
 
@@ -69,6 +70,7 @@ impl Compiler {
             var_resolution: HashMap::new(),
             type_resolution: HashMap::new(),
 
+            warnings: vec![],
             errors: vec![],
         }
     }
@@ -446,6 +448,13 @@ impl Compiler {
                 eprint!("\x1b[0;34m");
                 for _ in span_start..span_end {
                     eprint!("=");
+                }
+                eprintln!(" note: {}", message);
+            }
+            Severity::Warning => {
+                eprint!("\x1b[0;35m");
+                for _ in span_start..span_end {
+                    eprint!("~");
                 }
                 eprintln!(" note: {}", message);
             }
