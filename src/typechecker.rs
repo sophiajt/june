@@ -1246,7 +1246,7 @@ impl Typechecker {
                 let args = args.clone();
                 self.typecheck_call(head, &args)
             }
-            AstNode::New(allocation_type, allocation_node_id) => {
+            AstNode::New(allocation_type, _, allocation_node_id) => {
                 let allocation_type = *allocation_type;
                 let allocation_node_id = *allocation_node_id;
                 self.typecheck_new(allocation_type, allocation_node_id)

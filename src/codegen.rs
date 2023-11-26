@@ -575,7 +575,7 @@ impl Codegen {
                     }
                 }
             }
-            AstNode::New(_, allocation_call) => {
+            AstNode::New(_, _, allocation_call) => {
                 let type_id = self.compiler.get_node_type(node_id);
 
                 let Type::Pointer {

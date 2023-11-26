@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::{CallTarget, Compiler},
     errors::{Severity, SourceError},
-    parser::{AstNode, BlockId, NodeId},
+    parser::{AstNode, BlockId, NodeId, RequiredLifetime},
     typechecker::{Lifetime, LifetimeAnnotation, Type, VarId},
 };
 
@@ -521,8 +521,9 @@ impl LifetimeChecker {
                     }
                 }
             }
-            AstNode::New(_, allocation_node_id) => {
+            AstNode::New(_, required_lifetime, allocation_node_id) => {
                 let allocation_node_id = *allocation_node_id;
+                let required_lifetime = *required_lifetime;
 
                 if self.compiler.get_node_lifetime(node_id) == AllocationLifetime::Unknown {
                     // If we don't have enough constraints, then allocate at the current local scope level
@@ -555,6 +556,28 @@ impl LifetimeChecker {
                     }
                     _ => {
                         self.error("expected call as part of allocation", allocation_node_id);
+                    }
+                }
+
+                // Before we leave, make sure we haven't expanded the lifetime beyond what is allowed
+                match required_lifetime {
+                    RequiredLifetime::Local => {
+                        if !matches!(
+                            self.compiler.get_node_lifetime(node_id),
+                            AllocationLifetime::Scope { .. }
+                        ) {
+                            // We're not one of the local scopes, we're escaping but this is required to be a local allocation
+                            self.error(
+                                format!(
+                                    "allocation is not local, lifetime inferred to be {:?}",
+                                    self.compiler.get_node_lifetime(node_id)
+                                ),
+                                node_id,
+                            )
+                        }
+                    }
+                    RequiredLifetime::Unknown => {
+                        // No requirement, so go ahead and ignore
                     }
                 }
 

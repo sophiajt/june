@@ -9,14 +9,14 @@ struct Employee {
     stats: Stats,
 }
 
-fun helper(mut employee: Employee) {
+fun set_stats(mut employee: Employee) {
     employee.stats = new Stats(age: 33)
 }
 
 fun main() {
     mut employee = new Employee(name: "Sophia", stats: new Stats(age: 22))
 
-    helper(employee)
+    set_stats(employee)
 
     println(employee.stats.age)
 }

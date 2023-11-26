@@ -1,0 +1,13 @@
+// error: allocation is not local
+
+struct Stats {
+    age: i64
+}
+
+fun foo() -> Stats {
+    return new(local) Stats(age: 100)
+}
+
+fun main() {
+    println(foo().age)
+}

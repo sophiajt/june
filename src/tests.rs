@@ -284,6 +284,16 @@ fn enum_var_scope_error3() -> TestResult {
 }
 
 #[test]
+fn escaping_local_alt_error() -> TestResult {
+    test_example("lifetime_inference/escaping_local_alt_error")
+}
+
+#[test]
+fn escaping_local_error() -> TestResult {
+    test_example("lifetime_inference/escaping_local_error")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("control_flow/for_range")
 }

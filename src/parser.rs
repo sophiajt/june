@@ -20,6 +20,13 @@ pub enum MemberAccess {
     Private,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum RequiredLifetime {
+    Local,
+    //Stack,
+    Unknown,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum AstNode {
     Int,
@@ -167,7 +174,7 @@ pub enum AstNode {
         target: NodeId,
         match_arms: Vec<(NodeId, NodeId)>,
     },
-    New(PointerType, NodeId),
+    New(PointerType, RequiredLifetime, NodeId),
     Statement(NodeId),
     Garbage,
 }
@@ -654,6 +661,11 @@ impl Parser {
             }) if &self.compiler.source[span_start..span_end] == b"new" => true,
             Some(Token {
                 token_type: TokenType::Name,
+                span_start,
+                span_end,
+            }) if &self.compiler.source[span_start..span_end] == b"local" => true,
+            Some(Token {
+                token_type: TokenType::Name,
                 ..
             }) => true,
             _ => false,
@@ -1038,7 +1050,7 @@ impl Parser {
         // Check for special forms
         if self.is_keyword(b"if") {
             return self.if_expression();
-        } else if self.is_keyword(b"new") {
+        } else if self.is_keyword(b"new") || self.is_keyword(b"local") {
             return self.new_allocation();
         } else if self.is_keyword(b"match") {
             return self.match_expression();
@@ -1160,7 +1172,7 @@ impl Parser {
             self.boolean()
         } else if self.is_keyword(b"none") {
             self.none()
-        } else if self.is_keyword(b"new") {
+        } else if self.is_keyword(b"new") || self.is_keyword(b"local") {
             self.new_allocation()
         } else if self.is_string() {
             self.string()
@@ -1617,7 +1629,26 @@ impl Parser {
 
     pub fn new_allocation(&mut self) -> NodeId {
         let span_start = self.position();
-        self.keyword(b"new");
+
+        let required_lifetime = if self.is_keyword(b"local") {
+            self.keyword(b"local");
+            RequiredLifetime::Local
+        } else {
+            self.keyword(b"new");
+            if self.is_lparen() {
+                self.lparen();
+                let require_lifetime = if self.is_keyword(b"local") {
+                    self.keyword(b"local");
+                    RequiredLifetime::Local
+                } else {
+                    return self.error("unknown lifetime specifier");
+                };
+                self.rparen();
+                require_lifetime
+            } else {
+                RequiredLifetime::Unknown
+            }
+        };
 
         let pointer_type = if self.is_keyword(b"owned") {
             self.next();
@@ -1629,7 +1660,11 @@ impl Parser {
         let allocated = self.variable_or_call();
         let span_end = self.get_span_end(allocated);
 
-        self.create_node(AstNode::New(pointer_type, allocated), span_start, span_end)
+        self.create_node(
+            AstNode::New(pointer_type, required_lifetime, allocated),
+            span_start,
+            span_end,
+        )
     }
 
     pub fn match_expression(&mut self) -> NodeId {

@@ -196,10 +196,11 @@ impl Compiler {
                     self.print_helper(node, indent + 2);
                 }
             }
-            AstNode::New(allocation_type, node) => {
+            AstNode::New(allocation_type, required_lifetime, node) => {
                 println!(
-                    "New {:?} ({}, {}):[{}]",
+                    "New {:?} of {:?} ({}, {}):[{}]",
                     allocation_type,
+                    required_lifetime,
                     self.span_start[node_id.0],
                     self.span_end[node_id.0],
                     node_id.0
