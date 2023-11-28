@@ -224,6 +224,11 @@ fn defer_simple() -> TestResult {
 }
 
 #[test]
+fn defer_simple_error() -> TestResult {
+    test_example("defer/defer_simple_error")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("data_types/double")
 }

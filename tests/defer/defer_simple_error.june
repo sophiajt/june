@@ -1,0 +1,15 @@
+// error: incompatible type in callback for 'defer'
+
+struct Person {
+    name: string
+}
+
+fun greet(p: i64) {
+    println(p)
+}
+
+fun main() {
+    let person = new Person(name: "Felicia");
+    defer person greet
+    println("hello")
+}

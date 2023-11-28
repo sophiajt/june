@@ -380,6 +380,9 @@ repository:
       - comment: crate
         name: keyword.other.crate.june
         match: \bcrate\b
+      - comment: defer
+        name: keyword.other.defer.june
+        match: \bdefer\b
       - comment: mut
         name: storage.modifier.mut.june
         match: \bmut\b

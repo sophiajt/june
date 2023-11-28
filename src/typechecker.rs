@@ -1352,8 +1352,33 @@ impl Typechecker {
                 let pointer = *pointer;
                 let callback = *callback;
 
-                self.typecheck_node(pointer);
-                self.typecheck_node(callback);
+                let pointer_type_id = self.typecheck_node(pointer);
+                let callback_type_id = self.typecheck_node(callback);
+
+                match self.compiler.get_type(callback_type_id) {
+                    Type::Fun { params, ret } => {
+                        if *ret != VOID_TYPE_ID {
+                            self.error("callback for 'defer' should not return a value", callback);
+                        } else if params.len() == 1 {
+                            let var_id = params[0].var_id;
+
+                            if !self.is_type_compatible(
+                                self.compiler.variables[var_id.0].ty,
+                                pointer_type_id,
+                            ) {
+                                // FIXME: improve the error message with type name
+                                self.error("incompatible type in callback for 'defer'", callback);
+                            }
+                        } else if params.is_empty() {
+                            // we don't use the pointer, ignore it
+                        } else {
+                            self.error("incompatible callback for 'defer'", callback);
+                        }
+                    }
+                    _ => {
+                        self.error("expected function for callback in 'defer'", callback);
+                    }
+                }
 
                 VOID_TYPE_ID
             }
