@@ -299,6 +299,11 @@ fn escaping_local_error2() -> TestResult {
 }
 
 #[test]
+fn first_class_function_value() -> TestResult {
+    test_example("first_class_functions/first_class_function_value")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("control_flow/for_range")
 }

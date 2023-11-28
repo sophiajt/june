@@ -34,6 +34,10 @@ pub enum Type {
     F64,
     Bool,
     Range(TypeId),
+    Fun {
+        params: Vec<Param>,
+        ret: TypeId,
+    },
     String,
     Struct {
         generic_params: Vec<TypeId>,
@@ -77,7 +81,7 @@ pub struct Variable {
     pub where_defined: NodeId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Param {
     pub name: Vec<u8>,
     pub var_id: VarId,
@@ -133,6 +137,11 @@ impl Scope {
 pub struct Typechecker {
     pub compiler: Compiler,
     pub scope: Vec<Scope>,
+}
+
+pub enum VarOrFunId {
+    VarId(VarId),
+    FunId(FunId),
 }
 
 pub const UNKNOWN_TYPE_ID: TypeId = TypeId(0);
@@ -207,14 +216,14 @@ impl Typechecker {
             b"void" => VOID_TYPE_ID,
             _ => {
                 if let Some(type_id) = self.find_type_in_scope(name_node_id) {
-                    if self.is_type_variable(*type_id) {
-                        *type_id
+                    if self.is_type_variable(type_id) {
+                        type_id
                     } else {
                         // Assume custom types are pointers
                         self.compiler.find_or_create_type(Type::Pointer {
                             pointer_type,
                             optional,
-                            target: *type_id,
+                            target: type_id,
                         })
                     }
                 } else {
@@ -279,7 +288,7 @@ impl Typechecker {
             let lhs = match self.compiler.get_node(*lhs) {
                 AstNode::Variable => {
                     if let Some(var_id) = self.find_variable_in_scope(*lhs) {
-                        Lifetime::Variable(*var_id)
+                        Lifetime::Variable(var_id)
                     } else {
                         self.error("couldn't find parameter for lifetime", *lhs);
                         continue;
@@ -294,7 +303,7 @@ impl Typechecker {
             let rhs = match self.compiler.get_node(*rhs) {
                 AstNode::Variable => {
                     if let Some(var_id) = self.find_variable_in_scope(*rhs) {
-                        Lifetime::Variable(*var_id)
+                        Lifetime::Variable(var_id)
                     } else {
                         self.error("couldn't find parameter for lifetime", *rhs);
                         continue;
@@ -997,7 +1006,7 @@ impl Typechecker {
 
     pub fn typecheck_call(&mut self, head: NodeId, args: &[NodeId]) -> TypeId {
         if let Some(fun_id) = self.find_function_in_scope(head) {
-            self.typecheck_call_with_fun_id(head, *fun_id, args, None)
+            self.typecheck_call_with_fun_id(head, fun_id, args, None)
         } else {
             self.error("unknown function", head);
             UNKNOWN_TYPE_ID
@@ -1065,29 +1074,41 @@ impl Typechecker {
                 VOID_TYPE_ID
             }
             AstNode::Variable => {
-                let var_id = self.find_variable_in_scope(node_id);
+                // This looks like a variable, but may also be the name of a function
+                let var_or_fun_id = self.find_name_in_scope(node_id);
 
-                if let Some(var_id) = var_id {
-                    let var_id = *var_id;
+                match var_or_fun_id {
+                    Some(VarOrFunId::VarId(var_id)) => {
+                        if let Some(where_moved) = self.var_was_previously_moved(var_id) {
+                            self.note("location of variable move", where_moved);
+                            self.error("moved variable accessed after move", node_id);
+                        }
+                        self.compiler.var_resolution.insert(node_id, var_id);
 
-                    if let Some(where_moved) = self.var_was_previously_moved(var_id) {
-                        self.note("location of variable move", where_moved);
-                        self.error("moved variable accessed after move", node_id);
+                        let variable = &self.compiler.variables[var_id.0];
+                        variable.ty
                     }
-                    self.compiler.var_resolution.insert(node_id, var_id);
+                    Some(VarOrFunId::FunId(fun_id)) => {
+                        let fun = &self.compiler.functions[fun_id.0];
 
-                    let variable = &self.compiler.variables[var_id.0];
-                    variable.ty
-                } else {
-                    let name = self.compiler.get_source(node_id);
+                        self.compiler.fun_resolution.insert(node_id, fun_id);
 
-                    // Reserved name for synthetic self variables
-                    if name == b"." {
-                        self.error("can't find 'self' variable", node_id);
-                    } else {
-                        self.error("can't find variable", node_id);
+                        self.compiler.find_or_create_type(Type::Fun {
+                            params: fun.params.clone(),
+                            ret: fun.return_type,
+                        })
                     }
-                    UNKNOWN_TYPE_ID
+                    None => {
+                        let name = self.compiler.get_source(node_id);
+
+                        // Reserved name for synthetic self variables
+                        if name == b"." {
+                            self.error("can't find 'self' variable", node_id);
+                        } else {
+                            self.error("can't find variable", node_id);
+                        }
+                        UNKNOWN_TYPE_ID
+                    }
                 }
             }
             AstNode::MemberAccess { target, field } => {
@@ -1568,7 +1589,6 @@ impl Typechecker {
                 return UNKNOWN_TYPE_ID;
             };
 
-            let type_id = *type_id;
             let output_type = self.compiler.find_or_create_type(Type::Pointer {
                 pointer_type,
                 optional: false,
@@ -1629,7 +1649,7 @@ impl Typechecker {
                                     let result = self.find_type_in_scope_by_name(b"Self");
 
                                     if let Some(scoped_type_id) = result {
-                                        if scoped_type_id != &type_id {
+                                        if scoped_type_id != type_id {
                                             // FIXME: add a hint to say you need to create your own constructor
                                             self.error("'new' used on private member field from outside struct or class", arg)
                                         }
@@ -1696,12 +1716,10 @@ impl Typechecker {
     pub fn typecheck_namespaced_lookup(&mut self, namespace: NodeId, item: NodeId) -> TypeId {
         let type_id = self.find_type_in_scope(namespace);
 
-        let Some(type_id) = type_id else {
+        let Some(mut type_id) = type_id else {
             self.error("could not find namespace", namespace);
             return VOID_TYPE_ID;
         };
-
-        let mut type_id = *type_id;
 
         match self.compiler.get_type(type_id) {
             Type::Struct { methods, .. } => {
@@ -2269,7 +2287,26 @@ impl Typechecker {
         var_id
     }
 
-    pub fn find_variable_in_scope(&self, variable_name: NodeId) -> Option<&VarId> {
+    pub fn find_name_in_scope(&self, name: NodeId) -> Option<VarOrFunId> {
+        let name =
+            &self.compiler.source[self.compiler.span_start[name.0]..self.compiler.span_end[name.0]];
+
+        // Expand the shorthand, and look for 'self' instead
+        let name = if name == b"." { b"self" } else { name };
+
+        for scope in self.scope.iter().rev() {
+            if let Some(var_id) = scope.variables.get(name) {
+                return Some(VarOrFunId::VarId(*var_id));
+            }
+            if let Some(fun_id) = scope.functions.get(name) {
+                return Some(VarOrFunId::FunId(*fun_id));
+            }
+        }
+
+        None
+    }
+
+    pub fn find_variable_in_scope(&self, variable_name: NodeId) -> Option<VarId> {
         let name = &self.compiler.source
             [self.compiler.span_start[variable_name.0]..self.compiler.span_end[variable_name.0]];
 
@@ -2277,42 +2314,42 @@ impl Typechecker {
         let name = if name == b"." { b"self" } else { name };
 
         for scope in self.scope.iter().rev() {
-            if let Some(value) = scope.variables.get(name) {
-                return Some(value);
+            if let Some(var_id) = scope.variables.get(name) {
+                return Some(*var_id);
             }
         }
 
         None
     }
 
-    pub fn find_function_in_scope(&self, function_name: NodeId) -> Option<&FunId> {
+    pub fn find_function_in_scope(&self, function_name: NodeId) -> Option<FunId> {
         let name = &self.compiler.source
             [self.compiler.span_start[function_name.0]..self.compiler.span_end[function_name.0]];
         for scope in self.scope.iter().rev() {
-            if let Some(value) = scope.functions.get(name) {
-                return Some(value);
+            if let Some(fun_id) = scope.functions.get(name) {
+                return Some(*fun_id);
             }
         }
 
         None
     }
 
-    pub fn find_type_in_scope(&self, type_name: NodeId) -> Option<&TypeId> {
+    pub fn find_type_in_scope(&self, type_name: NodeId) -> Option<TypeId> {
         let name = &self.compiler.source
             [self.compiler.span_start[type_name.0]..self.compiler.span_end[type_name.0]];
         for scope in self.scope.iter().rev() {
-            if let Some(value) = scope.types.get(name) {
-                return Some(value);
+            if let Some(type_id) = scope.types.get(name) {
+                return Some(*type_id);
             }
         }
 
         None
     }
 
-    pub fn find_type_in_scope_by_name(&self, name: &[u8]) -> Option<&TypeId> {
+    pub fn find_type_in_scope_by_name(&self, name: &[u8]) -> Option<TypeId> {
         for scope in self.scope.iter().rev() {
-            if let Some(value) = scope.types.get(name) {
-                return Some(value);
+            if let Some(type_id) = scope.types.get(name) {
+                return Some(*type_id);
             }
         }
 

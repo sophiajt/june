@@ -2284,9 +2284,9 @@ impl Parser {
         let span_start = self.span_offset;
         let mut span_position = span_start;
         while span_position < self.compiler.source.len()
-            && (!self.compiler.source[span_position].is_ascii_whitespace()
+            && ((!self.compiler.source[span_position].is_ascii_whitespace()
                 && !self.compiler.source[span_position].is_ascii_punctuation())
-            || self.compiler.source[span_position] == b'_'
+                || self.compiler.source[span_position] == b'_')
         {
             span_position += 1;
         }

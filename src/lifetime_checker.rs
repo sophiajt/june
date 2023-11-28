@@ -362,16 +362,18 @@ impl LifetimeChecker {
                 // We're seeing a use of a variable at this point, so make sure the variable
                 // lives long enough to get here
 
-                let var_id =
-                    self.compiler.var_resolution.get(&node_id).expect(
-                        "internal error: unresolved variable found during lifetime checking",
-                    );
+                if let Some(var_id) = self.compiler.var_resolution.get(&node_id) {
+                    let definition_node_id = self.compiler.variables[var_id.0].where_defined;
 
-                let definition_node_id = self.compiler.variables[var_id.0].where_defined;
+                    self.expand_lifetime_with_node(definition_node_id, node_id);
 
-                self.expand_lifetime_with_node(definition_node_id, node_id);
-
-                self.expand_lifetime_with_node(node_id, definition_node_id);
+                    self.expand_lifetime_with_node(node_id, definition_node_id);
+                } else if !self.compiler.fun_resolution.contains_key(&node_id) {
+                    self.error(
+                        "unresolved variable found during lifetime checking",
+                        node_id,
+                    )
+                }
             }
             AstNode::MemberAccess { target, .. } => {
                 // Check the type of the access. If it isn't something that can

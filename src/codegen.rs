@@ -33,6 +33,10 @@ impl Codegen {
                 self.codegen_typename(*type_id, output);
                 output.push(b'*');
             }
+            Type::Fun { .. } => {
+                output.extend_from_slice(b"fun_ty_");
+                output.extend_from_slice(type_id.0.to_string().as_bytes());
+            }
             _ => {
                 if type_id == VOID_TYPE_ID {
                     output.extend_from_slice(b"void");
@@ -106,7 +110,7 @@ impl Codegen {
         output.extend_from_slice(b"return tmp;\n}\n");
     }
 
-    pub fn codegen_structs_and_enums(&self, output: &mut Vec<u8>) {
+    pub fn codegen_user_types(&self, output: &mut Vec<u8>) {
         for (idx, ty) in self.compiler.get_types().iter().enumerate() {
             match ty {
                 Type::Struct {
@@ -273,6 +277,21 @@ impl Codegen {
                         output.extend_from_slice(b"}\n");
                     }
                 }
+                Type::Fun { params, ret } => {
+                    // typedef long(*funcPtr)(short, char);
+                    output.extend_from_slice(b"typedef ");
+                    self.codegen_typename(*ret, output);
+                    output.extend_from_slice(b"(*fun_ty_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    // FIXME: we may not always have an allocation_id
+                    output.extend_from_slice(b")(long");
+                    for param in params {
+                        output.extend_from_slice(b", ");
+                        let var_type_id = self.compiler.variables[param.var_id.0].ty;
+                        self.codegen_typename(var_type_id, output);
+                    }
+                    output.extend_from_slice(b");\n");
+                }
                 _ => {}
             }
         }
@@ -388,29 +407,32 @@ impl Codegen {
                 output.extend_from_slice(src);
             }
             AstNode::Variable => {
-                let src = self.compiler.get_source(node_id);
+                if let Some(var_id) = self.compiler.var_resolution.get(&node_id) {
+                    output.extend_from_slice(b"/* ");
+                    output.extend_from_slice(
+                        self.compiler
+                            .get_source(self.compiler.variables[var_id.0].name),
+                    );
+                    output.extend_from_slice(b" */ ");
 
-                let var_id = self
-                    .compiler
-                    .var_resolution
-                    .get(&node_id)
-                    .unwrap_or_else(|| {
-                        println!("{:?}", String::from_utf8_lossy(src));
-                        panic!(
-                            "internal error: unresolved variable in codegen: {}",
-                            node_id.0
-                        )
-                    });
+                    output.extend_from_slice(b"variable_");
+                    output.extend_from_slice(var_id.0.to_string().as_bytes());
+                } else if let Some(fun_id) = self.compiler.fun_resolution.get(&node_id) {
+                    output.extend_from_slice(b"/* ");
+                    output.extend_from_slice(
+                        self.compiler
+                            .get_source(self.compiler.functions[fun_id.0].name),
+                    );
+                    output.extend_from_slice(b" */ ");
 
-                output.extend_from_slice(b"/* ");
-                output.extend_from_slice(
-                    self.compiler
-                        .get_source(self.compiler.variables[var_id.0].name),
-                );
-                output.extend_from_slice(b" */ ");
-
-                output.extend_from_slice(b"variable_");
-                output.extend_from_slice(var_id.0.to_string().as_bytes());
+                    output.extend_from_slice(b"function_");
+                    output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                } else {
+                    panic!(
+                        "internal error: unresolved variable in codegen: {}",
+                        node_id.0
+                    )
+                }
             }
             AstNode::Let {
                 variable_name,
@@ -1060,7 +1082,7 @@ impl Codegen {
 
         output.extend_from_slice(b"struct Allocator *allocator;\n");
 
-        self.codegen_structs_and_enums(&mut output);
+        self.codegen_user_types(&mut output);
         self.codegen_fun_decls(&mut output);
 
         for (idx, fun) in self.compiler.functions.iter().enumerate().skip(1) {

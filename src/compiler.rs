@@ -41,6 +41,7 @@ pub struct Compiler {
     // Use/def
     pub call_resolution: HashMap<NodeId, CallTarget>,
     pub var_resolution: HashMap<NodeId, VarId>,
+    pub fun_resolution: HashMap<NodeId, FunId>,
     pub type_resolution: HashMap<NodeId, TypeId>,
 
     pub errors: Vec<SourceError>,
@@ -67,6 +68,7 @@ impl Compiler {
 
             call_resolution: HashMap::new(),
             var_resolution: HashMap::new(),
+            fun_resolution: HashMap::new(),
             type_resolution: HashMap::new(),
 
             errors: vec![],
