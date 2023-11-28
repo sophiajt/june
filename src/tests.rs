@@ -219,6 +219,11 @@ fn circular_linked_list_helper() -> TestResult {
 }
 
 #[test]
+fn defer_simple() -> TestResult {
+    test_example("defer/defer_simple")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("data_types/double")
 }

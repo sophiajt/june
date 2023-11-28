@@ -11,7 +11,7 @@ const bool DEBUG_ZEROING = true;
 struct ResourceCleanup
 {
     void *resource;
-    void (*cleanup_fun)(void *);
+    void (*cleanup_fun)(long, void *);
 
     struct ResourceCleanup *next;
 };
@@ -104,7 +104,7 @@ void create_allocator_level(struct Allocator *allocator, int level)
     allocator->levels[level]->cleanups = NULL;
 }
 
-void add_resource_cleanup(struct Allocator *allocator, int level, void *resource, void (*cleanup_fun)(void *))
+void add_resource_cleanup(struct Allocator *allocator, int level, void *resource, void (*cleanup_fun)(long, void *))
 {
     if (allocator->num_levels <= level)
     {
@@ -231,7 +231,7 @@ void free_allocator_level(struct Allocator *allocator, int level)
 
     while (allocator_level->cleanups != NULL)
     {
-        allocator_level->cleanups->cleanup_fun(allocator_level->cleanups->resource);
+        allocator_level->cleanups->cleanup_fun(/*unused*/ 0, allocator_level->cleanups->resource);
         struct ResourceCleanup *old = allocator_level->cleanups;
         allocator_level->cleanups = allocator_level->cleanups->next;
 

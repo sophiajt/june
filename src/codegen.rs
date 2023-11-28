@@ -823,6 +823,15 @@ impl Codegen {
                 self.codegen_node(*block, output);
                 output.extend_from_slice(b"}");
             }
+            AstNode::Defer { pointer, callback } => {
+                output.extend_from_slice(b"add_resource_cleanup(allocator, ");
+                self.codegen_annotation(*pointer, output);
+                output.extend_from_slice(b", ");
+                self.codegen_node(*pointer, output);
+                output.extend_from_slice(b", ");
+                self.codegen_node(*callback, output);
+                output.extend_from_slice(b");\n");
+            }
             AstNode::Match { target, match_arms } => {
                 output.extend_from_slice(b"{\n");
                 let type_id = self.compiler.get_node_type(*target);

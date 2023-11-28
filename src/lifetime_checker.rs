@@ -479,6 +479,11 @@ impl LifetimeChecker {
                 self.expand_lifetime_with_node(block, node_id);
                 self.check_node_lifetime(block, scope_level);
             }
+            AstNode::Defer { pointer, .. } => {
+                let pointer = *pointer;
+
+                self.check_node_lifetime(pointer, scope_level);
+            }
             AstNode::Call { head, args } => {
                 let head = *head;
                 // FIXME: remove clone

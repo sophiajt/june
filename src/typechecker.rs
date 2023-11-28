@@ -1348,6 +1348,15 @@ impl Typechecker {
 
                 VOID_TYPE_ID
             }
+            AstNode::Defer { pointer, callback } => {
+                let pointer = *pointer;
+                let callback = *callback;
+
+                self.typecheck_node(pointer);
+                self.typecheck_node(callback);
+
+                VOID_TYPE_ID
+            }
             AstNode::Match { target, match_arms } => {
                 self.typecheck_match(*target, match_arms.clone())
             }

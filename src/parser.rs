@@ -175,6 +175,10 @@ pub enum AstNode {
         match_arms: Vec<(NodeId, NodeId)>,
     },
     New(PointerType, RequiredLifetime, NodeId),
+    Defer {
+        pointer: NodeId,
+        callback: NodeId,
+    },
     Statement(NodeId),
     Garbage,
 }
@@ -749,6 +753,8 @@ impl Parser {
                 code_body.push(self.for_statement());
             } else if self.is_keyword(b"return") {
                 code_body.push(self.return_statement());
+            } else if self.is_keyword(b"defer") {
+                code_body.push(self.defer_statement());
             } else {
                 let span_start = self.position();
                 let expression = self.expression_or_assignment();
@@ -1858,6 +1864,20 @@ impl Parser {
         };
 
         self.create_node(AstNode::Return(ret_val), span_start, span_end)
+    }
+
+    pub fn defer_statement(&mut self) -> NodeId {
+        let span_start = self.position();
+
+        self.keyword(b"defer");
+
+        let pointer = self.variable();
+
+        let callback = self.expression();
+
+        let span_end = self.get_span_end(callback);
+
+        self.create_node(AstNode::Defer { pointer, callback }, span_start, span_end)
     }
 
     pub fn variable(&mut self) -> NodeId {

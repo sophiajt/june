@@ -1,0 +1,15 @@
+// output: helloFelicia
+
+struct Person {
+    name: string
+}
+
+fun greet(p: Person) {
+    println(p.name)
+}
+
+fun main() {
+    let person = new Person(name: "Felicia");
+    defer person greet
+    println("hello")
+}
