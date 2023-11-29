@@ -235,7 +235,7 @@ impl LifetimeChecker {
                     // }
                 }
                 AllocationLifetime::Param { var_id } => {
-                    let var_type = self.compiler.variables[var_id.0].ty;
+                    let var_type = self.compiler.get_variable(var_id).ty;
 
                     if !self.compiler.is_allocator_type(var_type) {
                         let param_name =
@@ -307,7 +307,7 @@ impl LifetimeChecker {
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
                 if let Some(var_id) = var_id {
-                    let definition_node_id = self.compiler.variables[var_id.0].where_defined;
+                    let definition_node_id = self.compiler.get_variable(*var_id).where_defined;
 
                     self.expand_lifetime_with_node(lvalue, definition_node_id);
                 } else {
@@ -363,7 +363,7 @@ impl LifetimeChecker {
                 // lives long enough to get here
 
                 if let Some(var_id) = self.compiler.var_resolution.get(&node_id) {
-                    let definition_node_id = self.compiler.variables[var_id.0].where_defined;
+                    let definition_node_id = self.compiler.get_variable(*var_id).where_defined;
 
                     self.expand_lifetime_with_node(definition_node_id, node_id);
 
@@ -507,7 +507,7 @@ impl LifetimeChecker {
 
                         for (param, arg) in params.iter().zip(args.iter()) {
                             let param_node_id =
-                                self.compiler.variables[param.var_id.0].where_defined;
+                                self.compiler.get_variable(param.var_id).where_defined;
 
                             let expected_lifetime = self.compiler.get_node_lifetime(param_node_id);
 
@@ -687,7 +687,7 @@ impl LifetimeChecker {
         for fun_id in 1..self.compiler.functions.len() {
             let fun = self.compiler.functions[fun_id].clone();
             'param: for param in &fun.params {
-                let param_node_id = self.compiler.variables[param.var_id.0].where_defined;
+                let param_node_id = self.compiler.get_variable(param.var_id).where_defined;
 
                 for lifetime_annotation in &fun.lifetime_annotations {
                     match lifetime_annotation {

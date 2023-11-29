@@ -1,0 +1,9 @@
+// output: 3
+
+fun foo(x: i64) -> i64 {
+    return x
+}
+
+let bar = foo
+
+println(bar(3))

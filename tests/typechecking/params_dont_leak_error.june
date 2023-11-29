@@ -1,0 +1,7 @@
+// error: can't find variable
+
+fun foo(x: i64) -> i64 {
+    return x
+}
+
+println(x)

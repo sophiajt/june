@@ -12,6 +12,7 @@ pub struct CaseOffset(pub usize);
 pub enum CallTarget {
     Function(FunId),
     EnumConstructor(TypeId, CaseOffset),
+    Variable(VarId),
 }
 
 #[derive(Debug)]
@@ -560,6 +561,10 @@ impl Compiler {
             } => *type_id,
             _ => type_id,
         }
+    }
+
+    pub fn get_variable(&self, var_id: VarId) -> &Variable {
+        &self.variables[var_id.0]
     }
 
     pub fn fresh_type_variable(&mut self) -> TypeId {

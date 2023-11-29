@@ -314,6 +314,11 @@ fn first_class_function_value() -> TestResult {
 }
 
 #[test]
+fn first_class_function_value_call() -> TestResult {
+    test_example("first_class_functions/first_class_function_value_call")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("control_flow/for_range")
 }
@@ -571,6 +576,11 @@ fn owned_struct_error2() -> TestResult {
 #[test]
 fn owned_struct_error3() -> TestResult {
     test_example("owned_abstractions/owned_struct_error3")
+}
+
+#[test]
+fn params_dont_leak_error() -> TestResult {
+    test_example("typechecking/params_dont_leak_error")
 }
 
 #[test]

@@ -250,6 +250,8 @@ impl Typechecker {
             [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
             .to_vec();
 
+        self.enter_scope();
+
         //FIXME: remove clone?
         if let AstNode::Params(unchecked_params) = self.compiler.get_node(params).clone() {
             for unchecked_param in unchecked_params {
@@ -323,6 +325,8 @@ impl Typechecker {
         } else {
             VOID_TYPE_ID
         };
+
+        self.exit_scope();
 
         self.compiler.functions.push(Function {
             name,
@@ -789,11 +793,11 @@ impl Typechecker {
 
     pub fn maybe_move_variable(&mut self, node_id: NodeId) {
         if let AstNode::Variable = self.compiler.get_node(node_id) {
-            let var = self.compiler.var_resolution.get(&node_id);
+            let var_id = self.compiler.var_resolution.get(&node_id);
 
             // Assume the mistyped variable error has already been reported
-            if let Some(var) = var {
-                let var_type = self.compiler.variables[var.0].ty;
+            if let Some(var_id) = var_id {
+                let var_type = self.compiler.get_variable(*var_id).ty;
                 let var_ty = self.compiler.get_type(var_type);
 
                 if let Type::Pointer { pointer_type, .. } = var_ty {
@@ -802,7 +806,7 @@ impl Typechecker {
                             .last_mut()
                             .expect("internal error: missing scope frame")
                             .moved_owned_values
-                            .insert(*var, node_id);
+                            .insert(*var_id, node_id);
                     }
                 }
             }
@@ -847,13 +851,39 @@ impl Typechecker {
         match self.compiler.get_node(node_id) {
             AstNode::Variable => {
                 if let Some(var_id) = self.compiler.var_resolution.get(&node_id) {
-                    return self.compiler.variables[var_id.0].is_mutable;
+                    return self.compiler.get_variable(*var_id).is_mutable;
                 }
 
                 false
             }
             AstNode::MemberAccess { target, .. } => self.is_binding_mutable(*target),
             _ => false,
+        }
+    }
+
+    pub fn typecheck_call_with_var_id(
+        &mut self,
+        name: NodeId,
+        var_id: VarId,
+        args: &[NodeId],
+    ) -> TypeId {
+        let var = self.compiler.get_variable(var_id);
+
+        if let Type::Fun { params, ret } = self.compiler.get_type(var.ty) {
+            let params = params.clone();
+            let ret = *ret;
+
+            self.compiler
+                .call_resolution
+                .insert(name, CallTarget::Variable(var_id));
+
+            self.typecheck_call_helper(args, params, None);
+
+            ret
+        } else {
+            self.error("attempt to call a non-function variable", name);
+
+            UNKNOWN_TYPE_ID
         }
     }
 
@@ -906,6 +936,21 @@ impl Typechecker {
             self.enter_scope();
         }
 
+        self.typecheck_call_helper(args, params, method_target);
+
+        if method_target.is_some() {
+            self.exit_scope();
+        }
+
+        return_type
+    }
+
+    fn typecheck_call_helper(
+        &mut self,
+        args: &[NodeId],
+        params: Vec<Param>,
+        method_target: Option<NodeId>,
+    ) {
         for (idx, (arg, param)) in args.iter().zip(params).enumerate() {
             let arg = *arg;
 
@@ -917,7 +962,7 @@ impl Typechecker {
                     // Set up expected type for inference. Note: if we find concrete values
                     // this inference type will be replaced by the concrete type.
                     self.compiler
-                        .set_node_type(value, self.compiler.variables[param.var_id.0].ty);
+                        .set_node_type(value, self.compiler.get_variable(param.var_id).ty);
 
                     // If this is a method, we've already checked the first argument (aka
                     // the target of the method)
@@ -929,22 +974,22 @@ impl Typechecker {
 
                     self.maybe_move_variable(value);
 
-                    if self.compiler.variables[param.var_id.0].is_mutable
+                    if self.compiler.get_variable(param.var_id).is_mutable
                         && !self.is_binding_mutable(value)
                     {
                         self.note(
                             "parameter defined here",
-                            self.compiler.variables[param.var_id.0].where_defined,
+                            self.compiler.get_variable(param.var_id).where_defined,
                         );
                         self.error("argument to function needs to be mutable", value);
                     }
 
-                    if !self.is_type_compatible(arg_ty, self.compiler.variables[param.var_id.0].ty)
+                    if !self.is_type_compatible(arg_ty, self.compiler.get_variable(param.var_id).ty)
                     {
                         // FIXME: make this a better error
                         self.note(
                             "parameter defined here",
-                            self.compiler.variables[param.var_id.0].where_defined,
+                            self.compiler.get_variable(param.var_id).where_defined,
                         );
                         self.error("types incompatible with function", value);
                     }
@@ -954,7 +999,7 @@ impl Typechecker {
                     if arg_name != param.name {
                         self.note(
                             "parameter defined here",
-                            self.compiler.variables[param.var_id.0].where_defined,
+                            self.compiler.get_variable(param.var_id).where_defined,
                         );
 
                         self.error(
@@ -972,44 +1017,42 @@ impl Typechecker {
 
                     self.maybe_move_variable(arg);
 
-                    let variable = &self.compiler.variables[param.var_id.0];
+                    let variable = &self.compiler.get_variable(param.var_id);
 
                     if !self.is_type_compatible(variable.ty, arg_type) {
                         // FIXME: make this a better type error
                         self.note(
                             "parameter defined here",
-                            self.compiler.variables[param.var_id.0].where_defined,
+                            self.compiler.get_variable(param.var_id).where_defined,
                         );
 
                         self.error("type mismatch for arg", arg);
                     }
 
-                    if self.compiler.variables[param.var_id.0].is_mutable
+                    if self.compiler.get_variable(param.var_id).is_mutable
                         && !self.is_binding_mutable(arg)
                     {
                         self.note(
                             "parameter defined here",
-                            self.compiler.variables[param.var_id.0].where_defined,
+                            self.compiler.get_variable(param.var_id).where_defined,
                         );
                         self.error("argument to function needs to be mutable", arg);
                     }
                 }
             }
         }
-
-        if method_target.is_some() {
-            self.exit_scope();
-        }
-
-        return_type
     }
 
     pub fn typecheck_call(&mut self, head: NodeId, args: &[NodeId]) -> TypeId {
-        if let Some(fun_id) = self.find_function_in_scope(head) {
-            self.typecheck_call_with_fun_id(head, fun_id, args, None)
-        } else {
-            self.error("unknown function", head);
-            UNKNOWN_TYPE_ID
+        match self.find_name_in_scope(head) {
+            Some(VarOrFunId::FunId(fun_id)) => {
+                self.typecheck_call_with_fun_id(head, fun_id, args, None)
+            }
+            Some(VarOrFunId::VarId(var_id)) => self.typecheck_call_with_var_id(head, var_id, args),
+            None => {
+                self.error("unknown function", head);
+                UNKNOWN_TYPE_ID
+            }
         }
     }
 
@@ -1085,7 +1128,7 @@ impl Typechecker {
                         }
                         self.compiler.var_resolution.insert(node_id, var_id);
 
-                        let variable = &self.compiler.variables[var_id.0];
+                        let variable = &self.compiler.get_variable(var_id);
                         variable.ty
                     }
                     Some(VarOrFunId::FunId(fun_id)) => {
@@ -1363,7 +1406,7 @@ impl Typechecker {
                             let var_id = params[0].var_id;
 
                             if !self.is_type_compatible(
-                                self.compiler.variables[var_id.0].ty,
+                                self.compiler.get_variable(var_id).ty,
                                 pointer_type_id,
                             ) {
                                 // FIXME: improve the error message with type name
@@ -1410,7 +1453,7 @@ impl Typechecker {
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
                 if let Some(var_id) = var_id {
-                    let var = &self.compiler.variables[var_id.0];
+                    let var = &self.compiler.get_variable(*var_id);
                     let ty = var.ty;
                     if !var.is_mutable {
                         if self.compiler.get_source(lvalue) == b"." {
@@ -1568,9 +1611,7 @@ impl Typechecker {
                         if param.name == b"self" {
                             let var_id = param.var_id;
 
-                            let var = &self.compiler.variables[var_id.0];
-
-                            if var.is_mutable {
+                            if self.compiler.get_variable(var_id).is_mutable {
                                 self_is_mutable = true;
                             }
                         }
@@ -1581,7 +1622,7 @@ impl Typechecker {
                         for param in &params {
                             let var_id = param.var_id;
 
-                            let var = &self.compiler.variables[var_id.0];
+                            let var = &self.compiler.get_variable(var_id);
 
                             let var_type_id = var.ty;
                             let where_defined = var.where_defined;
@@ -2356,17 +2397,17 @@ impl Typechecker {
         None
     }
 
-    pub fn find_function_in_scope(&self, function_name: NodeId) -> Option<FunId> {
-        let name = &self.compiler.source
-            [self.compiler.span_start[function_name.0]..self.compiler.span_end[function_name.0]];
-        for scope in self.scope.iter().rev() {
-            if let Some(fun_id) = scope.functions.get(name) {
-                return Some(*fun_id);
-            }
-        }
+    // pub fn find_function_in_scope(&self, function_name: NodeId) -> Option<FunId> {
+    //     let name = &self.compiler.source
+    //         [self.compiler.span_start[function_name.0]..self.compiler.span_end[function_name.0]];
+    //     for scope in self.scope.iter().rev() {
+    //         if let Some(fun_id) = scope.functions.get(name) {
+    //             return Some(*fun_id);
+    //         }
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
     pub fn find_type_in_scope(&self, type_name: NodeId) -> Option<TypeId> {
         let name = &self.compiler.source

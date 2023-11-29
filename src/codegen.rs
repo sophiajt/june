@@ -287,7 +287,7 @@ impl Codegen {
                     output.extend_from_slice(b")(long");
                     for param in params {
                         output.extend_from_slice(b", ");
-                        let var_type_id = self.compiler.variables[param.var_id.0].ty;
+                        let var_type_id = self.compiler.get_variable(param.var_id).ty;
                         self.codegen_typename(var_type_id, output);
                     }
                     output.extend_from_slice(b");\n");
@@ -321,8 +321,8 @@ impl Codegen {
         for param in params {
             output.extend_from_slice(b", ");
 
-            let variable = &self.compiler.variables[param.var_id.0];
-            self.codegen_typename(variable.ty, output);
+            let variable_ty = self.compiler.get_variable(param.var_id).ty;
+            self.codegen_typename(variable_ty, output);
             output.push(b' ');
             output.extend_from_slice(b"variable_");
             output.extend_from_slice(param.var_id.0.to_string().as_bytes());
@@ -411,7 +411,7 @@ impl Codegen {
                     output.extend_from_slice(b"/* ");
                     output.extend_from_slice(
                         self.compiler
-                            .get_source(self.compiler.variables[var_id.0].name),
+                            .get_source(self.compiler.get_variable(*var_id).name),
                     );
                     output.extend_from_slice(b" */ ");
 
@@ -445,14 +445,14 @@ impl Codegen {
                     .get(variable_name)
                     .expect("internal error: unresolved variable in codegen");
 
-                let ty = self.compiler.variables[var_id.0].ty;
+                let ty = self.compiler.get_variable(*var_id).ty;
 
                 self.codegen_typename(ty, output);
 
                 output.extend_from_slice(b" /* ");
                 output.extend_from_slice(
                     self.compiler
-                        .get_source(self.compiler.variables[var_id.0].name),
+                        .get_source(self.compiler.get_variable(*var_id).name),
                 );
                 output.extend_from_slice(b" */ ");
 
@@ -536,7 +536,7 @@ impl Codegen {
                                     self.codegen_node(args[0], output);
                                 }
                                 I64_TYPE_ID => {
-                                    output.extend_from_slice(b"printf(\"%li\\n\", ");
+                                    output.extend_from_slice(b"printf(\"%lli\\n\", ");
                                     self.codegen_node(args[0], output);
                                 }
                                 F64_TYPE_ID => {
@@ -584,6 +584,27 @@ impl Codegen {
                         output.extend_from_slice(target.0.to_string().as_bytes());
                         output.push(b'_');
                         output.extend_from_slice(offset.0.to_string().as_bytes());
+                        output.push(b'(');
+
+                        self.codegen_annotation(node_id, output);
+
+                        for arg in args {
+                            output.extend_from_slice(b", ");
+
+                            self.codegen_node(*arg, output)
+                        }
+                        output.push(b')');
+                    }
+                    CallTarget::Variable(var_id) => {
+                        output.extend_from_slice(b"/* ");
+                        output.extend_from_slice(
+                            self.compiler
+                                .get_source(self.compiler.variables[var_id.0].name),
+                        );
+                        output.extend_from_slice(b" */ ");
+
+                        output.extend_from_slice(b"variable_");
+                        output.extend_from_slice(var_id.0.to_string().as_bytes());
                         output.push(b'(');
 
                         self.codegen_annotation(node_id, output);
@@ -674,6 +695,9 @@ impl Codegen {
                             }
                             output.push(b')');
                         }
+                        _ => {
+                            unimplemented!("namedspaced lookup of non-namedspaced value")
+                        }
                     }
                 }
                 AstNode::Variable => {
@@ -705,6 +729,22 @@ impl Codegen {
                             output.extend_from_slice(target.0.to_string().as_bytes());
                             output.push(b'_');
                             output.extend_from_slice(offset.0.to_string().as_bytes());
+                            output.push(b'(');
+
+                            self.codegen_annotation(node_id, output);
+
+                            output.push(b')');
+                        }
+                        CallTarget::Variable(var_id) => {
+                            output.extend_from_slice(b"/* ");
+                            output.extend_from_slice(
+                                self.compiler
+                                    .get_source(self.compiler.variables[var_id.0].name),
+                            );
+                            output.extend_from_slice(b" */ ");
+
+                            output.extend_from_slice(b"variable_");
+                            output.extend_from_slice(var_id.0.to_string().as_bytes());
                             output.push(b'(');
 
                             self.codegen_annotation(node_id, output);
@@ -802,7 +842,7 @@ impl Codegen {
                     .get(variable)
                     .expect("internal error: unresolved variable in codegen");
 
-                let ty = self.compiler.variables[var_id.0].ty;
+                let ty = self.compiler.get_variable(*var_id).ty;
 
                 self.codegen_typename(ty, output);
 
@@ -862,7 +902,7 @@ impl Codegen {
                                 .var_resolution
                                 .get(match_arm)
                                 .expect("internal error: unresolved variable in codegen");
-                            let var_type = self.compiler.variables[var_id.0].ty;
+                            let var_type = self.compiler.get_variable(*var_id).ty;
                             self.codegen_typename(var_type, output);
                             output.extend_from_slice(b" variable_");
                             output.extend_from_slice(var_id.0.to_string().as_bytes());
@@ -927,7 +967,7 @@ impl Codegen {
                                                     AstNode::Variable => {
                                                         let var_id = self.compiler.var_resolution.get(arg).expect("internal error: unresolved variable in codegen");
                                                         let var_type =
-                                                            self.compiler.variables[var_id.0].ty;
+                                                            self.compiler.get_variable(*var_id).ty;
                                                         self.codegen_typename(
                                                             var_type,
                                                             &mut variable_assignments,
