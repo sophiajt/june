@@ -1,0 +1,5 @@
+// output: hello world
+
+extern "C" fun puts(s: c_string) -> c_int
+
+puts("hello world")

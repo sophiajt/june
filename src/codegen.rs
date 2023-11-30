@@ -3,8 +3,8 @@ use crate::{
     lifetime_checker::AllocationLifetime,
     parser::{AstNode, NodeId},
     typechecker::{
-        EnumVariant, FunId, Function, Param, Type, TypeId, TypedField, BOOL_TYPE_ID, F64_TYPE_ID,
-        I64_TYPE_ID, STRING_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
+        EnumVariant, FunId, Function, Param, Type, TypeId, TypedField, BOOL_TYPE_ID, C_INT_TYPE_ID,
+        C_STRING_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
     },
 };
 
@@ -44,8 +44,10 @@ impl Codegen {
                     output.extend_from_slice(b"int64_t");
                 } else if type_id == F64_TYPE_ID {
                     output.extend_from_slice(b"double");
-                } else if type_id == STRING_TYPE_ID {
-                    output.extend_from_slice(b"char*");
+                } else if type_id == C_STRING_TYPE_ID {
+                    output.extend_from_slice(b"const char*");
+                } else if type_id == C_INT_TYPE_ID {
+                    output.extend_from_slice(b"int");
                 } else if type_id == BOOL_TYPE_ID {
                     output.extend_from_slice(b"bool");
                 } else if type_id == UNKNOWN_TYPE_ID {
@@ -303,23 +305,39 @@ impl Codegen {
         params: &[Param],
         return_type: TypeId,
         output: &mut Vec<u8>,
+        is_extern_c: bool,
     ) {
         self.codegen_typename(return_type, output);
         output.push(b' ');
-        output.extend_from_slice(b"/* ");
-        output.extend_from_slice(
-            self.compiler
-                .get_source(self.compiler.functions[fun_id.0].name),
-        );
-        output.extend_from_slice(b" */ ");
+        if is_extern_c {
+            output.extend_from_slice(
+                self.compiler
+                    .get_source(self.compiler.functions[fun_id.0].name),
+            );
+            output.push(b'(');
+        } else {
+            output.extend_from_slice(b"/* ");
+            output.extend_from_slice(
+                self.compiler
+                    .get_source(self.compiler.functions[fun_id.0].name),
+            );
+            output.extend_from_slice(b" */ ");
 
-        output.extend_from_slice(b"function_");
-        output.extend_from_slice(fun_id.0.to_string().as_bytes());
-        output.push(b'(');
+            output.extend_from_slice(b"function_");
+            output.extend_from_slice(fun_id.0.to_string().as_bytes());
+            output.push(b'(');
 
-        output.extend_from_slice(b"long allocation_id");
+            output.extend_from_slice(b"long allocation_id");
+        }
+
+        let mut first = is_extern_c;
+
         for param in params {
-            output.extend_from_slice(b", ");
+            if !first {
+                output.extend_from_slice(b", ");
+            } else {
+                first = false;
+            }
 
             let variable_ty = self.compiler.get_variable(param.var_id).ty;
             self.codegen_typename(variable_ty, output);
@@ -337,11 +355,12 @@ impl Codegen {
             Function {
                 params,
                 return_type,
+                body,
                 ..
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)
         {
-            self.codegen_fun_signature(FunId(idx), params, *return_type, output);
+            self.codegen_fun_signature(FunId(idx), params, *return_type, output, body.is_none());
 
             output.extend_from_slice(b";\n");
         }
@@ -357,11 +376,13 @@ impl Codegen {
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)
         {
-            self.codegen_fun_signature(FunId(idx), params, *return_type, output);
+            if let Some(body) = body {
+                self.codegen_fun_signature(FunId(idx), params, *return_type, output, false);
 
-            output.extend_from_slice(b"{\n");
-            self.codegen_block(*body, output);
-            output.extend_from_slice(b"}\n");
+                output.extend_from_slice(b"{\n");
+                self.codegen_block(*body, output);
+                output.extend_from_slice(b"}\n");
+            }
         }
     }
 
@@ -528,10 +549,11 @@ impl Codegen {
 
                 match call_target {
                     CallTarget::Function(fun_id) => {
+                        let fun = &self.compiler.functions[fun_id.0];
                         if fun_id.0 == 0 {
                             // special case for println
                             match self.compiler.get_node_type(args[0]) {
-                                STRING_TYPE_ID => {
+                                C_STRING_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%s\\n\", ");
                                     self.codegen_node(args[0], output);
                                 }
@@ -559,21 +581,29 @@ impl Codegen {
                             return;
                         }
 
-                        output.extend_from_slice(b"/* ");
-                        output.extend_from_slice(
-                            self.compiler
-                                .get_source(self.compiler.functions[fun_id.0].name),
-                        );
-                        output.extend_from_slice(b" */ ");
+                        if fun.body.is_some() {
+                            output.extend_from_slice(b"/* ");
+                            output.extend_from_slice(self.compiler.get_source(fun.name));
+                            output.extend_from_slice(b" */ ");
 
-                        output.extend_from_slice(b"function_");
-                        output.extend_from_slice(fun_id.0.to_string().as_bytes());
-                        output.push(b'(');
+                            output.extend_from_slice(b"function_");
+                            output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                            output.push(b'(');
 
-                        self.codegen_annotation(node_id, output);
+                            self.codegen_annotation(node_id, output);
+                        } else {
+                            output.extend_from_slice(self.compiler.get_source(fun.name));
+                            output.push(b'(');
+                        }
+
+                        let mut first = fun.body.is_none();
 
                         for arg in args {
-                            output.extend_from_slice(b", ");
+                            if !first {
+                                output.extend_from_slice(b", ");
+                            } else {
+                                first = false;
+                            }
 
                             self.codegen_node(*arg, output)
                         }

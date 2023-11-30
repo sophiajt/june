@@ -1,7 +1,7 @@
 // output: 200
 
 struct Employee {
-    name: string,
+    name: c_string,
     age: i64,
 }
 

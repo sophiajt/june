@@ -5,7 +5,7 @@ struct Stats {
 }
 
 struct Employee {
-    name: string,
+    name: c_string,
     stats: Stats,
 }
 

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, NodeId};
-use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, STRING_TYPE_ID};
+use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CaseOffset(pub usize);
@@ -104,8 +104,8 @@ impl Compiler {
         }
 
         println!("Types:");
-        for (type_id, ty) in self.types.iter().skip(STRING_TYPE_ID.0 + 1).enumerate() {
-            println!("  {}: {:?}", type_id + STRING_TYPE_ID.0 + 1, ty);
+        for (type_id, ty) in self.types.iter().skip(C_STRING_TYPE_ID.0 + 1).enumerate() {
+            println!("  {}: {:?}", type_id + C_STRING_TYPE_ID.0 + 1, ty);
         }
 
         println!("Call resolution");
@@ -170,7 +170,9 @@ impl Compiler {
                 if let Some(return_ty) = return_ty {
                     self.print_helper(return_ty, indent + 2);
                 }
-                self.print_helper(block, indent + 2);
+                if let Some(block) = block {
+                    self.print_helper(block, indent + 2);
+                }
             }
             AstNode::Struct {
                 typename: name,

@@ -1,7 +1,7 @@
 // output: helloFelicia
 
 struct Person {
-    name: string
+    name: c_string
 }
 
 fun greet(p: Person) {

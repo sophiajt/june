@@ -732,10 +732,9 @@ impl LifetimeChecker {
 
         // Check function bodies, skipping over our built-in print
         for fun_id in 1..self.compiler.functions.len() {
-            let fun = self.compiler.functions[fun_id].clone();
-
-            let body = fun.body;
-            self.check_node_lifetime(body, 0);
+            if let Some(body) = self.compiler.functions[fun_id].body {
+                self.check_node_lifetime(body, 0);
+            }
         }
 
         // Before we leave, go through our possible allocation sites and see

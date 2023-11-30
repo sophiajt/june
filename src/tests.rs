@@ -584,6 +584,11 @@ fn params_dont_leak_error() -> TestResult {
 }
 
 #[test]
+fn puts() -> TestResult {
+    test_example("extern_c/puts")
+}
+
+#[test]
 fn scope_struct() -> TestResult {
     test_example("lifetime_inference/scope_struct")
 }

@@ -4,6 +4,6 @@ fun main() {
     greet("hello")
 }
 
-fun greet(msg: string) {
+fun greet(msg: c_string) {
     println(msg)
 }

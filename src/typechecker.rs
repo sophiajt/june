@@ -38,7 +38,8 @@ pub enum Type {
         params: Vec<Param>,
         ret: TypeId,
     },
-    String,
+    CInt,
+    CString,
     Struct {
         generic_params: Vec<TypeId>,
         fields: Vec<TypedField>,
@@ -111,7 +112,7 @@ pub struct Function {
     pub lifetime_annotations: Vec<LifetimeAnnotation>,
     pub return_node: Option<NodeId>,
     pub return_type: TypeId,
-    pub body: NodeId,
+    pub body: Option<NodeId>,
 }
 
 pub struct Scope {
@@ -150,7 +151,8 @@ pub const I64_TYPE_ID: TypeId = TypeId(2);
 pub const F64_TYPE_ID: TypeId = TypeId(3);
 pub const BOOL_TYPE_ID: TypeId = TypeId(4);
 pub const RANGE_I64_TYPE_ID: TypeId = TypeId(5);
-pub const STRING_TYPE_ID: TypeId = TypeId(6);
+pub const C_INT_TYPE_ID: TypeId = TypeId(6);
+pub const C_STRING_TYPE_ID: TypeId = TypeId(7);
 
 impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
@@ -164,7 +166,7 @@ impl Typechecker {
         compiler.functions.push(Function {
             name: NodeId(0),
             params: vec![Param::new(b"input".to_vec(), VarId(0))],
-            body: NodeId(0),
+            body: None,
             lifetime_annotations: vec![],
             return_node: None,
             return_type: VOID_TYPE_ID,
@@ -177,7 +179,8 @@ impl Typechecker {
         compiler.push_type(Type::F64);
         compiler.push_type(Type::Bool);
         compiler.push_type(Type::Range(I64_TYPE_ID));
-        compiler.push_type(Type::String);
+        compiler.push_type(Type::CInt);
+        compiler.push_type(Type::CString);
 
         let mut scope = vec![Scope::new()];
 
@@ -211,7 +214,8 @@ impl Typechecker {
         match name {
             b"i64" => I64_TYPE_ID,
             b"f64" => F64_TYPE_ID,
-            b"string" => STRING_TYPE_ID,
+            b"c_string" => C_STRING_TYPE_ID,
+            b"c_int" => C_INT_TYPE_ID,
             b"bool" => BOOL_TYPE_ID,
             b"void" => VOID_TYPE_ID,
             _ => {
@@ -243,7 +247,7 @@ impl Typechecker {
         params: NodeId,
         lifetime_annotations: &[NodeId],
         return_ty: Option<NodeId>,
-        block: NodeId,
+        block: Option<NodeId>,
     ) -> FunId {
         let mut fun_params = vec![];
         let fun_name = self.compiler.source
@@ -357,6 +361,10 @@ impl Typechecker {
             name,
             ..
         } = self.compiler.functions[fun_id.0].clone();
+
+        let Some(body) = body else {
+            return;
+        };
 
         self.enter_scope();
 
@@ -1087,7 +1095,7 @@ impl Typechecker {
 
                 type_id
             }
-            AstNode::String => STRING_TYPE_ID,
+            AstNode::String => C_STRING_TYPE_ID,
             AstNode::Let {
                 variable_name,
                 initializer,
@@ -2317,7 +2325,7 @@ impl Typechecker {
                 lifetime_annotations: vec![],
                 return_type: top_level_type,
                 return_node: None,
-                body: top_level,
+                body: Some(top_level),
             })
         }
 

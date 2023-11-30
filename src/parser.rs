@@ -104,7 +104,7 @@ pub enum AstNode {
         params: NodeId,
         lifetime_annotations: Vec<NodeId>,
         return_ty: Option<NodeId>,
-        block: NodeId,
+        block: Option<NodeId>,
     },
     Params(Vec<NodeId>),
     Param {
@@ -737,6 +737,8 @@ impl Parser {
                 continue;
             } else if self.is_keyword(b"fun") {
                 code_body.push(self.fun_definition());
+            } else if self.is_keyword(b"extern") {
+                code_body.push(self.extern_definition());
             } else if self.is_keyword(b"struct") {
                 code_body.push(self.class_struct_definition(false));
             } else if self.is_keyword(b"class") {
@@ -783,12 +785,49 @@ impl Parser {
         )
     }
 
+    pub fn extern_definition(&mut self) -> NodeId {
+        let span_start = self.position();
+
+        self.keyword(b"extern");
+
+        // Assume "C" for now?
+        self.string();
+
+        self.keyword(b"fun");
+
+        let name = self.name();
+        let params = self.params();
+
+        let span_end;
+
+        let return_ty = if self.is_thin_arrow() {
+            self.next();
+            let typename = self.typename();
+            span_end = self.get_span_end(typename);
+            Some(typename)
+        } else {
+            span_end = self.get_span_end(params);
+            None
+        };
+
+        self.create_node(
+            AstNode::Fun {
+                name,
+                params,
+                lifetime_annotations: vec![],
+                return_ty,
+                block: None,
+            },
+            span_start,
+            span_end,
+        )
+    }
+
     pub fn fun_definition(&mut self) -> NodeId {
         let span_start = self.position();
         self.keyword(b"fun");
 
         let name = self.name();
-
         let params = self.params();
 
         let mut lifetime_annotations = vec![];
@@ -853,7 +892,7 @@ impl Parser {
                 params,
                 lifetime_annotations,
                 return_ty,
-                block,
+                block: Some(block),
             },
             span_start,
             span_end,

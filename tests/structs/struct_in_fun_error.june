@@ -2,7 +2,7 @@
 
 fun foo() {
     struct Employee {
-        name: string,
+        name: c_string,
         age: i64,
     }
 }
