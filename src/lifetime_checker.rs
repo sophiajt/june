@@ -666,7 +666,10 @@ impl LifetimeChecker {
                     self.check_node_lifetime(*match_result, scope_level)
                 }
             }
-            AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
+            AstNode::Fun { .. }
+            | AstNode::Struct { .. }
+            | AstNode::Enum { .. }
+            | AstNode::ExternType { .. } => {
                 // ignore
             }
             AstNode::Statement(node_id) => {

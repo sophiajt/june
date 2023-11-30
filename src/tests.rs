@@ -309,6 +309,11 @@ fn escaping_local_error2() -> TestResult {
 }
 
 #[test]
+fn file_ptr() -> TestResult {
+    test_example("extern_c/file_ptr")
+}
+
+#[test]
 fn first_class_function_value() -> TestResult {
     test_example("first_class_functions/first_class_function_value")
 }

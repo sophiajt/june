@@ -133,6 +133,10 @@ pub enum AstNode {
         payload: Option<Vec<NodeId>>,
     },
 
+    ExternType {
+        name: NodeId,
+    },
+
     // Closure {
     //     params: NodeId,
     //     block: NodeId,
@@ -790,37 +794,47 @@ impl Parser {
 
         self.keyword(b"extern");
 
-        // Assume "C" for now?
-        self.string();
+        if self.is_keyword(b"type") {
+            self.keyword(b"type");
 
-        self.keyword(b"fun");
+            let name = self.name();
+            let span_start = self.compiler.span_start[name.0];
+            let span_end = self.compiler.span_end[name.0];
 
-        let name = self.name();
-        let params = self.params();
-
-        let span_end;
-
-        let return_ty = if self.is_thin_arrow() {
-            self.next();
-            let typename = self.typename();
-            span_end = self.get_span_end(typename);
-            Some(typename)
+            self.create_node(AstNode::ExternType { name }, span_start, span_end)
         } else {
-            span_end = self.get_span_end(params);
-            None
-        };
+            // Assume "C" for now?
+            self.string();
 
-        self.create_node(
-            AstNode::Fun {
-                name,
-                params,
-                lifetime_annotations: vec![],
-                return_ty,
-                block: None,
-            },
-            span_start,
-            span_end,
-        )
+            self.keyword(b"fun");
+
+            let name = self.name();
+            let params = self.params();
+
+            let span_end;
+
+            let return_ty = if self.is_thin_arrow() {
+                self.next();
+                let typename = self.typename();
+                span_end = self.get_span_end(typename);
+                Some(typename)
+            } else {
+                span_end = self.get_span_end(params);
+                None
+            };
+
+            self.create_node(
+                AstNode::Fun {
+                    name,
+                    params,
+                    lifetime_annotations: vec![],
+                    return_ty,
+                    block: None,
+                },
+                span_start,
+                span_end,
+            )
+        }
     }
 
     pub fn fun_definition(&mut self) -> NodeId {

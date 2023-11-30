@@ -39,7 +39,9 @@ pub enum Type {
         ret: TypeId,
     },
     CInt,
+    CVoidPtr,
     CString,
+    CExternalType(NodeId),
     Struct {
         generic_params: Vec<TypeId>,
         fields: Vec<TypedField>,
@@ -152,7 +154,8 @@ pub const F64_TYPE_ID: TypeId = TypeId(3);
 pub const BOOL_TYPE_ID: TypeId = TypeId(4);
 pub const RANGE_I64_TYPE_ID: TypeId = TypeId(5);
 pub const C_INT_TYPE_ID: TypeId = TypeId(6);
-pub const C_STRING_TYPE_ID: TypeId = TypeId(7);
+pub const C_VOID_PTR_TYPE_ID: TypeId = TypeId(7);
+pub const C_STRING_TYPE_ID: TypeId = TypeId(8);
 
 impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
@@ -180,6 +183,7 @@ impl Typechecker {
         compiler.push_type(Type::Bool);
         compiler.push_type(Type::Range(I64_TYPE_ID));
         compiler.push_type(Type::CInt);
+        compiler.push_type(Type::CVoidPtr);
         compiler.push_type(Type::CString);
 
         let mut scope = vec![Scope::new()];
@@ -215,6 +219,7 @@ impl Typechecker {
             b"i64" => I64_TYPE_ID,
             b"f64" => F64_TYPE_ID,
             b"c_string" => C_STRING_TYPE_ID,
+            b"c_voidptr" => C_VOID_PTR_TYPE_ID,
             b"c_int" => C_INT_TYPE_ID,
             b"bool" => BOOL_TYPE_ID,
             b"void" => VOID_TYPE_ID,
@@ -773,6 +778,15 @@ impl Typechecker {
                 } => {
                     self.typecheck_enum(*typename, cases.clone(), methods.clone());
                 }
+
+                AstNode::ExternType { name } => {
+                    let type_name = self.compiler.get_source(*name).to_vec();
+                    let ty = Type::CExternalType(*name);
+                    let type_id = self.compiler.find_or_create_type(ty);
+
+                    self.add_type_to_scope(type_name, type_id);
+                }
+
                 _ => {}
             }
         }
@@ -1436,7 +1450,10 @@ impl Typechecker {
             AstNode::Match { target, match_arms } => {
                 self.typecheck_match(*target, match_arms.clone())
             }
-            AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
+            AstNode::Fun { .. }
+            | AstNode::Struct { .. }
+            | AstNode::Enum { .. }
+            | AstNode::ExternType { .. } => {
                 // ignore here, since we checked this in an earlier pass
                 VOID_TYPE_ID
             }

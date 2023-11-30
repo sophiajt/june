@@ -4,7 +4,8 @@ use crate::{
     parser::{AstNode, NodeId},
     typechecker::{
         EnumVariant, FunId, Function, Param, Type, TypeId, TypedField, BOOL_TYPE_ID, C_INT_TYPE_ID,
-        C_STRING_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
+        C_STRING_TYPE_ID, C_VOID_PTR_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID, UNKNOWN_TYPE_ID,
+        VOID_TYPE_ID,
     },
 };
 
@@ -37,6 +38,10 @@ impl Codegen {
                 output.extend_from_slice(b"fun_ty_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
             }
+            Type::CExternalType(node_id) => {
+                let typename = self.compiler.get_source(*node_id);
+                output.extend_from_slice(typename);
+            }
             _ => {
                 if type_id == VOID_TYPE_ID {
                     output.extend_from_slice(b"void");
@@ -46,6 +51,8 @@ impl Codegen {
                     output.extend_from_slice(b"double");
                 } else if type_id == C_STRING_TYPE_ID {
                     output.extend_from_slice(b"const char*");
+                } else if type_id == C_VOID_PTR_TYPE_ID {
+                    output.extend_from_slice(b"void*");
                 } else if type_id == C_INT_TYPE_ID {
                     output.extend_from_slice(b"int");
                 } else if type_id == BOOL_TYPE_ID {
@@ -569,6 +576,10 @@ impl Codegen {
                                     output.extend_from_slice(b"printf(\"%s\\n\", (");
                                     self.codegen_node(args[0], output);
                                     output.extend_from_slice(br#")?"true":"false""#);
+                                }
+                                C_INT_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%i\\n\", ");
+                                    self.codegen_node(args[0], output);
                                 }
                                 x => {
                                     panic!(
@@ -1098,7 +1109,10 @@ impl Codegen {
             AstNode::False => {
                 output.extend_from_slice(b"false");
             }
-            AstNode::Fun { .. } | AstNode::Struct { .. } | AstNode::Enum { .. } => {
+            AstNode::Fun { .. }
+            | AstNode::Struct { .. }
+            | AstNode::Enum { .. }
+            | AstNode::ExternType { .. } => {
                 // ignore this, as we handle it elsewhere
             }
             x => {
