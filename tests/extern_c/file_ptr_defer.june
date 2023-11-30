@@ -1,0 +1,21 @@
+// output: 97closing
+
+extern type FILE;
+
+extern "C" fun fopen(filename: c_string, mode: c_string) -> FILE?
+extern "C" fun fclose(file: FILE?) -> c_int;
+extern "C" fun fgetc(file: FILE?) -> c_int;
+
+fun cleanup(f: FILE?) {
+    println("closing")
+    fclose(f)
+}
+
+fun main() {
+    let file = fopen("test_data/alphabet.txt", "rb");
+    defer file cleanup
+    if file != none {
+        let x = fgetc(file)
+        println(x)
+    }
+}

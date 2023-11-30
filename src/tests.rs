@@ -314,6 +314,11 @@ fn file_ptr() -> TestResult {
 }
 
 #[test]
+fn file_ptr_defer() -> TestResult {
+    test_example("extern_c/file_ptr_defer")
+}
+
+#[test]
 fn first_class_function_value() -> TestResult {
     test_example("first_class_functions/first_class_function_value")
 }

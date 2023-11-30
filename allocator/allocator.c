@@ -38,7 +38,16 @@ struct Allocator
 
 void print_allocator_level(struct AllocatorLevel *allocator_level)
 {
-    printf("  Resource cleanup: %p\n", allocator_level->cleanups);
+    printf("  Resource cleanup\n");
+
+    struct ResourceCleanup *current = allocator_level->cleanups;
+    while (current != NULL)
+    {
+        printf("    Cleanup:\n");
+        printf("      Pointer: %p\n", current->resource);
+        printf("      Callback: %p\n", current->cleanup_fun);
+    }
+
     printf("  Number of pages: %i\n", allocator_level->num_pages);
 
     for (int i = 0; i < allocator_level->num_pages; ++i)
@@ -125,17 +134,23 @@ void add_resource_cleanup(struct Allocator *allocator, int level, void *resource
     }
     else
     {
-        struct ResourceCleanup *current = allocator->levels[level]->cleanups;
+        // struct ResourceCleanup *current = allocator->levels[level]->cleanups;
 
-        while (current->next != NULL)
-        {
-            current = current->next;
-        }
+        // while (current->next != NULL)
+        // {
+        //     current = current->next;
+        // }
 
-        current->next = (struct ResourceCleanup *)malloc(sizeof(struct ResourceCleanup));
-        current->next->cleanup_fun = cleanup_fun;
-        current->next->resource = resource;
-        current->next->next = NULL;
+        // current->next = (struct ResourceCleanup *)malloc(sizeof(struct ResourceCleanup));
+        // current->next->cleanup_fun = cleanup_fun;
+        // current->next->resource = resource;
+        // current->next->next = NULL;
+
+        struct ResourceCleanup *new_node = (struct ResourceCleanup *)malloc(sizeof(struct ResourceCleanup));
+        new_node->cleanup_fun = cleanup_fun;
+        new_node->resource = resource;
+        new_node->next = allocator->levels[level]->cleanups;
+        allocator->levels[level]->cleanups = new_node;
     }
 }
 

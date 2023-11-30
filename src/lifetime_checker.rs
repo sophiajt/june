@@ -483,6 +483,19 @@ impl LifetimeChecker {
                 let pointer = *pointer;
 
                 self.check_node_lifetime(pointer, scope_level);
+
+                let expected_lifetime = self.compiler.get_node_lifetime(pointer);
+                self.expand_lifetime_with_node(node_id, pointer);
+
+                match expected_lifetime {
+                    AllocationLifetime::Return => {}
+                    AllocationLifetime::Param { .. } => {}
+                    AllocationLifetime::Scope { .. } => {
+                        // is this right?
+                        self.current_block_may_allocate(scope_level, node_id);
+                    }
+                    AllocationLifetime::Unknown => {}
+                }
             }
             AstNode::Call { head, args } => {
                 let head = *head;
@@ -504,6 +517,10 @@ impl LifetimeChecker {
                     Some(CallTarget::Function(fun_id)) if fun_id.0 != 0 => {
                         let fun_id = *fun_id;
                         let params = self.compiler.functions[fun_id.0].params.clone();
+                        if self.compiler.functions[fun_id.0].body.is_none() {
+                            // External calls handle their own lifetimes?
+                            return;
+                        }
 
                         for (param, arg) in params.iter().zip(args.iter()) {
                             let param_node_id =
