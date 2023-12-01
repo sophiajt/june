@@ -92,6 +92,7 @@ pub enum AstNode {
         block: NodeId,
     },
     Return(Option<NodeId>),
+    Break,
 
     NamespacedLookup {
         namespace: NodeId,
@@ -773,6 +774,8 @@ impl Parser {
                 code_body.push(self.for_statement());
             } else if self.is_keyword(b"return") {
                 code_body.push(self.return_statement());
+            } else if self.is_keyword(b"break") {
+                code_body.push(self.break_statement());
             } else if self.is_keyword(b"defer") {
                 code_body.push(self.defer_statement());
             } else {
@@ -1947,6 +1950,15 @@ impl Parser {
         };
 
         self.create_node(AstNode::Return(ret_val), span_start, span_end)
+    }
+
+    pub fn break_statement(&mut self) -> NodeId {
+        let span_start = self.position();
+        let span_end = self.position() + 5;
+
+        self.keyword(b"break");
+
+        self.create_node(AstNode::Break, span_start, span_end)
     }
 
     pub fn defer_statement(&mut self) -> NodeId {

@@ -1,0 +1,57 @@
+// output: 979899100101102103doneclosing
+
+extern type FILE;
+
+extern "C" fun fopen(filename: c_string, mode: c_string) -> FILE?
+extern "C" fun fclose(file: FILE?) -> c_int;
+extern "C" fun fgetc(file: FILE?) -> c_int;
+
+fun cleanup(f: FILE?) {
+    println("closing")
+    fclose(f)
+}
+
+enum Output {
+    EOF
+    Char(c_int)
+}
+
+class File {
+    file: FILE?
+
+    fun open(fname: c_string) -> File {
+        let file = fopen(fname, "rb")
+        defer file cleanup
+
+        return new File(file: file)
+    }
+
+    fun get_char(mut self) -> Output {
+        let x = fgetc(self.file)
+
+        if x == -1 {
+            return Output::EOF
+        } else {
+            return Output::Char(x)
+        }
+    }
+}
+
+fun main() {
+    mut file = File::open("test_data/alphabet.txt");
+    while true {
+        let x = file.get_char();
+
+        match x {
+            Output::EOF => {
+                println("done")
+                break
+            }
+            Output::Char(c) => {
+                if c != 10 && c != 13 {
+                    println(c)                
+                }
+            }
+        }
+    }
+}

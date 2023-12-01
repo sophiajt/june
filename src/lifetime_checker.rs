@@ -686,7 +686,8 @@ impl LifetimeChecker {
             AstNode::Fun { .. }
             | AstNode::Struct { .. }
             | AstNode::Enum { .. }
-            | AstNode::ExternType { .. } => {
+            | AstNode::ExternType { .. }
+            | AstNode::Break => {
                 // ignore
             }
             AstNode::Statement(node_id) => {

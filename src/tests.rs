@@ -309,6 +309,11 @@ fn escaping_local_error2() -> TestResult {
 }
 
 #[test]
+fn file_io_abstraction() -> TestResult {
+    test_example("extern_c/file_io_abstraction")
+}
+
+#[test]
 fn file_ptr() -> TestResult {
     test_example("extern_c/file_ptr")
 }

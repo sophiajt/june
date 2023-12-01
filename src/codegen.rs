@@ -809,6 +809,9 @@ impl Codegen {
                 // rather than ignoring the name
                 self.codegen_node(*value, output)
             }
+            AstNode::Break => {
+                output.extend_from_slice(b"break;\n");
+            }
             AstNode::MemberAccess { target, field } => {
                 self.codegen_node(*target, output);
                 output.extend_from_slice(b"->");
@@ -981,8 +984,9 @@ impl Codegen {
                                             output.extend_from_slice(
                                                 case_offset.0.to_string().as_bytes(),
                                             );
-                                            output.extend_from_slice(b") ");
+                                            output.extend_from_slice(b") {");
                                             self.codegen_node(*match_result, output);
+                                            output.extend_from_slice(b"}\n");
                                         }
                                         x => {
                                             panic!("target not supported in enum codegen: {:?}", x);

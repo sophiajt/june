@@ -1365,6 +1365,10 @@ impl Typechecker {
                 self.typecheck_new(allocation_type, allocation_node_id)
             }
             AstNode::NamedValue { value, .. } => self.typecheck_node(*value),
+            AstNode::Break => {
+                //FIXME: ensure that we're inside a loop
+                VOID_TYPE_ID
+            }
             AstNode::Return(return_expr) => {
                 let return_expr = *return_expr;
                 let expected_type = self.find_expected_return_type();
