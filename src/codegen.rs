@@ -520,6 +520,12 @@ impl Codegen {
             AstNode::GreaterThan => {
                 output.push(b'>');
             }
+            AstNode::And => {
+                output.extend_from_slice(b"&&");
+            }
+            AstNode::Or => {
+                output.extend_from_slice(b"||");
+            }
             AstNode::GreaterThanOrEqual => {
                 output.extend_from_slice(b">=");
             }

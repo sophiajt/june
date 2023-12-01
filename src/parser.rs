@@ -591,6 +591,16 @@ impl Parser {
         )
     }
 
+    pub fn is_minus(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::Dash,
+                ..
+            })
+        )
+    }
+
     pub fn is_string(&mut self) -> bool {
         matches!(
             self.peek(),
@@ -630,6 +640,10 @@ impl Parser {
         match self.peek() {
             Some(Token {
                 token_type: TokenType::Number,
+                ..
+            })
+            | Some(Token {
+                token_type: TokenType::Dash,
                 ..
             })
             | Some(Token {
@@ -1235,7 +1249,7 @@ impl Parser {
             self.new_allocation()
         } else if self.is_string() {
             self.string()
-        } else if self.is_number() {
+        } else if self.is_number() || self.is_minus() {
             self.number()
         } else if self.is_name() {
             self.variable_or_call()
@@ -1327,6 +1341,22 @@ impl Parser {
                 span_end,
             }) => {
                 self.next();
+                let contents = &self.compiler.source[span_start..span_end];
+
+                if contents.contains(&b'.') {
+                    self.create_node(AstNode::Float, span_start, span_end)
+                } else {
+                    self.create_node(AstNode::Int, span_start, span_end)
+                }
+            }
+            Some(Token {
+                token_type: TokenType::Dash,
+                span_start,
+                ..
+            }) => {
+                self.next();
+                let remaining = self.number();
+                let span_end = self.get_span_end(remaining);
                 let contents = &self.compiler.source[span_start..span_end];
 
                 if contents.contains(&b'.') {

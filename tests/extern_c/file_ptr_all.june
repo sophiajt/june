@@ -1,0 +1,19 @@
+// output: 979899100101102103
+
+extern type FILE;
+
+extern "C" fun fopen(filename: c_string, mode: c_string) -> FILE?
+extern "C" fun fclose(file: FILE?) -> c_int;
+extern "C" fun fgetc(file: FILE?) -> c_int;
+
+fun main() {
+    let file = fopen("test_data/alphabet.txt", "rb");
+    if file != none {
+        mut c = fgetc(file)
+        while c != -1 && c != 10 && c != 13 {
+            println(c)
+            c = fgetc(file)
+        }
+        fclose(file)
+    }
+}

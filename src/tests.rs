@@ -314,6 +314,11 @@ fn file_ptr() -> TestResult {
 }
 
 #[test]
+fn file_ptr_all() -> TestResult {
+    test_example("extern_c/file_ptr_all")
+}
+
+#[test]
 fn file_ptr_defer() -> TestResult {
     test_example("extern_c/file_ptr_defer")
 }

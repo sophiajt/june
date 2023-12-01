@@ -865,6 +865,8 @@ impl Typechecker {
                     && target_lhs == target_rhs
                     && (*optional_lhs || optional_lhs == optional_rhs)
             }
+            (Type::CInt, Type::I64) => true, // FIXME: do we want these?
+            (Type::I64, Type::CInt) => true,
             _ => lhs == rhs,
         }
     }
@@ -1303,6 +1305,31 @@ impl Typechecker {
                             );
                         }
                         VOID_TYPE_ID
+                    }
+                    AstNode::And | AstNode::Or => {
+                        let lhs_ty = self.typecheck_node(lhs);
+                        let rhs_ty = self.typecheck_node(rhs);
+
+                        if !self.is_type_compatible(lhs_ty, BOOL_TYPE_ID) {
+                            self.error(
+                                format!(
+                                    "type mismatch during operation. expected: bool, found: {:?}",
+                                    self.compiler.get_type(lhs_ty),
+                                ),
+                                lhs,
+                            )
+                        }
+                        if !self.is_type_compatible(rhs_ty, BOOL_TYPE_ID) {
+                            self.error(
+                                format!(
+                                    "type mismatch during operation. expected: bool, found: {:?}",
+                                    self.compiler.get_type(rhs_ty),
+                                ),
+                                rhs,
+                            )
+                        }
+
+                        BOOL_TYPE_ID
                     }
                     x => panic!("unsupported operator: {:?}", x),
                 }
