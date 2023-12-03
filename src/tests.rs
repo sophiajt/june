@@ -633,6 +633,11 @@ fn static_method() -> TestResult {
 }
 
 #[test]
+fn string_() -> TestResult {
+    test_example("data_types/string")
+}
+
+#[test]
 fn struct_allocator() -> TestResult {
     test_example("structs/struct_allocator")
 }
