@@ -39,6 +39,10 @@ pub enum AstNode {
         optional: bool,
         pointer_type: PointerType,
     },
+    FunType {
+        params: Vec<NodeId>,
+        ret: NodeId,
+    },
     Variable,
 
     // Booleans
@@ -1571,6 +1575,34 @@ impl Parser {
         }
     }
 
+    pub fn fun_typename(&mut self) -> NodeId {
+        let span_start = self.position();
+        self.keyword(b"fun");
+
+        self.lparen();
+
+        let mut params = vec![];
+
+        loop {
+            if self.is_rparen() {
+                self.rparen();
+                break;
+            } else {
+                params.push(self.typename())
+            }
+        }
+
+        // FIXME: allow no arrow if there's no return type
+
+        self.thin_arrow();
+
+        let ret = self.typename();
+
+        let span_end = self.get_span_end(ret);
+
+        self.create_node(AstNode::FunType { params, ret }, span_start, span_end)
+    }
+
     pub fn typename(&mut self) -> NodeId {
         let pointer_type = if self.is_keyword(b"owned") {
             self.next();
@@ -1586,7 +1618,12 @@ impl Parser {
                 span_end,
                 ..
             }) => {
+                if &self.compiler.source[span_start..span_end] == b"fun" {
+                    return self.fun_typename();
+                }
+
                 let name = self.name();
+
                 let mut params = None;
                 if self.is_less_than() {
                     // We have generics
@@ -2222,6 +2259,20 @@ impl Parser {
             }
             _ => {
                 self.error("expected: equals '='");
+            }
+        }
+    }
+
+    pub fn thin_arrow(&mut self) {
+        match self.peek() {
+            Some(Token {
+                token_type: TokenType::ThinArrow,
+                ..
+            }) => {
+                self.next();
+            }
+            _ => {
+                self.error("expected: thin arrow '->'");
             }
         }
     }

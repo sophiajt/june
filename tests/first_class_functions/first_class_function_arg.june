@@ -1,0 +1,11 @@
+// output: 98
+
+fun bar(f: fun(i64) -> i64) -> i64 {
+    return f(88)
+}
+
+fun foo(x: i64) -> i64 {
+    return x + 10
+}
+
+println(bar(foo))

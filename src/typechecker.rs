@@ -201,57 +201,82 @@ impl Typechecker {
     }
 
     pub fn typecheck_typename(&mut self, node_id: NodeId) -> TypeId {
-        let AstNode::Type {
-            name,
-            optional,
-            pointer_type,
-            ..
-        } = self.compiler.get_node(node_id)
-        else {
-            self.error(
-                format!(
-                    "expected type name: {:?}",
-                    self.compiler.get_node(node_id).clone()
-                ),
-                node_id,
-            );
-            return VOID_TYPE_ID;
-        };
+        match self.compiler.get_node(node_id) {
+            AstNode::Type {
+                name,
+                optional,
+                pointer_type,
+                ..
+            } => {
+                let name_node_id = *name;
+                let optional = *optional;
+                let pointer_type = *pointer_type;
 
-        let name_node_id = *name;
-        let optional = *optional;
-        let pointer_type = *pointer_type;
+                let name = self.compiler.get_source(name_node_id);
 
-        let name = self.compiler.get_source(name_node_id);
-
-        match name {
-            b"i64" => I64_TYPE_ID,
-            b"f64" => F64_TYPE_ID,
-            b"c_string" => C_STRING_TYPE_ID,
-            b"c_voidptr" => C_VOID_PTR_TYPE_ID,
-            b"c_char" => C_CHAR_TYPE_ID,
-            b"c_int" => C_INT_TYPE_ID,
-            b"bool" => BOOL_TYPE_ID,
-            b"void" => VOID_TYPE_ID,
-            _ => {
-                if let Some(type_id) = self.find_type_in_scope(name_node_id) {
-                    if self.is_type_variable(type_id) {
-                        type_id
-                    } else {
-                        // Assume custom types are pointers
-                        self.compiler.find_or_create_type(Type::Pointer {
-                            pointer_type,
-                            optional,
-                            target: type_id,
-                        })
+                match name {
+                    b"i64" => I64_TYPE_ID,
+                    b"f64" => F64_TYPE_ID,
+                    b"c_string" => C_STRING_TYPE_ID,
+                    b"c_voidptr" => C_VOID_PTR_TYPE_ID,
+                    b"c_char" => C_CHAR_TYPE_ID,
+                    b"c_int" => C_INT_TYPE_ID,
+                    b"bool" => BOOL_TYPE_ID,
+                    b"void" => VOID_TYPE_ID,
+                    _ => {
+                        if let Some(type_id) = self.find_type_in_scope(name_node_id) {
+                            if self.is_type_variable(type_id) {
+                                type_id
+                            } else {
+                                // Assume custom types are pointers
+                                self.compiler.find_or_create_type(Type::Pointer {
+                                    pointer_type,
+                                    optional,
+                                    target: type_id,
+                                })
+                            }
+                        } else {
+                            self.error(
+                                &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
+                                node_id,
+                            );
+                            UNKNOWN_TYPE_ID
+                        }
                     }
-                } else {
-                    self.error(
-                        &format!("unknown type: '{}'", String::from_utf8_lossy(name)),
-                        node_id,
-                    );
-                    UNKNOWN_TYPE_ID
                 }
+            }
+            AstNode::FunType { params, ret } => {
+                let params = params.clone();
+                let ret = *ret;
+
+                let mut typed_params = vec![];
+
+                for param in params {
+                    let param_ty = self.typecheck_typename(param);
+                    let var_id = self.define_variable(param, param_ty, false, param);
+
+                    typed_params.push(Param {
+                        name: vec![],
+                        var_id,
+                    });
+                }
+
+                let typed_ret = self.typecheck_typename(ret);
+
+                self.compiler.find_or_create_type(Type::Fun {
+                    params: typed_params,
+                    ret: typed_ret,
+                })
+            }
+            _ => {
+                self.error(
+                    format!(
+                        "expected type name: {:?}",
+                        self.compiler.get_node(node_id).clone()
+                    ),
+                    node_id,
+                );
+                return VOID_TYPE_ID;
             }
         }
     }
@@ -874,6 +899,31 @@ impl Typechecker {
                         && pointer_type_rhs == &PointerType::Owned))
                     && target_lhs == target_rhs
                     && (*optional_lhs || optional_lhs == optional_rhs)
+            }
+            (
+                Type::Fun {
+                    params: lhs_params,
+                    ret: lhs_ret,
+                },
+                Type::Fun {
+                    params: rhs_params,
+                    ret: rhs_ret,
+                },
+            ) => {
+                if lhs_params.len() != rhs_params.len() {
+                    return false;
+                }
+
+                for (x, y) in lhs_params.iter().zip(rhs_params.iter()) {
+                    let x_ty = self.compiler.get_variable(x.var_id).ty;
+                    let y_ty = self.compiler.get_variable(y.var_id).ty;
+
+                    if !self.is_type_compatible(x_ty, y_ty) {
+                        return false;
+                    }
+                }
+
+                self.is_type_compatible(*lhs_ret, *rhs_ret)
             }
             (Type::CInt, Type::I64) => true, // FIXME: do we want these?
             (Type::I64, Type::CInt) => true,
