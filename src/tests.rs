@@ -339,6 +339,11 @@ fn first_class_function_value_call() -> TestResult {
 }
 
 #[test]
+fn first_class_function_value_call_error() -> TestResult {
+    test_example("first_class_functions/first_class_function_value_call_error")
+}
+
+#[test]
 fn for_range() -> TestResult {
     test_example("control_flow/for_range")
 }

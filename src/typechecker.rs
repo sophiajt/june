@@ -1001,34 +1001,33 @@ impl Typechecker {
                     if self.compiler.get_variable(param.var_id).is_mutable
                         && !self.is_binding_mutable(value)
                     {
+                        self.error("argument to function needs to be mutable", value);
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
                         );
-                        self.error("argument to function needs to be mutable", value);
                     }
 
                     if !self.is_type_compatible(arg_ty, self.compiler.get_variable(param.var_id).ty)
                     {
                         // FIXME: make this a better error
+                        self.error("types incompatible with function", value);
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
                         );
-                        self.error("types incompatible with function", value);
                     }
 
                     let arg_name = self.compiler.get_source(name);
 
                     if arg_name != param.name {
-                        self.note(
-                            "parameter defined here",
-                            self.compiler.get_variable(param.var_id).where_defined,
-                        );
-
                         self.error(
                             &format!("expected name '{}'", String::from_utf8_lossy(&param.name)),
                             name,
+                        );
+                        self.note(
+                            "parameter defined here",
+                            self.compiler.get_variable(param.var_id).where_defined,
                         )
                     }
                 }
@@ -1045,22 +1044,21 @@ impl Typechecker {
 
                     if !self.is_type_compatible(variable.ty, arg_type) {
                         // FIXME: make this a better type error
+                        self.error("type mismatch for arg", arg);
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
                         );
-
-                        self.error("type mismatch for arg", arg);
                     }
 
                     if self.compiler.get_variable(param.var_id).is_mutable
                         && !self.is_binding_mutable(arg)
                     {
+                        self.error("argument to function needs to be mutable", arg);
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
                         );
-                        self.error("argument to function needs to be mutable", arg);
                     }
                 }
             }
@@ -1147,8 +1145,8 @@ impl Typechecker {
                 match var_or_fun_id {
                     Some(VarOrFunId::VarId(var_id)) => {
                         if let Some(where_moved) = self.var_was_previously_moved(var_id) {
-                            self.note("location of variable move", where_moved);
                             self.error("moved variable accessed after move", node_id);
+                            self.note("location of variable move", where_moved);
                         }
                         self.compiler.var_resolution.insert(node_id, var_id);
 

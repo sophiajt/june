@@ -147,14 +147,14 @@ impl LifetimeChecker {
                         )
                         .to_string();
                         if incoming_var_id != var_id {
+                            self.error(format!("can't find compatible lifetime between param '{}' and param '{}'", param_name1, param_name2), node_id);
                             self.note(
                                 format!(
                                     "add a lifetime annotation to the function, e.g. [{} == {}]",
                                     param_name1, param_name2
                                 ),
                                 node_id,
-                            );
-                            self.error(format!("can't find compatible lifetime between param '{}' and param '{}'", param_name1, param_name2), node_id)
+                            )
                         }
                     }
                     AllocationLifetime::Scope { .. } => {
@@ -164,16 +164,16 @@ impl LifetimeChecker {
                         let param_name1 =
                             String::from_utf8_lossy(self.compiler.get_variable_name(var_id))
                                 .to_string();
-                        self.note(
+                        self.error(
                             format!(
-                                "add a lifetime annotation to the function, e.g. [{} == return]",
+                                "can't find compatible lifetime between param '{}' and return",
                                 param_name1
                             ),
                             node_id,
                         );
-                        self.error(
+                        self.note(
                             format!(
-                                "can't find compatible lifetime between param '{}' and return",
+                                "add a lifetime annotation to the function, e.g. [{} == return]",
                                 param_name1
                             ),
                             node_id,

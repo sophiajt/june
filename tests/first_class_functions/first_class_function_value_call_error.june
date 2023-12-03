@@ -1,0 +1,9 @@
+// error: type mismatch for arg
+
+fun foo(x: i64) -> i64 {
+    return x
+}
+
+let bar = foo
+
+println(bar("bob"))
