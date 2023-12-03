@@ -443,14 +443,14 @@ impl Compiler {
             Severity::Error => {
                 eprint!("\x1b[0;31m");
                 for _ in span_start..span_end {
-                    eprint!("▰");
+                    eprint!("╍"); //▔
                 }
                 eprintln!(" error: {}", message);
             }
             Severity::Note => {
                 eprint!("\x1b[0;34m");
                 for _ in span_start..span_end {
-                    eprint!("=");
+                    eprint!("╌");
                 }
                 eprintln!(" note: {}", message);
             }
