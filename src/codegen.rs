@@ -918,7 +918,7 @@ impl Codegen {
                 self.codegen_annotation(*pointer, output);
                 output.extend_from_slice(b", ");
                 self.codegen_node(*pointer, output);
-                output.extend_from_slice(b", ");
+                output.extend_from_slice(b", (void (*)(long, void *))");
                 self.codegen_node(*callback, output);
                 output.extend_from_slice(b");\n");
             }
