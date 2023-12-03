@@ -1,4 +1,4 @@
-// output: 97closing
+// output: aclosing
 
 extern type FILE;
 
@@ -16,6 +16,6 @@ fun main() {
     defer file cleanup
     if file != none {
         let x = fgetc(file)
-        println(x)
+        println(x as c_char)
     }
 }

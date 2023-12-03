@@ -693,6 +693,9 @@ impl LifetimeChecker {
             AstNode::Statement(node_id) => {
                 self.check_node_lifetime(*node_id, scope_level);
             }
+            AstNode::Type { .. } => {
+                // ignore types (eg "foo as bar")
+            }
             x => {
                 panic!("unsupported node: {:?}", x)
             }

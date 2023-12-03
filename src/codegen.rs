@@ -3,9 +3,9 @@ use crate::{
     lifetime_checker::AllocationLifetime,
     parser::{AstNode, NodeId},
     typechecker::{
-        EnumVariant, FunId, Function, Param, Type, TypeId, TypedField, BOOL_TYPE_ID, C_INT_TYPE_ID,
-        C_STRING_TYPE_ID, C_VOID_PTR_TYPE_ID, F64_TYPE_ID, I64_TYPE_ID, UNKNOWN_TYPE_ID,
-        VOID_TYPE_ID,
+        EnumVariant, FunId, Function, Param, Type, TypeId, TypedField, BOOL_TYPE_ID,
+        C_CHAR_TYPE_ID, C_INT_TYPE_ID, C_STRING_TYPE_ID, C_VOID_PTR_TYPE_ID, F64_TYPE_ID,
+        I64_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
     },
 };
 
@@ -55,6 +55,8 @@ impl Codegen {
                     output.extend_from_slice(b"void*");
                 } else if type_id == C_INT_TYPE_ID {
                     output.extend_from_slice(b"int");
+                } else if type_id == C_CHAR_TYPE_ID {
+                    output.extend_from_slice(b"char")
                 } else if type_id == BOOL_TYPE_ID {
                     output.extend_from_slice(b"bool");
                 } else if type_id == UNKNOWN_TYPE_ID {
@@ -542,15 +544,24 @@ impl Codegen {
                 output.extend_from_slice(b"/=");
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
-                output.push(b'(');
-                self.codegen_node(*lhs, output);
-                output.push(b')');
+                if matches!(self.compiler.get_node(*op), AstNode::As) {
+                    output.extend_from_slice(b"((");
+                    let rhs_type_id = self.compiler.get_node_type(*rhs);
+                    self.codegen_typename(rhs_type_id, output);
+                    output.push(b')');
+                    self.codegen_node(*lhs, output);
+                    output.push(b')');
+                } else {
+                    output.push(b'(');
+                    self.codegen_node(*lhs, output);
+                    output.push(b')');
 
-                self.codegen_node(*op, output);
+                    self.codegen_node(*op, output);
 
-                output.push(b'(');
-                self.codegen_node(*rhs, output);
-                output.push(b')');
+                    output.push(b'(');
+                    self.codegen_node(*rhs, output);
+                    output.push(b')');
+                }
             }
             AstNode::Call { head, args } => {
                 let call_target = self.compiler.call_resolution.get(head).unwrap_or_else(|| {
@@ -585,6 +596,10 @@ impl Codegen {
                                 }
                                 C_INT_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%i\\n\", ");
+                                    self.codegen_node(args[0], output);
+                                }
+                                C_CHAR_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%c\\n\", ");
                                     self.codegen_node(args[0], output);
                                 }
                                 x => {

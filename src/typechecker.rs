@@ -40,6 +40,7 @@ pub enum Type {
     },
     CInt,
     CVoidPtr,
+    CChar,
     CString,
     CExternalType(NodeId),
     Struct {
@@ -155,7 +156,8 @@ pub const BOOL_TYPE_ID: TypeId = TypeId(4);
 pub const RANGE_I64_TYPE_ID: TypeId = TypeId(5);
 pub const C_INT_TYPE_ID: TypeId = TypeId(6);
 pub const C_VOID_PTR_TYPE_ID: TypeId = TypeId(7);
-pub const C_STRING_TYPE_ID: TypeId = TypeId(8);
+pub const C_CHAR_TYPE_ID: TypeId = TypeId(8);
+pub const C_STRING_TYPE_ID: TypeId = TypeId(9);
 
 impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
@@ -184,6 +186,7 @@ impl Typechecker {
         compiler.push_type(Type::Range(I64_TYPE_ID));
         compiler.push_type(Type::CInt);
         compiler.push_type(Type::CVoidPtr);
+        compiler.push_type(Type::CChar);
         compiler.push_type(Type::CString);
 
         let mut scope = vec![Scope::new()];
@@ -205,7 +208,13 @@ impl Typechecker {
             ..
         } = self.compiler.get_node(node_id)
         else {
-            self.error("expected type name", node_id);
+            self.error(
+                format!(
+                    "expected type name: {:?}",
+                    self.compiler.get_node(node_id).clone()
+                ),
+                node_id,
+            );
             return VOID_TYPE_ID;
         };
 
@@ -220,6 +229,7 @@ impl Typechecker {
             b"f64" => F64_TYPE_ID,
             b"c_string" => C_STRING_TYPE_ID,
             b"c_voidptr" => C_VOID_PTR_TYPE_ID,
+            b"c_char" => C_CHAR_TYPE_ID,
             b"c_int" => C_INT_TYPE_ID,
             b"bool" => BOOL_TYPE_ID,
             b"void" => VOID_TYPE_ID,
@@ -1328,6 +1338,16 @@ impl Typechecker {
                         }
 
                         BOOL_TYPE_ID
+                    }
+                    AstNode::As => {
+                        let _lhs_ty = self.typecheck_node(lhs);
+                        let rhs_ty = self.typecheck_typename(rhs);
+
+                        self.compiler.set_node_type(rhs, rhs_ty);
+                        self.compiler.set_node_type(node_id, rhs_ty);
+
+                        //FIXME: Add type conversion compatibility check
+                        rhs_ty
                     }
                     x => panic!("unsupported operator: {:?}", x),
                 }

@@ -1,4 +1,4 @@
-// output: 979899100101102103doneclosing
+// output: abcdefgdoneclosing
 
 extern type FILE;
 
@@ -49,7 +49,7 @@ fun main() {
             }
             Output::Char(c) => {
                 if c != 10 && c != 13 {
-                    println(c)                
+                    println(c as c_char)                
                 }
             }
         }

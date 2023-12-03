@@ -1,4 +1,4 @@
-// output: 97
+// output: a
 
 extern type FILE;
 
@@ -10,7 +10,7 @@ fun main() {
     let file = fopen("test_data/alphabet.txt", "rb");
     if file != none {
         let x = fgetc(file)
-        println(x)
+        println(x as c_char)
     }
     fclose(file)
 }

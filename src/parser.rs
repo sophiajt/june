@@ -68,6 +68,9 @@ pub enum AstNode {
     Or,
     Pow,
 
+    // Special operators
+    As,
+
     // Assignments
     Assignment,
     AddAssignment,
@@ -193,6 +196,7 @@ pub const ASSIGNMENT_PRECEDENCE: usize = 10;
 impl AstNode {
     pub fn precedence(&self) -> usize {
         match self {
+            AstNode::As => 200,
             AstNode::Pow => 100,
             AstNode::Multiply | AstNode::Divide => 95,
             //AstNode::Modulo => 95,
@@ -337,27 +341,33 @@ impl Parser {
 
     pub fn is_operator(&mut self) -> bool {
         match self.peek() {
-            Some(Token { token_type, .. }) => matches!(
+            Some(Token {
                 token_type,
-                TokenType::Asterisk
-                    | TokenType::AsteriskAsterisk
-                    | TokenType::Dash
-                    | TokenType::EqualsEquals
-                    | TokenType::ExclamationEquals
-                    | TokenType::ForwardSlash
-                    | TokenType::LessThan
-                    | TokenType::LessThanEqual
-                    | TokenType::Plus
-                    | TokenType::GreaterThan
-                    | TokenType::GreaterThanEqual
-                    | TokenType::AmpersandAmpersand
-                    | TokenType::PipePipe
-                    | TokenType::Equals
-                    | TokenType::PlusEquals
-                    | TokenType::DashEquals
-                    | TokenType::AsteriskEquals
-                    | TokenType::ForwardSlashEquals
-            ),
+                span_start,
+                span_end,
+            }) => {
+                matches!(
+                    token_type,
+                    TokenType::Asterisk
+                        | TokenType::AsteriskAsterisk
+                        | TokenType::Dash
+                        | TokenType::EqualsEquals
+                        | TokenType::ExclamationEquals
+                        | TokenType::ForwardSlash
+                        | TokenType::LessThan
+                        | TokenType::LessThanEqual
+                        | TokenType::Plus
+                        | TokenType::GreaterThan
+                        | TokenType::GreaterThanEqual
+                        | TokenType::AmpersandAmpersand
+                        | TokenType::PipePipe
+                        | TokenType::Equals
+                        | TokenType::PlusEquals
+                        | TokenType::DashEquals
+                        | TokenType::AsteriskEquals
+                        | TokenType::ForwardSlashEquals
+                ) || matches!(token_type, TokenType::Name if &self.compiler.source[span_start..span_end] == b"as")
+            }
             _ => false,
         }
     }
@@ -1148,8 +1158,8 @@ impl Parser {
                 self.error("assignment found in expression");
             }
             let op = self.operator();
-
             let rhs = self.expression();
+
             let span_end = self.get_span_end(rhs);
 
             return self.create_node(AstNode::BinaryOp { lhs, op, rhs }, span_start, span_end);
@@ -1166,7 +1176,9 @@ impl Parser {
                     self.error_on_node("assignment found in expression", op);
                 }
 
-                let rhs = if self.is_simple_expression() {
+                let rhs = if matches!(self.compiler.get_node(op), AstNode::As) {
+                    self.typename()
+                } else if self.is_simple_expression() {
                     self.simple_expression()
                 } else {
                     self.error("incomplete math expression")
@@ -1492,6 +1504,10 @@ impl Parser {
                 TokenType::ForwardSlashEquals => {
                     self.next();
                     self.create_node(AstNode::DivideAssignment, span_start, span_end)
+                }
+                TokenType::Name if &self.compiler.source[span_start..span_end] == b"as" => {
+                    self.next();
+                    self.create_node(AstNode::As, span_start, span_end)
                 }
                 _ => self.error("expected: operator"),
             },
