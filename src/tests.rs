@@ -574,6 +574,11 @@ fn return_value() -> TestResult {
 }
 
 #[test]
+fn return_value_error() -> TestResult {
+    test_example("typechecking/return_value_error")
+}
+
+#[test]
 fn owned_method_doesnt_permanently_move() -> TestResult {
     test_example("owned_abstractions/owned_method_doesnt_permanently_move")
 }

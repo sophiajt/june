@@ -1,0 +1,7 @@
+// error: incompatible type at return
+
+fun foo() -> i64 {
+    return "bob"
+}
+
+println(foo())
