@@ -609,7 +609,7 @@ repository:
     patterns:
       - comment: double-quoted strings and byte strings
         name: string.quoted.double.june
-        begin: '(b?)(")'
+        begin: '((b|c)?)(")'
         beginCaptures:
           1:
             name: string.quoted.byte.raw.june
@@ -624,7 +624,7 @@ repository:
           - include: "#interpolations"
       - comment: double-quoted raw strings and raw byte strings
         name: string.quoted.double.june
-        begin: '(b?r)(#*)(")'
+        begin: '((b|c)?r)(#*)(")'
         beginCaptures:
           1:
             name: string.quoted.byte.raw.june
@@ -640,7 +640,7 @@ repository:
             name: punctuation.definition.string.raw.june
       - comment: characters and bytes
         name: string.quoted.single.char.june
-        begin: "(b)?(')"
+        begin: "(b|c)?(')"
         beginCaptures:
           1:
             name: string.quoted.byte.raw.june

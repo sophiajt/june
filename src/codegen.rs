@@ -412,7 +412,7 @@ impl Codegen {
 
     pub fn codegen_node(&self, node_id: NodeId, output: &mut Vec<u8>) {
         match &self.compiler.get_node(node_id) {
-            AstNode::String => {
+            AstNode::CString => {
                 let src = self.compiler.get_source(node_id);
 
                 output.extend_from_slice(src);

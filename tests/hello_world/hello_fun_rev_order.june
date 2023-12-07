@@ -5,5 +5,5 @@ fun main() {
 }
 
 fun greet() {
-    println("hello")
+    println(c"hello")
 }

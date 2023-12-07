@@ -8,6 +8,6 @@ enum Option<T> {
 let x = Option::Some(3)
 
 match x {
-    Option::None => println("None")
+    Option::None => println(c"None")
     Option::Some(y) => println(y)
 }

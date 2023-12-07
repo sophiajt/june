@@ -6,7 +6,7 @@ struct Employee {
 }
 
 fun main() {
-    mut employee = new Employee(name: "Bob", age: 123)
+    mut employee = new Employee(name: c"Bob", age: 123)
     employee.age = 200;
     println(employee.age)
 }

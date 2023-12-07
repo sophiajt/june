@@ -8,6 +8,6 @@ fun main() {
     let x = State::None
 
     match x {
-        State::Some => println("Some")
+        State::Some => println(c"Some")
     }
 }

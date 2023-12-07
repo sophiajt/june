@@ -10,7 +10,7 @@ fun main() {
     let x = State::Struct(x: 66, y: 77)
 
     match x {
-        State::None => println("None")
-        _ => println("Some")
+        State::None => println(c"None")
+        _ => println(c"Some")
     }
 }

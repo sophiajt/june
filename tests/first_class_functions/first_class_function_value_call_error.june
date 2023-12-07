@@ -6,4 +6,4 @@ fun foo(x: i64) -> i64 {
 
 let bar = foo
 
-println(bar("bob"))
+println(bar(c"bob"))

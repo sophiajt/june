@@ -2,7 +2,7 @@
 
 fun main() {
     fun say_hello() {
-        println("hello!")
+        println(c"hello!")
     }
 
     say_hello()

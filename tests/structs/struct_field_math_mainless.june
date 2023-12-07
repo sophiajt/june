@@ -5,5 +5,5 @@ struct Employee {
     age: i64,
 }
 
-let employee = new Employee(name: "Bob", age: 123)
+let employee = new Employee(name: c"Bob", age: 123)
 println(employee.age * 3 + 4 * 9)

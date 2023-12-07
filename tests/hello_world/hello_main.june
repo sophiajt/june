@@ -1,5 +1,5 @@
 // output: hello
 
 fun main() {
-    println("hello")
+    println(c"hello")
 }

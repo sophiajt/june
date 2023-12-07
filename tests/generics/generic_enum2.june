@@ -9,5 +9,5 @@ let x = Option::Some(3)
 
 match x {
     Option::Some(y) => println(y)
-    Option::None => println("None")
+    Option::None => println(c"None")
 }

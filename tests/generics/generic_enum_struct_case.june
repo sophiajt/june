@@ -8,6 +8,6 @@ enum Option<T, U> {
 let x = Option::Point(x: 3, y: 5)
 
 match x {
-    Option::None => println("None")
+    Option::None => println(c"None")
     Option::Point(x, y) => println(x - y)
 }

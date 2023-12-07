@@ -11,7 +11,7 @@ let b = 🦈::🍇(34)
 let c = 🦈::🍉(🍍: 68)
 
 match c {
-    🦈::🥧 => println("pie")
+    🦈::🥧 => println(c"pie")
     🦈::🍇(x) => println(x)
     🦈::🍉(🍍) => println(🍍)
 }

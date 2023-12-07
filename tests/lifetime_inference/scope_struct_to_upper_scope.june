@@ -6,9 +6,9 @@ struct Employee {
 }
 
 fun main() {
-    mut employee = new Employee(name: "Bob", age: 123)
+    mut employee = new Employee(name: c"Bob", age: 123)
     if true {
-        let employee2 = new Employee(name: "Sam", age: 456)
+        let employee2 = new Employee(name: c"Sam", age: 456)
         employee = employee2
     }
     println(employee.age)

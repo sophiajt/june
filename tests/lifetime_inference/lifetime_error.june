@@ -14,7 +14,7 @@ fun helper(mut employee: Employee, stats: Stats) {
 }
 
 fun main() {
-    mut employee = new Employee(name: "Sophia", stats: new Stats(age: 22))
+    mut employee = new Employee(name: c"Sophia", stats: new Stats(age: 22))
 
     helper(employee, new Stats(age: 33))
 

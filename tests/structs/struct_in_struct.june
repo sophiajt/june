@@ -10,7 +10,7 @@ struct Employee {
 }
 
 fun main() {
-    let employee = new Employee(name: "Sally", stats: new Stats(age: 22))
+    let employee = new Employee(name: c"Sally", stats: new Stats(age: 22))
 
     println(employee.stats.age)
 }

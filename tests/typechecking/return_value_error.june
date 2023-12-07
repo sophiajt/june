@@ -1,7 +1,7 @@
 // error: incompatible type at return
 
 fun foo() -> i64 {
-    return "bob"
+    return c"bob"
 }
 
 println(foo())

@@ -1169,7 +1169,11 @@ impl Typechecker {
 
                 type_id
             }
-            AstNode::String => C_STRING_TYPE_ID,
+            AstNode::String => {
+                self.error("strings not yet supported", node_id);
+                UNKNOWN_TYPE_ID
+            }
+            AstNode::CString => C_STRING_TYPE_ID,
             AstNode::Let {
                 variable_name,
                 initializer,

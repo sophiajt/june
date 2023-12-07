@@ -1,7 +1,7 @@
 // output: hello
 
 fun main() {
-    greet("hello")
+    greet(c"hello")
 }
 
 fun greet(msg: c_string) {

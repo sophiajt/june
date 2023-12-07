@@ -6,7 +6,7 @@ struct Employee {
 }
 
 fun helper() -> i64 {
-    let employee = new Employee(name: "Bob", age: 123)
+    let employee = new Employee(name: c"Bob", age: 123)
 
     return employee.age
 }

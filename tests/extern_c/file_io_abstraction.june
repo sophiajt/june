@@ -7,7 +7,7 @@ extern "C" fun fclose(file: FILE?) -> c_int;
 extern "C" fun fgetc(file: FILE?) -> c_int;
 
 fun cleanup(f: FILE?) {
-    println("closing")
+    println(c"closing")
     fclose(f)
 }
 
@@ -20,7 +20,7 @@ class File {
     file: FILE?
 
     fun open(fname: c_string) -> File {
-        let file = fopen(fname, "rb")
+        let file = fopen(fname, c"rb")
         defer file cleanup
 
         return new File(file: file)
@@ -38,13 +38,13 @@ class File {
 }
 
 fun main() {
-    mut file = File::open("test_data/alphabet.txt");
+    mut file = File::open(c"test_data/alphabet.txt");
     while true {
         let x = file.get_char();
 
         match x {
             Output::EOF => {
-                println("done")
+                println(c"done")
                 break
             }
             Output::Char(c) => {

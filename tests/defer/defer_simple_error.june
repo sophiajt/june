@@ -9,7 +9,7 @@ fun greet(p: i64) {
 }
 
 fun main() {
-    let person = new Person(name: "Felicia");
+    let person = new Person(name: c"Felicia");
     defer person greet
-    println("hello")
+    println(c"hello")
 }

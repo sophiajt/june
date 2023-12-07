@@ -1,7 +1,7 @@
 // output: hello
 
 fun greet() {
-    println("hello")
+    println(c"hello")
 }
 
 fun main() {
