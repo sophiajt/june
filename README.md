@@ -4,6 +4,7 @@
 
 - [ ] Cleanup the VSCode directory
 - [ ] Write docs on June's design and usage
+- [ ] Build June's website
 
 ## Pointer types
 
