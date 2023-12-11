@@ -339,6 +339,11 @@ fn first_class_function_return() -> TestResult {
 }
 
 #[test]
+fn first_class_function_return_error() -> TestResult {
+    test_example("first_class_functions/first_class_function_return_error")
+}
+
+#[test]
 fn first_class_function_value() -> TestResult {
     test_example("first_class_functions/first_class_function_value")
 }
