@@ -276,7 +276,7 @@ impl Typechecker {
                     ),
                     node_id,
                 );
-                return VOID_TYPE_ID;
+                VOID_TYPE_ID
             }
         }
     }
@@ -1132,8 +1132,19 @@ impl Typechecker {
             }
             Some(VarOrFunId::VarId(var_id)) => self.typecheck_call_with_var_id(head, var_id, args),
             None => {
-                self.error("unknown function", head);
-                UNKNOWN_TYPE_ID
+                let call_type_id = self.typecheck_node(head);
+                match self.compiler.get_type(call_type_id) {
+                    Type::Fun { params, ret } => {
+                        let params = params.clone();
+                        let ret = *ret;
+                        self.typecheck_call_helper(args, params, None);
+                        ret
+                    }
+                    _ => {
+                        self.error("unknown function", head);
+                        UNKNOWN_TYPE_ID
+                    }
+                }
             }
         }
     }

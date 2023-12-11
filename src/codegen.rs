@@ -564,6 +564,22 @@ impl Codegen {
                 }
             }
             AstNode::Call { head, args } => {
+                if matches!(
+                    self.compiler.get_type(self.compiler.get_node_type(*head)),
+                    Type::Fun { .. }
+                ) {
+                    // We're calling into a first class function
+                    output.push(b'(');
+                    self.codegen_node(*head, output);
+                    output.extend_from_slice(b")(");
+                    self.codegen_annotation(node_id, output);
+                    for arg in args {
+                        output.extend_from_slice(b", ");
+                        self.codegen_node(*arg, output);
+                    }
+                    output.push(b')');
+                    return;
+                }
                 let call_target = self.compiler.call_resolution.get(head).unwrap_or_else(|| {
                     panic!(
                         "internal error: missing call resolution in codegen: {:?}",

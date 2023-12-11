@@ -557,6 +557,7 @@ impl LifetimeChecker {
                         self.current_block_may_allocate(scope_level, node_id);
                     }
                     _ => {
+                        self.check_node_lifetime(head, scope_level);
                         for arg in args {
                             self.check_node_lifetime(arg, scope_level)
                         }
@@ -688,7 +689,8 @@ impl LifetimeChecker {
             | AstNode::Struct { .. }
             | AstNode::Enum { .. }
             | AstNode::ExternType { .. }
-            | AstNode::Break => {
+            | AstNode::Break
+            | AstNode::Name => {
                 // ignore
             }
             AstNode::Statement(node_id) => {

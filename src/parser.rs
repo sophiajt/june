@@ -2085,51 +2085,55 @@ impl Parser {
             let name_end = name.span_end;
 
             if self.is_lparen() {
-                let head = self.create_node(AstNode::Name, name_start, name_end);
-                // We're a call
-                self.lparen();
-                let mut args = vec![];
-                loop {
-                    if self.is_expression() {
-                        let value_start = self.position();
-                        let val = self.expression();
+                let mut head = self.create_node(AstNode::Name, name_start, name_end);
+                while self.is_lparen() {
+                    // We're a call
+                    self.lparen();
+                    let mut args = vec![];
+                    loop {
+                        if self.is_expression() {
+                            let value_start = self.position();
+                            let val = self.expression();
 
-                        if self.is_comma() {
-                            args.push(val);
-                            self.comma();
-                            continue;
-                        } else if self.is_rparen() {
-                            args.push(val);
-                            break;
-                        } else if self.is_colon() {
-                            // we have a named value
-                            self.colon();
-                            let name = val;
-                            let value = self.expression();
-                            let value_end = self.position();
-                            args.push(self.create_node(
-                                AstNode::NamedValue { name, value },
-                                value_start,
-                                value_end,
-                            ));
                             if self.is_comma() {
+                                args.push(val);
                                 self.comma();
                                 continue;
                             } else if self.is_rparen() {
+                                args.push(val);
                                 break;
+                            } else if self.is_colon() {
+                                // we have a named value
+                                self.colon();
+                                let name = val;
+                                let value = self.expression();
+                                let value_end = self.position();
+                                args.push(self.create_node(
+                                    AstNode::NamedValue { name, value },
+                                    value_start,
+                                    value_end,
+                                ));
+                                if self.is_comma() {
+                                    self.comma();
+                                    continue;
+                                } else if self.is_rparen() {
+                                    break;
+                                }
+                            } else {
+                                args.push(val);
+                                args.push(self.error("unexpected value in call arguments"));
                             }
                         } else {
-                            args.push(val);
-                            args.push(self.error("unexpected value in call arguments"));
+                            break;
                         }
-                    } else {
-                        break;
                     }
-                }
-                let span_end = self.position() + 1;
-                self.rparen();
+                    let span_end = self.position() + 1;
+                    self.rparen();
 
-                self.create_node(AstNode::Call { head, args }, span_start, span_end)
+                    head = self.create_node(AstNode::Call { head, args }, span_start, span_end)
+                }
+
+                head
             } else {
                 // We're a variable
                 self.create_node(AstNode::Variable, name_start, name_end)
