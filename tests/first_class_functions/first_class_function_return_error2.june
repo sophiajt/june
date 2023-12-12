@@ -1,0 +1,11 @@
+// error: found: fun (i64) -> i64 expected: fun (c_string) -> c_string
+
+fun bar() -> fun(c_string) -> c_string {
+    return foo
+}
+
+fun foo(x: i64) -> i64 {
+    return x + 10
+}
+
+println(bar()(c"bob"))

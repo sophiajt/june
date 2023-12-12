@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
-use crate::parser::{AstNode, Block, NodeId};
+use crate::parser::{AstNode, Block, NodeId, PointerType};
 use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -573,6 +573,68 @@ impl Compiler {
         self.types.push(Type::TypeVariable);
 
         TypeId(self.types.len() - 1)
+    }
+
+    pub fn pretty_type(&self, type_id: TypeId) -> String {
+        match self.get_type(type_id) {
+            Type::Bool => "bool".into(),
+            Type::CChar => "c_char".into(),
+            Type::CExternalType(node_id) => {
+                format!(
+                    "extern({})",
+                    String::from_utf8_lossy(self.get_source(*node_id))
+                )
+            }
+            Type::CInt => "c_int".into(),
+            Type::CString => "c_string".into(),
+            Type::CVoidPtr => "c_voidptr".into(),
+            Type::Enum { .. } => {
+                //FIXME: give this a name
+                "enum".into()
+            }
+            Type::F64 => "f64".into(),
+            Type::Fun { params, ret } => {
+                let mut output = "fun (".to_string();
+                let mut first = true;
+                for param in params {
+                    if !first {
+                        output += ", ";
+                    } else {
+                        first = false;
+                    }
+                    output += &self.pretty_type(self.get_variable(param.var_id).ty);
+                }
+                output += ") -> ";
+                output += &self.pretty_type(*ret);
+                output
+            }
+            Type::I64 => "i64".into(),
+            Type::Pointer {
+                pointer_type,
+                optional,
+                target,
+            } => {
+                let mut output = String::new();
+                if matches!(pointer_type, PointerType::Owned) {
+                    output += "owned ";
+                }
+                output += &self.pretty_type(*target);
+                if *optional {
+                    output += "?"
+                }
+                output
+            }
+            Type::Range(type_id) => {
+                format!("range({})", self.pretty_type(*type_id))
+            }
+            Type::Struct { .. } => {
+                // FIXME: need more info
+                "struct".into()
+            }
+            Type::TypeVariable => "<typevar>".into(),
+            Type::Unknown => "<unknown>".into(),
+            Type::Void => "void".into(),
+        }
     }
 
     pub fn num_ast_nodes(&self) -> usize {

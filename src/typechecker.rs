@@ -1311,9 +1311,9 @@ impl Typechecker {
                         if lhs_ty != rhs_ty {
                             self.error(
                                 format!(
-                                    "type mismatch during operation. expected: {:?}, found: {:?}",
-                                    self.compiler.get_type(lhs_ty),
-                                    self.compiler.get_type(rhs_ty),
+                                    "type mismatch during operation. expected: {}, found: {}",
+                                    self.compiler.pretty_type(lhs_ty),
+                                    self.compiler.pretty_type(rhs_ty),
                                 ),
                                 op,
                             )
@@ -1331,9 +1331,9 @@ impl Typechecker {
                         if !self.is_type_compatible(lhs_ty, rhs_ty) {
                             self.error(
                                 format!(
-                                    "type mismatch during operation. expected: {:?}, found: {:?}",
-                                    self.compiler.get_type(lhs_ty),
-                                    self.compiler.get_type(rhs_ty),
+                                    "type mismatch during operation. expected: {}, found: {}",
+                                    self.compiler.pretty_type(lhs_ty),
+                                    self.compiler.pretty_type(rhs_ty),
                                 ),
                                 op,
                             )
@@ -1349,9 +1349,9 @@ impl Typechecker {
                         if !self.is_type_compatible(lhs_ty, rhs_ty) {
                             self.error(
                                 format!(
-                                    "type mismatch during operation. expected: {:?}, found: {:?}",
-                                    self.compiler.get_type(lhs_ty),
-                                    self.compiler.get_type(rhs_ty),
+                                    "type mismatch during operation. expected: {}, found: {}",
+                                    self.compiler.pretty_type(lhs_ty),
+                                    self.compiler.pretty_type(rhs_ty),
                                 ),
                                 op,
                             )
@@ -1370,9 +1370,9 @@ impl Typechecker {
                         if !self.is_type_compatible(lhs_ty, rhs_ty) {
                             self.error(
                                 format!(
-                                    "type mismatch during operation. expected: {:?}, found: {:?}",
-                                    self.compiler.get_type(lhs_ty),
-                                    self.compiler.get_type(rhs_ty),
+                                    "type mismatch during operation. expected: {}, found: {}",
+                                    self.compiler.pretty_type(lhs_ty),
+                                    self.compiler.pretty_type(rhs_ty),
                                 ),
                                 op,
                             );
@@ -1386,8 +1386,8 @@ impl Typechecker {
                         if !self.is_type_compatible(lhs_ty, BOOL_TYPE_ID) {
                             self.error(
                                 format!(
-                                    "type mismatch during operation. expected: bool, found: {:?}",
-                                    self.compiler.get_type(lhs_ty),
+                                    "type mismatch during operation. expected: bool, found: {}",
+                                    self.compiler.pretty_type(lhs_ty),
                                 ),
                                 lhs,
                             )
@@ -1395,8 +1395,8 @@ impl Typechecker {
                         if !self.is_type_compatible(rhs_ty, BOOL_TYPE_ID) {
                             self.error(
                                 format!(
-                                    "type mismatch during operation. expected: bool, found: {:?}",
-                                    self.compiler.get_type(rhs_ty),
+                                    "type mismatch during operation. expected: bool, found: {}",
+                                    self.compiler.pretty_type(rhs_ty),
                                 ),
                                 rhs,
                             )
@@ -1461,13 +1461,11 @@ impl Typechecker {
 
                     if let Some(expected_type) = expected_type {
                         if !self.is_type_compatible(expected_type, expr_type) {
-                            // FIXME: actually print the types
-
                             self.error(
                                 format!(
-                                    "incompatible type at return, found: {:?} expected: {:?}",
-                                    self.compiler.get_type(expr_type),
-                                    self.compiler.get_type(expected_type)
+                                    "incompatible type at return, found: {} expected: {}",
+                                    self.compiler.pretty_type(expr_type),
+                                    self.compiler.pretty_type(expected_type)
                                 ),
                                 return_expr,
                             );
@@ -1892,8 +1890,8 @@ impl Typechecker {
                                     let value_type = self.typecheck_node(value);
 
                                     if !self.is_type_compatible(known_field_type, value_type) {
-                                        self.error(format!("incompatible type for argument, found: {:?}, expected: {:?}",
-                                            self.compiler.get_type(known_field_type), self.compiler.get_type(value_type)), value)
+                                        self.error(format!("incompatible type for argument, expected: {}, found: {}, ",
+                                        self.compiler.pretty_type(value_type), self.compiler.pretty_type(known_field_type)), value)
                                     }
                                 };
 
