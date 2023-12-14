@@ -432,11 +432,6 @@ impl Codegen {
                 output.extend_from_slice(b"NULL");
             }
             AstNode::Name => {
-                let src = self.compiler.get_source(node_id);
-
-                output.extend_from_slice(src);
-            }
-            AstNode::Variable => {
                 if let Some(var_id) = self.compiler.var_resolution.get(&node_id) {
                     output.extend_from_slice(b"/* ");
                     output.extend_from_slice(
@@ -458,10 +453,9 @@ impl Codegen {
                     output.extend_from_slice(b"function_");
                     output.extend_from_slice(fun_id.0.to_string().as_bytes());
                 } else {
-                    panic!(
-                        "internal error: unresolved variable in codegen: {}",
-                        node_id.0
-                    )
+                    let src = self.compiler.get_source(node_id);
+
+                    output.extend_from_slice(src);
                 }
             }
             AstNode::Let {
@@ -564,22 +558,22 @@ impl Codegen {
                 }
             }
             AstNode::Call { head, args } => {
-                if matches!(
-                    self.compiler.get_type(self.compiler.get_node_type(*head)),
-                    Type::Fun { .. }
-                ) {
-                    // We're calling into a first class function
-                    output.push(b'(');
-                    self.codegen_node(*head, output);
-                    output.extend_from_slice(b")(");
-                    self.codegen_annotation(node_id, output);
-                    for arg in args {
-                        output.extend_from_slice(b", ");
-                        self.codegen_node(*arg, output);
-                    }
-                    output.push(b')');
-                    return;
-                }
+                // if matches!(
+                //     self.compiler.get_type(self.compiler.get_node_type(*head)),
+                //     Type::Fun { .. }
+                // ) {
+                //     // We're calling into a first class function
+                //     output.push(b'(');
+                //     self.codegen_node(*head, output);
+                //     output.extend_from_slice(b")(");
+                //     self.codegen_annotation(node_id, output);
+                //     for arg in args {
+                //         output.extend_from_slice(b", ");
+                //         self.codegen_node(*arg, output);
+                //     }
+                //     output.push(b')');
+                //     return;
+                // }
                 let call_target = self.compiler.call_resolution.get(head).unwrap_or_else(|| {
                     panic!(
                         "internal error: missing call resolution in codegen: {:?}",
@@ -646,6 +640,18 @@ impl Codegen {
 
                         let mut first = fun.body.is_none();
 
+                        if let AstNode::MemberAccess { target, .. } = self.compiler.get_node(*head)
+                        {
+                            // A bit of a codegen workaround for now. Because we aren't updating the AST during typecheck,
+                            // we haven't moved the target of the method call to be the first arg. To get around that,
+                            // we'll manually push it in now.
+                            if !first {
+                                output.extend_from_slice(b", ");
+                            }
+                            self.codegen_node(*target, output);
+                            first = false;
+                        }
+
                         for arg in args {
                             if !first {
                                 output.extend_from_slice(b", ");
@@ -673,16 +679,10 @@ impl Codegen {
                         }
                         output.push(b')');
                     }
-                    CallTarget::Variable(var_id) => {
-                        output.extend_from_slice(b"/* ");
-                        output.extend_from_slice(
-                            self.compiler
-                                .get_source(self.compiler.variables[var_id.0].name),
-                        );
-                        output.extend_from_slice(b" */ ");
-
-                        output.extend_from_slice(b"variable_");
-                        output.extend_from_slice(var_id.0.to_string().as_bytes());
+                    CallTarget::NodeId(..) => {
+                        output.push(b'(');
+                        self.codegen_node(*head, output);
+                        output.push(b')');
                         output.push(b'(');
 
                         self.codegen_annotation(node_id, output);
@@ -778,7 +778,7 @@ impl Codegen {
                         }
                     }
                 }
-                AstNode::Variable => {
+                AstNode::Name => {
                     let call_target = self
                         .compiler
                         .call_resolution
@@ -813,16 +813,11 @@ impl Codegen {
 
                             output.push(b')');
                         }
-                        CallTarget::Variable(var_id) => {
-                            output.extend_from_slice(b"/* ");
-                            output.extend_from_slice(
-                                self.compiler
-                                    .get_source(self.compiler.variables[var_id.0].name),
-                            );
-                            output.extend_from_slice(b" */ ");
+                        CallTarget::NodeId(target) => {
+                            output.push(b'(');
+                            self.codegen_node(*target, output);
+                            output.push(b')');
 
-                            output.extend_from_slice(b"variable_");
-                            output.extend_from_slice(var_id.0.to_string().as_bytes());
                             output.push(b'(');
 
                             self.codegen_annotation(node_id, output);
@@ -875,9 +870,6 @@ impl Codegen {
                         panic!("internal error: field access on non-struct: {:?}", x)
                     }
                 }
-            }
-            AstNode::MethodCall { call, .. } => {
-                self.codegen_node(*call, output);
             }
             AstNode::Statement(node_id) => {
                 self.codegen_node(*node_id, output);
@@ -975,7 +967,7 @@ impl Codegen {
                         first = false
                     }
                     match self.compiler.get_node(*match_arm) {
-                        AstNode::Variable => {
+                        AstNode::Name => {
                             output.extend_from_slice(b"if (true) {\n");
 
                             let var_id = self
@@ -998,7 +990,7 @@ impl Codegen {
                         }
                         AstNode::NamespacedLookup { item, .. } => {
                             match self.compiler.get_node(*item) {
-                                AstNode::Name | AstNode::Variable => {
+                                AstNode::Name => {
                                     let Some(resolution) =
                                         self.compiler.call_resolution.get(match_arm)
                                     else {
@@ -1046,7 +1038,7 @@ impl Codegen {
 
                                             for (arg_idx, arg) in args.iter().enumerate() {
                                                 match self.compiler.get_node(*arg) {
-                                                    AstNode::Variable => {
+                                                    AstNode::Name => {
                                                         let var_id = self.compiler.var_resolution.get(arg).expect("internal error: unresolved variable in codegen");
                                                         let var_type =
                                                             self.compiler.get_variable(*var_id).ty;

@@ -332,7 +332,7 @@ impl Typechecker {
             };
 
             let lhs = match self.compiler.get_node(*lhs) {
-                AstNode::Variable => {
+                AstNode::Name => {
                     if let Some(var_id) = self.find_variable_in_scope(*lhs) {
                         Lifetime::Variable(var_id)
                     } else {
@@ -347,7 +347,7 @@ impl Typechecker {
             };
 
             let rhs = match self.compiler.get_node(*rhs) {
-                AstNode::Variable => {
+                AstNode::Name => {
                     if let Some(var_id) = self.find_variable_in_scope(*rhs) {
                         Lifetime::Variable(var_id)
                     } else {
@@ -849,7 +849,7 @@ impl Typechecker {
     }
 
     pub fn maybe_move_variable(&mut self, node_id: NodeId) {
-        if let AstNode::Variable = self.compiler.get_node(node_id) {
+        if let AstNode::Name = self.compiler.get_node(node_id) {
             let var_id = self.compiler.var_resolution.get(&node_id);
 
             // Assume the mistyped variable error has already been reported
@@ -933,7 +933,7 @@ impl Typechecker {
 
     pub fn is_binding_mutable(&self, node_id: NodeId) -> bool {
         match self.compiler.get_node(node_id) {
-            AstNode::Variable => {
+            AstNode::Name => {
                 if let Some(var_id) = self.compiler.var_resolution.get(&node_id) {
                     return self.compiler.get_variable(*var_id).is_mutable;
                 }
@@ -945,27 +945,27 @@ impl Typechecker {
         }
     }
 
-    pub fn typecheck_call_with_var_id(
+    pub fn typecheck_call_with_node_id(
         &mut self,
         name: NodeId,
-        var_id: VarId,
+        node_id: NodeId,
         args: &[NodeId],
     ) -> TypeId {
-        let var = self.compiler.get_variable(var_id);
+        let type_id = self.compiler.get_node_type(name);
 
-        if let Type::Fun { params, ret } = self.compiler.get_type(var.ty) {
+        if let Type::Fun { params, ret } = self.compiler.get_type(type_id) {
             let params = params.clone();
             let ret = *ret;
 
             self.compiler
                 .call_resolution
-                .insert(name, CallTarget::Variable(var_id));
+                .insert(name, CallTarget::NodeId(node_id));
 
             self.typecheck_call_helper(args, params, None);
 
             ret
         } else {
-            self.error("attempt to call a non-function variable", name);
+            self.error("attempt to call a non-function", name);
 
             UNKNOWN_TYPE_ID
         }
@@ -987,12 +987,20 @@ impl Typechecker {
         let params = params.clone();
         let return_type = *return_type;
 
+        let args = if let Some(method_target) = method_target {
+            let mut output = vec![method_target];
+            output.extend_from_slice(args);
+            output
+        } else {
+            args.to_vec()
+        };
+
         if fun_id.0 == 0 {
             // Just for now, special-case println
             self.compiler
                 .call_resolution
                 .insert(name, CallTarget::Function(fun_id));
-            for arg in args {
+            for arg in &args {
                 // TODO: add name-checking
                 let arg = *arg;
 
@@ -1020,7 +1028,7 @@ impl Typechecker {
             self.enter_scope();
         }
 
-        self.typecheck_call_helper(args, params, method_target);
+        self.typecheck_call_helper(&args, params, method_target);
 
         if method_target.is_some() {
             self.exit_scope();
@@ -1125,25 +1133,27 @@ impl Typechecker {
         }
     }
 
-    pub fn typecheck_call(&mut self, head: NodeId, args: &[NodeId]) -> TypeId {
-        match self.find_name_in_scope(head) {
-            Some(VarOrFunId::FunId(fun_id)) => {
-                self.typecheck_call_with_fun_id(head, fun_id, args, None)
+    pub fn typecheck_call(&mut self, node_id: NodeId, head: NodeId, args: &[NodeId]) -> TypeId {
+        let type_id = self.typecheck_node(head);
+        self.compiler.set_node_type(head, type_id);
+
+        match self.compiler.get_node(head) {
+            AstNode::MemberAccess { target, .. } => {
+                let target = *target;
+
+                if let Some(fun_id) = self.compiler.fun_resolution.get(&head) {
+                    self.typecheck_call_with_fun_id(head, *fun_id, args, Some(target))
+                } else {
+                    // We're not looking at the name of a defined function, but likely looking at a first-class function instead
+                    self.typecheck_call_with_node_id(head, node_id, args)
+                }
             }
-            Some(VarOrFunId::VarId(var_id)) => self.typecheck_call_with_var_id(head, var_id, args),
-            None => {
-                let call_type_id = self.typecheck_node(head);
-                match self.compiler.get_type(call_type_id) {
-                    Type::Fun { params, ret } => {
-                        let params = params.clone();
-                        let ret = *ret;
-                        self.typecheck_call_helper(args, params, None);
-                        ret
-                    }
-                    _ => {
-                        self.error("unknown function", head);
-                        UNKNOWN_TYPE_ID
-                    }
+            _ => {
+                if let Some(fun_id) = self.compiler.fun_resolution.get(&head) {
+                    self.typecheck_call_with_fun_id(head, *fun_id, args, None)
+                } else {
+                    // We're not looking at the name of a defined function, but likely looking at a first-class function instead
+                    self.typecheck_call_with_node_id(head, node_id, args)
                 }
             }
         }
@@ -1213,7 +1223,7 @@ impl Typechecker {
 
                 VOID_TYPE_ID
             }
-            AstNode::Variable => {
+            AstNode::Name => {
                 // This looks like a variable, but may also be the name of a function
                 let var_or_fun_id = self.find_name_in_scope(node_id);
 
@@ -1233,10 +1243,15 @@ impl Typechecker {
 
                         self.compiler.fun_resolution.insert(node_id, fun_id);
 
-                        self.compiler.find_or_create_type(Type::Fun {
-                            params: fun.params.clone(),
-                            ret: fun.return_type,
-                        })
+                        // FIXME: I'm going to hate having these workarounds soon, I bet
+                        if fun_id.0 != 0 {
+                            self.compiler.find_or_create_type(Type::Fun {
+                                params: fun.params.clone(),
+                                ret: fun.return_type,
+                            })
+                        } else {
+                            UNKNOWN_TYPE_ID
+                        }
                     }
                     None => {
                         let name = self.compiler.get_source(node_id);
@@ -1262,7 +1277,9 @@ impl Typechecker {
                 let type_id = self.compiler.get_underlying_type_id(type_id);
 
                 match self.compiler.get_type(type_id) {
-                    Type::Struct { fields, .. } => {
+                    Type::Struct {
+                        fields, methods, ..
+                    } => {
                         let field_name = self.compiler.get_source(field);
                         for TypedField {
                             member_access,
@@ -1287,6 +1304,19 @@ impl Typechecker {
                                 return type_id;
                             }
                         }
+                        for method in methods {
+                            let method = *method;
+                            let fun = &self.compiler.functions[method.0];
+                            let method_name = self.compiler.get_source(fun.name);
+                            if field_name == method_name {
+                                self.compiler.fun_resolution.insert(field, method);
+                                self.compiler.fun_resolution.insert(node_id, method);
+                                return self.compiler.find_or_create_type(Type::Fun {
+                                    params: fun.params.clone(),
+                                    ret: fun.return_type,
+                                });
+                            }
+                        }
                         self.error("unknown field", field);
                         UNKNOWN_TYPE_ID
                     }
@@ -1295,9 +1325,6 @@ impl Typechecker {
                         UNKNOWN_TYPE_ID
                     }
                 }
-            }
-            AstNode::MethodCall { target, call } => {
-                self.typecheck_method_call(*target, *call, node_id)
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 let lhs = *lhs;
@@ -1440,7 +1467,7 @@ impl Typechecker {
             AstNode::Call { head, args } => {
                 let head = *head;
                 let args = args.clone();
-                self.typecheck_call(head, &args)
+                self.typecheck_call(node_id, head, &args)
             }
             AstNode::New(allocation_type, _, allocation_node_id) => {
                 let allocation_type = *allocation_type;
@@ -1585,7 +1612,7 @@ impl Typechecker {
 
     pub fn typecheck_lvalue(&mut self, lvalue: NodeId) -> TypeId {
         match self.compiler.get_node(lvalue) {
-            AstNode::Variable => {
+            AstNode::Name => {
                 self.typecheck_node(lvalue);
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
@@ -2096,7 +2123,7 @@ impl Typechecker {
                             }
                         }
                     }
-                    AstNode::Name | AstNode::Variable => {
+                    AstNode::Name => {
                         let case_name = self.compiler.get_source(item);
 
                         for (case_offset, case) in cases.iter().enumerate() {
@@ -2182,7 +2209,7 @@ impl Typechecker {
                 'arm: for (arm_pattern, arm_result) in match_arms {
                     self.enter_scope();
                     match self.compiler.get_node(arm_pattern) {
-                        AstNode::Variable | AstNode::Name => {
+                        AstNode::Name => {
                             let var_id = self.define_variable(
                                 arm_pattern,
                                 target_type_id,
@@ -2220,7 +2247,7 @@ impl Typechecker {
                                     )
                                 } else {
                                     match self.compiler.get_node(item) {
-                                        AstNode::Name | AstNode::Variable => {
+                                        AstNode::Name => {
                                             let arm_name = self.compiler.get_source(item);
 
                                             for (idx, variant) in variants.iter().enumerate() {
@@ -2265,7 +2292,7 @@ impl Typechecker {
                                                             );
                                                             if matches!(
                                                                 self.compiler.get_node(args[0]),
-                                                                AstNode::Variable
+                                                                AstNode::Name
                                                             ) {
                                                                 let var_id = self.define_variable(
                                                                     args[0], *param, false, args[0],
@@ -2303,7 +2330,7 @@ impl Typechecker {
                                                                 let arg = args[idx];
                                                                 if matches!(
                                                                     self.compiler.get_node(args[0]),
-                                                                    AstNode::Variable
+                                                                    AstNode::Name
                                                                 ) {
                                                                     let var_id = self
                                                                         .define_variable(
@@ -2385,46 +2412,46 @@ impl Typechecker {
         }
     }
 
-    pub fn typecheck_method_call(
-        &mut self,
-        target: NodeId,
-        call: NodeId,
-        node_id: NodeId,
-    ) -> TypeId {
-        let AstNode::Call { head, args } = self.compiler.get_node(call) else {
-            panic!("Internal error: method call using a non-call")
-        };
+    // pub fn typecheck_method_call(
+    //     &mut self,
+    //     target: NodeId,
+    //     call: NodeId,
+    //     node_id: NodeId,
+    // ) -> TypeId {
+    //     let AstNode::Call { head, args } = self.compiler.get_node(call) else {
+    //         panic!("Internal error: method call using a non-call")
+    //     };
 
-        let head = *head;
-        // FIXME: fix clone
-        let args = args.clone();
+    //     let head = *head;
+    //     // FIXME: fix clone
+    //     let args = args.clone();
 
-        let name = self.compiler.get_source(head).to_vec();
-        let type_id = self.typecheck_node(target);
+    //     let name = self.compiler.get_source(head).to_vec();
+    //     let type_id = self.typecheck_node(target);
 
-        let type_id = self.compiler.get_underlying_type_id(type_id);
+    //     let type_id = self.compiler.get_underlying_type_id(type_id);
 
-        match self.compiler.get_type(type_id) {
-            Type::Struct { methods, .. } => {
-                for method in methods {
-                    let method_name = self
-                        .compiler
-                        .get_source(self.compiler.functions[method.0].name);
+    //     match self.compiler.get_type(type_id) {
+    //         Type::Struct { methods, .. } => {
+    //             for method in methods {
+    //                 let method_name = self
+    //                     .compiler
+    //                     .get_source(self.compiler.functions[method.0].name);
 
-                    if method_name == name {
-                        let type_id =
-                            self.typecheck_call_with_fun_id(head, *method, &args, Some(target));
-                        self.compiler.set_node_type(node_id, type_id);
-                        return type_id;
-                    }
-                }
-                self.error("can't find method in struct", head);
-            }
-            _ => self.error("expected struct type for method call", target),
-        }
+    //                 if method_name == name {
+    //                     let type_id =
+    //                         self.typecheck_call_with_fun_id(head, *method, &args, Some(target));
+    //                     self.compiler.set_node_type(node_id, type_id);
+    //                     return type_id;
+    //                 }
+    //             }
+    //             self.error("can't find method in struct", head);
+    //         }
+    //         _ => self.error("expected struct type for method call", target),
+    //     }
 
-        VOID_TYPE_ID
-    }
+    //     VOID_TYPE_ID
+    // }
 
     pub fn typecheck(mut self) -> Compiler {
         let num_nodes = self.compiler.num_ast_nodes();
