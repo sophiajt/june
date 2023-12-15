@@ -369,6 +369,8 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(definition_node_id, node_id);
 
                     self.expand_lifetime_with_node(node_id, definition_node_id);
+                } else if self.compiler.fun_resolution.contains_key(&node_id) {
+                    // TODO
                 } else {
                     self.error(
                         "unresolved variable found during lifetime checking",

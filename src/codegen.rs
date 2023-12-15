@@ -121,6 +121,48 @@ impl Codegen {
         output.extend_from_slice(b"return tmp;\n}\n");
     }
 
+    pub fn codegen_user_predecls(&self, output: &mut Vec<u8>) {
+        for (idx, ty) in self.compiler.get_types().iter().enumerate() {
+            match ty {
+                Type::Struct { generic_params, .. } => {
+                    if !generic_params.is_empty() {
+                        // Don't codegen generic functions. Instead, only codegen their instantiations
+                        continue;
+                    }
+                    output.extend_from_slice(b"struct struct_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    output.extend_from_slice(b";\n");
+                }
+                Type::Enum { generic_params, .. } => {
+                    if !generic_params.is_empty() {
+                        // Don't codegen generic functions. Instead, only codegen their instantiations
+                        continue;
+                    }
+
+                    output.extend_from_slice(b"struct enum_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    output.extend_from_slice(b";\n");
+                }
+                Type::Fun { params, ret } => {
+                    // typedef long(*funcPtr)(short, char);
+                    output.extend_from_slice(b"typedef ");
+                    self.codegen_typename(*ret, output);
+                    output.extend_from_slice(b"(*fun_ty_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    // FIXME: we may not always have an allocation_id
+                    output.extend_from_slice(b")(long");
+                    for param in params {
+                        output.extend_from_slice(b", ");
+                        let var_type_id = self.compiler.get_variable(param.var_id).ty;
+                        self.codegen_typename(var_type_id, output);
+                    }
+                    output.extend_from_slice(b");\n");
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub fn codegen_user_types(&self, output: &mut Vec<u8>) {
         for (idx, ty) in self.compiler.get_types().iter().enumerate() {
             match ty {
@@ -1208,6 +1250,7 @@ impl Codegen {
 
         output.extend_from_slice(b"struct Allocator *allocator;\n");
 
+        self.codegen_user_predecls(&mut output);
         self.codegen_user_types(&mut output);
         self.codegen_fun_decls(&mut output);
 

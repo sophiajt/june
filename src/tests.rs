@@ -334,6 +334,11 @@ fn first_class_function_allocation() -> TestResult {
 }
 
 #[test]
+fn first_class_function_allocation2() -> TestResult {
+    test_example("first_class_functions/first_class_function_allocation2")
+}
+
+#[test]
 fn first_class_function_arg() -> TestResult {
     test_example("first_class_functions/first_class_function_arg")
 }
