@@ -2002,7 +2002,9 @@ impl Typechecker {
                 }
             }
             Type::Enum {
-                variants: cases, ..
+                variants: cases,
+                methods,
+                ..
             } => {
                 // FIXME: remove clone
                 let cases = cases.clone();
@@ -2142,6 +2144,21 @@ impl Typechecker {
                                 _ => {}
                             }
                         }
+                        let call_name = self.compiler.get_source(head);
+
+                        for method in methods {
+                            let method_name = self
+                                .compiler
+                                .get_source(self.compiler.functions[method.0].name);
+                            if method_name == call_name {
+                                return self.typecheck_call_with_fun_id(head, *method, &args, None);
+                            }
+                        }
+
+                        self.error(
+                            format!("could not find enum case when created enum value"),
+                            item,
+                        );
                     }
                     AstNode::Name => {
                         let case_name = self.compiler.get_source(item);

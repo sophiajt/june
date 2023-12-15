@@ -279,6 +279,11 @@ fn enum_single_pointer_payload() -> TestResult {
 }
 
 #[test]
+fn enum_static_method() -> TestResult {
+    test_example("enums/enum_static_method")
+}
+
+#[test]
 fn enum_struct_payload() -> TestResult {
     test_example("enums/enum_struct_payload")
 }
