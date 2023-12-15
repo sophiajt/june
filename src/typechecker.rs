@@ -585,7 +585,7 @@ impl Typechecker {
                 ));
             }
 
-            let Type::Struct { methods, .. } = self.compiler.get_type_mut(type_id) else {
+            let Type::Enum { methods, .. } = self.compiler.get_type_mut(type_id) else {
                 panic!("internal error: previously inserted struct can't be found");
             };
 
@@ -1276,11 +1276,11 @@ impl Typechecker {
 
                 let type_id = self.compiler.get_underlying_type_id(type_id);
 
+                let field_name = self.compiler.get_source(field);
                 match self.compiler.get_type(type_id) {
                     Type::Struct {
                         fields, methods, ..
                     } => {
-                        let field_name = self.compiler.get_source(field);
                         for TypedField {
                             member_access,
                             name,
@@ -1317,11 +1317,31 @@ impl Typechecker {
                                 });
                             }
                         }
-                        self.error("unknown field", field);
+                        self.error("unknown field or method", field);
+                        UNKNOWN_TYPE_ID
+                    }
+                    Type::Enum { methods, .. } => {
+                        for method in methods {
+                            let method = *method;
+                            let fun = &self.compiler.functions[method.0];
+                            let method_name = self.compiler.get_source(fun.name);
+                            if field_name == method_name {
+                                self.compiler.fun_resolution.insert(field, method);
+                                self.compiler.fun_resolution.insert(node_id, method);
+                                return self.compiler.find_or_create_type(Type::Fun {
+                                    params: fun.params.clone(),
+                                    ret: fun.return_type,
+                                });
+                            }
+                        }
+                        self.error("unknown method", field);
                         UNKNOWN_TYPE_ID
                     }
                     _ => {
-                        self.error("field access on non-struct type", target);
+                        self.error(
+                            "field or method access on type without fields or methods",
+                            target,
+                        );
                         UNKNOWN_TYPE_ID
                     }
                 }

@@ -239,6 +239,11 @@ fn enum_catchall() -> TestResult {
 }
 
 #[test]
+fn enum_method() -> TestResult {
+    test_example("enums/enum_method")
+}
+
+#[test]
 fn enum_missing_arm_error() -> TestResult {
     test_example("enums/enum_missing_arm_error")
 }
