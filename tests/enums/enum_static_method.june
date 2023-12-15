@@ -1,0 +1,19 @@
+// output: 99
+
+enum State {
+    None
+    Some(i64)
+
+    fun create_value(x: i64) -> State {
+        return State::Some(x)
+    }
+}
+
+fun main() {
+    let x = State::create_value(99)
+
+    match x {
+        State::None => println(c"None")
+        State::Some(i) => println(i)
+    }
+}
