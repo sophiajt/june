@@ -1,0 +1,21 @@
+// output: 44None
+
+enum State {
+    None
+    Some(i64)
+
+    fun print(self) {
+        match self {
+            State::None => println(c"None")
+            State::Some(i) => println(i)
+        }
+    }
+}
+
+fun main() {
+    let x = State::Some(44)
+    x.print()
+
+    let y = State::None
+    y.print()
+}
