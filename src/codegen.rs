@@ -121,6 +121,48 @@ impl Codegen {
         output.extend_from_slice(b"return tmp;\n}\n");
     }
 
+    pub fn codegen_user_predecls(&self, output: &mut Vec<u8>) {
+        for (idx, ty) in self.compiler.get_types().iter().enumerate() {
+            match ty {
+                Type::Struct { generic_params, .. } => {
+                    if !generic_params.is_empty() {
+                        // Don't codegen generic functions. Instead, only codegen their instantiations
+                        continue;
+                    }
+                    output.extend_from_slice(b"struct struct_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    output.extend_from_slice(b";\n");
+                }
+                Type::Enum { generic_params, .. } => {
+                    if !generic_params.is_empty() {
+                        // Don't codegen generic functions. Instead, only codegen their instantiations
+                        continue;
+                    }
+
+                    output.extend_from_slice(b"struct enum_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    output.extend_from_slice(b";\n");
+                }
+                Type::Fun { params, ret } => {
+                    // typedef long(*funcPtr)(short, char);
+                    output.extend_from_slice(b"typedef ");
+                    self.codegen_typename(*ret, output);
+                    output.extend_from_slice(b"(*fun_ty_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    // FIXME: we may not always have an allocation_id
+                    output.extend_from_slice(b")(long");
+                    for param in params {
+                        output.extend_from_slice(b", ");
+                        let var_type_id = self.compiler.get_variable(param.var_id).ty;
+                        self.codegen_typename(var_type_id, output);
+                    }
+                    output.extend_from_slice(b");\n");
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub fn codegen_user_types(&self, output: &mut Vec<u8>) {
         for (idx, ty) in self.compiler.get_types().iter().enumerate() {
             match ty {
@@ -432,11 +474,6 @@ impl Codegen {
                 output.extend_from_slice(b"NULL");
             }
             AstNode::Name => {
-                let src = self.compiler.get_source(node_id);
-
-                output.extend_from_slice(src);
-            }
-            AstNode::Variable => {
                 if let Some(var_id) = self.compiler.var_resolution.get(&node_id) {
                     output.extend_from_slice(b"/* ");
                     output.extend_from_slice(
@@ -458,10 +495,9 @@ impl Codegen {
                     output.extend_from_slice(b"function_");
                     output.extend_from_slice(fun_id.0.to_string().as_bytes());
                 } else {
-                    panic!(
-                        "internal error: unresolved variable in codegen: {}",
-                        node_id.0
-                    )
+                    let src = self.compiler.get_source(node_id);
+
+                    output.extend_from_slice(src);
                 }
             }
             AstNode::Let {
@@ -564,22 +600,22 @@ impl Codegen {
                 }
             }
             AstNode::Call { head, args } => {
-                if matches!(
-                    self.compiler.get_type(self.compiler.get_node_type(*head)),
-                    Type::Fun { .. }
-                ) {
-                    // We're calling into a first class function
-                    output.push(b'(');
-                    self.codegen_node(*head, output);
-                    output.extend_from_slice(b")(");
-                    self.codegen_annotation(node_id, output);
-                    for arg in args {
-                        output.extend_from_slice(b", ");
-                        self.codegen_node(*arg, output);
-                    }
-                    output.push(b')');
-                    return;
-                }
+                // if matches!(
+                //     self.compiler.get_type(self.compiler.get_node_type(*head)),
+                //     Type::Fun { .. }
+                // ) {
+                //     // We're calling into a first class function
+                //     output.push(b'(');
+                //     self.codegen_node(*head, output);
+                //     output.extend_from_slice(b")(");
+                //     self.codegen_annotation(node_id, output);
+                //     for arg in args {
+                //         output.extend_from_slice(b", ");
+                //         self.codegen_node(*arg, output);
+                //     }
+                //     output.push(b')');
+                //     return;
+                // }
                 let call_target = self.compiler.call_resolution.get(head).unwrap_or_else(|| {
                     panic!(
                         "internal error: missing call resolution in codegen: {:?}",
@@ -646,6 +682,18 @@ impl Codegen {
 
                         let mut first = fun.body.is_none();
 
+                        if let AstNode::MemberAccess { target, .. } = self.compiler.get_node(*head)
+                        {
+                            // A bit of a codegen workaround for now. Because we aren't updating the AST during typecheck,
+                            // we haven't moved the target of the method call to be the first arg. To get around that,
+                            // we'll manually push it in now.
+                            if !first {
+                                output.extend_from_slice(b", ");
+                            }
+                            self.codegen_node(*target, output);
+                            first = false;
+                        }
+
                         for arg in args {
                             if !first {
                                 output.extend_from_slice(b", ");
@@ -673,16 +721,10 @@ impl Codegen {
                         }
                         output.push(b')');
                     }
-                    CallTarget::Variable(var_id) => {
-                        output.extend_from_slice(b"/* ");
-                        output.extend_from_slice(
-                            self.compiler
-                                .get_source(self.compiler.variables[var_id.0].name),
-                        );
-                        output.extend_from_slice(b" */ ");
-
-                        output.extend_from_slice(b"variable_");
-                        output.extend_from_slice(var_id.0.to_string().as_bytes());
+                    CallTarget::NodeId(..) => {
+                        output.push(b'(');
+                        self.codegen_node(*head, output);
+                        output.push(b')');
                         output.push(b'(');
 
                         self.codegen_annotation(node_id, output);
@@ -778,7 +820,7 @@ impl Codegen {
                         }
                     }
                 }
-                AstNode::Variable => {
+                AstNode::Name => {
                     let call_target = self
                         .compiler
                         .call_resolution
@@ -813,16 +855,11 @@ impl Codegen {
 
                             output.push(b')');
                         }
-                        CallTarget::Variable(var_id) => {
-                            output.extend_from_slice(b"/* ");
-                            output.extend_from_slice(
-                                self.compiler
-                                    .get_source(self.compiler.variables[var_id.0].name),
-                            );
-                            output.extend_from_slice(b" */ ");
+                        CallTarget::NodeId(target) => {
+                            output.push(b'(');
+                            self.codegen_node(*target, output);
+                            output.push(b')');
 
-                            output.extend_from_slice(b"variable_");
-                            output.extend_from_slice(var_id.0.to_string().as_bytes());
                             output.push(b'(');
 
                             self.codegen_annotation(node_id, output);
@@ -875,9 +912,6 @@ impl Codegen {
                         panic!("internal error: field access on non-struct: {:?}", x)
                     }
                 }
-            }
-            AstNode::MethodCall { call, .. } => {
-                self.codegen_node(*call, output);
             }
             AstNode::Statement(node_id) => {
                 self.codegen_node(*node_id, output);
@@ -975,7 +1009,7 @@ impl Codegen {
                         first = false
                     }
                     match self.compiler.get_node(*match_arm) {
-                        AstNode::Variable => {
+                        AstNode::Name => {
                             output.extend_from_slice(b"if (true) {\n");
 
                             let var_id = self
@@ -998,7 +1032,7 @@ impl Codegen {
                         }
                         AstNode::NamespacedLookup { item, .. } => {
                             match self.compiler.get_node(*item) {
-                                AstNode::Name | AstNode::Variable => {
+                                AstNode::Name => {
                                     let Some(resolution) =
                                         self.compiler.call_resolution.get(match_arm)
                                     else {
@@ -1046,7 +1080,7 @@ impl Codegen {
 
                                             for (arg_idx, arg) in args.iter().enumerate() {
                                                 match self.compiler.get_node(*arg) {
-                                                    AstNode::Variable => {
+                                                    AstNode::Name => {
                                                         let var_id = self.compiler.var_resolution.get(arg).expect("internal error: unresolved variable in codegen");
                                                         let var_type =
                                                             self.compiler.get_variable(*var_id).ty;
@@ -1216,6 +1250,7 @@ impl Codegen {
 
         output.extend_from_slice(b"struct Allocator *allocator;\n");
 
+        self.codegen_user_predecls(&mut output);
         self.codegen_user_types(&mut output);
         self.codegen_fun_decls(&mut output);
 

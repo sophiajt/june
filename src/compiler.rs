@@ -8,11 +8,11 @@ use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, C_STRIN
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CaseOffset(pub usize);
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum CallTarget {
     Function(FunId),
     EnumConstructor(TypeId, CaseOffset),
-    Variable(VarId),
+    NodeId(NodeId),
 }
 
 #[derive(Debug)]
@@ -91,6 +91,11 @@ impl Compiler {
                 "  {}: {:?} ({:?}) @ ({:?})",
                 node_id, node, self.node_types[node_id], self.node_lifetimes[node_id]
             );
+        }
+
+        println!("Blocks:");
+        for (block_id, block) in self.blocks.iter().enumerate() {
+            println!("{}: {:?}", block_id, block);
         }
 
         println!("Variables:");
@@ -245,14 +250,6 @@ impl Compiler {
                 for arg in args {
                     self.print_helper(arg, indent + 2);
                 }
-            }
-            AstNode::MethodCall { target, call } => {
-                println!(
-                    "MethodCall ({}, {}):[{}]",
-                    self.span_start[node_id.0], self.span_end[node_id.0], node_id.0
-                );
-                self.print_helper(target, indent + 2);
-                self.print_helper(call, indent + 2);
             }
             AstNode::BinaryOp { lhs, op, rhs } => {
                 println!(

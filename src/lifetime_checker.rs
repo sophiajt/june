@@ -303,7 +303,7 @@ impl LifetimeChecker {
 
     pub fn check_lvalue_lifetime(&mut self, lvalue: NodeId) {
         match &self.compiler.get_node(lvalue) {
-            AstNode::Variable => {
+            AstNode::Name => {
                 let var_id = self.compiler.var_resolution.get(&lvalue);
 
                 if let Some(var_id) = var_id {
@@ -359,7 +359,7 @@ impl LifetimeChecker {
                 // from the initializer
                 self.expand_lifetime_with_node(node_id, initializer);
             }
-            AstNode::Variable => {
+            AstNode::Name => {
                 // We're seeing a use of a variable at this point, so make sure the variable
                 // lives long enough to get here
 
@@ -369,7 +369,9 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(definition_node_id, node_id);
 
                     self.expand_lifetime_with_node(node_id, definition_node_id);
-                } else if !self.compiler.fun_resolution.contains_key(&node_id) {
+                } else if self.compiler.fun_resolution.contains_key(&node_id) {
+                    // TODO
+                } else {
                     self.error(
                         "unresolved variable found during lifetime checking",
                         node_id,
@@ -388,21 +390,6 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(target, node_id);
                 }
                 self.check_node_lifetime(target, scope_level);
-            }
-            AstNode::MethodCall { target, call } => {
-                // Check the type of the access. If it isn't something that can
-                // affect lifetimes, we don't need to push the lifetime
-                // requirement deeper
-
-                let target = *target;
-                let call = *call;
-
-                let field_type = self.compiler.get_node_type(node_id);
-                if !self.compiler.is_copyable_type(field_type) {
-                    self.expand_lifetime_with_node(target, node_id);
-                }
-                self.check_node_lifetime(target, scope_level);
-                self.check_node_lifetime(call, scope_level);
             }
             AstNode::BinaryOp { lhs, rhs, op } => {
                 let lhs = *lhs;
@@ -515,8 +502,10 @@ impl LifetimeChecker {
 
                 // note: fun_id 0 is currently the built-in print
                 match call_target {
-                    Some(CallTarget::Function(fun_id)) if fun_id.0 != 0 => {
-                        let fun_id = *fun_id;
+                    Some(&CallTarget::Function(fun_id)) if fun_id.0 != 0 => {
+                        // TODO: double check this will be enough
+                        self.check_node_lifetime(head, scope_level);
+
                         let params = self.compiler.functions[fun_id.0].params.clone();
                         if self.compiler.functions[fun_id.0].body.is_none() {
                             // External calls handle their own lifetimes?
@@ -556,11 +545,19 @@ impl LifetimeChecker {
 
                         self.current_block_may_allocate(scope_level, node_id);
                     }
+                    Some(&CallTarget::Function(fun_id)) if fun_id.0 == 0 => {
+                        self.check_node_lifetime(head, scope_level);
+                        for arg in args {
+                            self.check_node_lifetime(arg, scope_level)
+                        }
+                    }
                     _ => {
                         self.check_node_lifetime(head, scope_level);
                         for arg in args {
                             self.check_node_lifetime(arg, scope_level)
                         }
+
+                        self.current_block_may_allocate(scope_level, node_id);
                     }
                 }
             }
@@ -651,7 +648,7 @@ impl LifetimeChecker {
                     );
                 }
 
-                if matches!(self.compiler.get_node(item), AstNode::Variable) {
+                if matches!(self.compiler.get_node(item), AstNode::Name) {
                     self.expand_lifetime_with_node(item, node_id);
                 } else if let AstNode::Call { args, .. } = self.compiler.get_node(item) {
                     let node_type_id = self.compiler.get_node_type(node_id);
@@ -663,7 +660,6 @@ impl LifetimeChecker {
                         let args = args.clone();
 
                         self.expand_lifetime_with_node(item, node_id);
-                        self.check_node_lifetime(item, scope_level);
 
                         for arg in args {
                             self.expand_lifetime_with_node(arg, item);
@@ -671,7 +667,7 @@ impl LifetimeChecker {
                         }
                     } else {
                         self.expand_lifetime_with_node(item, node_id);
-                        self.check_node_lifetime(item, scope_level);
+                        self.current_block_may_allocate(scope_level, node_id);
                     }
                 }
             }
@@ -689,8 +685,7 @@ impl LifetimeChecker {
             | AstNode::Struct { .. }
             | AstNode::Enum { .. }
             | AstNode::ExternType { .. }
-            | AstNode::Break
-            | AstNode::Name => {
+            | AstNode::Break => {
                 // ignore
             }
             AstNode::Statement(node_id) => {

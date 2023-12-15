@@ -44,7 +44,6 @@ pub enum AstNode {
         params: Vec<NodeId>,
         ret: NodeId,
     },
-    Variable,
 
     // Booleans
     True,
@@ -172,10 +171,6 @@ pub enum AstNode {
     MemberAccess {
         target: NodeId,
         field: NodeId,
-    },
-    MethodCall {
-        target: NodeId,
-        call: NodeId,
     },
     Block(BlockId),
     If {
@@ -1294,7 +1289,7 @@ impl Parser {
             let span_start = self.position();
             let span_end = self.position() + 1;
 
-            self.create_node(AstNode::Variable, span_start, span_end)
+            self.create_node(AstNode::Name, span_start, span_end)
         } else {
             self.error("incomplete expression")
         };
@@ -1325,7 +1320,7 @@ impl Parser {
                 let span_end = self.get_span_end(field_or_call);
 
                 match self.compiler.get_node_mut(field_or_call) {
-                    AstNode::Variable | AstNode::Name => {
+                    AstNode::Name => {
                         expr = self.create_node(
                             AstNode::MemberAccess {
                                 target: expr,
@@ -1335,13 +1330,19 @@ impl Parser {
                             span_end,
                         );
                     }
-                    AstNode::Call { args, .. } => {
-                        args.insert(0, expr);
+                    AstNode::Call { head, args } => {
+                        let head = *head;
+                        let args = args.clone();
                         expr = self.create_node(
-                            AstNode::MethodCall {
+                            AstNode::MemberAccess {
                                 target: expr,
-                                call: field_or_call,
+                                field: head,
                             },
+                            span_start,
+                            span_end,
+                        );
+                        expr = self.create_node(
+                            AstNode::Call { head: expr, args },
                             span_start,
                             span_end,
                         )
@@ -2068,7 +2069,7 @@ impl Parser {
                 .expect("internal error: missing token that was expected to be there");
             let name_start = name.span_start;
             let name_end = name.span_end;
-            self.create_node(AstNode::Variable, name_start, name_end)
+            self.create_node(AstNode::Name, name_start, name_end)
         } else {
             self.error("expected variable")
         }
@@ -2136,7 +2137,7 @@ impl Parser {
                 head
             } else {
                 // We're a variable
-                self.create_node(AstNode::Variable, name_start, name_end)
+                self.create_node(AstNode::Name, name_start, name_end)
             }
         } else {
             self.error("expected variable or call")
