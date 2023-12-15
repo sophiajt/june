@@ -1,0 +1,20 @@
+// output: leaving
+
+struct Foo {}
+
+fun exit_notice(f: Foo) {
+    println(c"leaving")
+}
+
+fun make_foo() -> Foo {
+    let f = new Foo()
+    defer f exit_notice
+
+    return f
+}
+
+fun main() {
+    let mf = make_foo
+
+    let y = mf()
+}

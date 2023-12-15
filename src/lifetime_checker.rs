@@ -369,8 +369,6 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(definition_node_id, node_id);
 
                     self.expand_lifetime_with_node(node_id, definition_node_id);
-                } else if let Some(f) = self.compiler.fun_resolution.get(&node_id) {
-                    self.expand_lifetime(node_id)
                 } else {
                     self.error(
                         "unresolved variable found during lifetime checking",
@@ -545,11 +543,19 @@ impl LifetimeChecker {
 
                         self.current_block_may_allocate(scope_level, node_id);
                     }
+                    Some(&CallTarget::Function(fun_id)) if fun_id.0 == 0 => {
+                        self.check_node_lifetime(head, scope_level);
+                        for arg in args {
+                            self.check_node_lifetime(arg, scope_level)
+                        }
+                    }
                     _ => {
                         self.check_node_lifetime(head, scope_level);
                         for arg in args {
                             self.check_node_lifetime(arg, scope_level)
                         }
+
+                        self.current_block_may_allocate(scope_level, node_id);
                     }
                 }
             }
@@ -659,6 +665,7 @@ impl LifetimeChecker {
                         }
                     } else {
                         self.expand_lifetime_with_node(item, node_id);
+                        self.current_block_may_allocate(scope_level, node_id);
                     }
                 }
             }

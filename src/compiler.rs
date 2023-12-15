@@ -93,6 +93,11 @@ impl Compiler {
             );
         }
 
+        println!("Blocks:");
+        for (block_id, block) in self.blocks.iter().enumerate() {
+            println!("{}: {:?}", block_id, block);
+        }
+
         println!("Variables:");
         for (var_id, var) in self.variables.iter().enumerate() {
             println!("  {}: {:?}", var_id, var);
