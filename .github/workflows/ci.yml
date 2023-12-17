@@ -7,7 +7,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_and_test:
+  build_and_test_win_linux:
     name: Rust project - latest Windows and Ubuntu
     strategy:
       matrix:
@@ -28,7 +28,7 @@ jobs:
       - run: cargo clippy --verbose
       - run: cargo test --verbose
 
-  build_and_test:
+  build_and_test_macos:
     name: Rust project - latest macOS
     strategy:
       matrix:
