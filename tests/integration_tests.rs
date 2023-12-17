@@ -7,7 +7,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 #[cfg(test)]
 fn test_example(test_name: &str) -> TestResult {
     use std::{
-        fs::{create_dir, File},
+        fs::{create_dir_all, File},
         io::{stdout, Write},
         path::PathBuf,
         process::Command,
@@ -25,7 +25,7 @@ fn test_example(test_name: &str) -> TestResult {
 
     eprintln!("temp_dir: {:?}", temp_dir);
 
-    let _ = create_dir(&temp_dir);
+    let _ = create_dir_all(&temp_dir);
 
     let test_filepath = {
         let mut test_filename = PathBuf::from(test_name);
@@ -105,6 +105,7 @@ fn test_example(test_name: &str) -> TestResult {
         // Now, output our C to a file
         eprintln!("c_output_filepath: {:?}", c_output_filepath);
         let mut output_file = File::create(&c_output_filepath).unwrap();
+
         let _ = output_file.write_all(&command.stdout);
 
         // Next, compile the file
