@@ -31,7 +31,7 @@ fn test_example(test_name: &str) -> TestResult {
         let mut test_filename = PathBuf::from(test_name);
         test_filename.set_extension("june");
 
-        let mut test_filepath = PathBuf::from("./tests");
+        let mut test_filepath = PathBuf::from("./tests/integration");
         test_filepath.push(test_filename);
 
         eprintln!("test_filepath: {:?}", test_filepath);
