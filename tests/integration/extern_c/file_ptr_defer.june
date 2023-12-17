@@ -12,7 +12,7 @@ fun cleanup(f: FILE?) {
 }
 
 fun main() {
-    let file = fopen(c"test_data/alphabet.txt", c"rb");
+    let file = fopen(c"tests/test_data/alphabet.txt", c"rb");
     defer file cleanup
     if file != none {
         let x = fgetc(file)

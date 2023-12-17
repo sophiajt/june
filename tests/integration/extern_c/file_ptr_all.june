@@ -7,7 +7,7 @@ extern "C" fun fclose(file: FILE?) -> c_int;
 extern "C" fun fgetc(file: FILE?) -> c_int;
 
 fun main() {
-    let file = fopen(c"test_data/alphabet.txt", c"rb");
+    let file = fopen(c"tests/test_data/alphabet.txt", c"rb");
     if file != none {
         mut c = fgetc(file)
         while c != -1 && c != 10 && c != 13 {

@@ -38,7 +38,7 @@ class File {
 }
 
 fun main() {
-    mut file = File::open(c"test_data/alphabet.txt");
+    mut file = File::open(c"tests/test_data/alphabet.txt");
     while true {
         let x = file.get_char();
 

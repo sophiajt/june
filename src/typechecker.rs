@@ -2155,10 +2155,7 @@ impl Typechecker {
                             }
                         }
 
-                        self.error(
-                            format!("could not find enum case when created enum value"),
-                            item,
-                        );
+                        self.error("could not find enum case when created enum value", item);
                     }
                     AstNode::Name => {
                         let case_name = self.compiler.get_source(item);
