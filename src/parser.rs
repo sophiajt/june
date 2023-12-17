@@ -227,7 +227,8 @@ pub struct BlockId(pub usize);
 
 #[derive(Debug)]
 pub enum TokenType {
-    Number,
+    Int,
+    Float,
     Comma,
     CString,
     String,
@@ -593,11 +594,21 @@ impl Parser {
         )
     }
 
-    pub fn is_number(&mut self) -> bool {
+    pub fn is_int(&mut self) -> bool {
         matches!(
             self.peek(),
             Some(Token {
-                token_type: TokenType::Number,
+                token_type: TokenType::Int,
+                ..
+            })
+        )
+    }
+
+    pub fn is_float(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::Float,
                 ..
             })
         )
@@ -661,7 +672,11 @@ impl Parser {
     pub fn is_simple_expression(&mut self) -> bool {
         match self.peek() {
             Some(Token {
-                token_type: TokenType::Number,
+                token_type: TokenType::Int,
+                ..
+            })
+            | Some(Token {
+                token_type: TokenType::Float,
                 ..
             })
             | Some(Token {
@@ -1281,7 +1296,7 @@ impl Parser {
             self.string()
         } else if self.is_c_string() {
             self.c_string()
-        } else if self.is_number() || self.is_minus() {
+        } else if self.is_float() || self.is_int() || self.is_minus() {
             self.number()
         } else if self.is_name() {
             self.variable_or_call()
@@ -1374,18 +1389,22 @@ impl Parser {
     pub fn number(&mut self) -> NodeId {
         match self.peek() {
             Some(Token {
-                token_type: TokenType::Number,
+                token_type: TokenType::Float,
                 span_start,
                 span_end,
             }) => {
                 self.next();
-                let contents = &self.compiler.source[span_start..span_end];
 
-                if contents.contains(&b'.') {
-                    self.create_node(AstNode::Float, span_start, span_end)
-                } else {
-                    self.create_node(AstNode::Int, span_start, span_end)
-                }
+                self.create_node(AstNode::Float, span_start, span_end)
+            }
+            Some(Token {
+                token_type: TokenType::Int,
+                span_start,
+                span_end,
+            }) => {
+                self.next();
+
+                self.create_node(AstNode::Int, span_start, span_end)
             }
             Some(Token {
                 token_type: TokenType::Dash,
@@ -2412,6 +2431,14 @@ impl Parser {
                 }
                 span_position += 1;
             }
+
+            self.span_offset = span_position;
+
+            return Some(Token {
+                token_type: TokenType::Int,
+                span_start,
+                span_end: self.span_offset,
+            });
         } else if span_position < self.compiler.source.len()
             && self.compiler.source[span_position] == b'o'
         {
@@ -2424,6 +2451,14 @@ impl Parser {
                 }
                 span_position += 1;
             }
+
+            self.span_offset = span_position;
+
+            return Some(Token {
+                token_type: TokenType::Int,
+                span_start,
+                span_end: self.span_offset,
+            });
         } else if span_position < self.compiler.source.len()
             && self.compiler.source[span_position] == b'b'
         {
@@ -2436,6 +2471,14 @@ impl Parser {
                 }
                 span_position += 1;
             }
+
+            self.span_offset = span_position;
+
+            return Some(Token {
+                token_type: TokenType::Int,
+                span_start,
+                span_end: self.span_offset,
+            });
         } else if span_position < self.compiler.source.len()
             && self.compiler.source[span_position] == b'.'
             && (span_position + 1 < self.compiler.source.len())
@@ -2469,12 +2512,20 @@ impl Parser {
                     span_position += 1;
                 }
             }
+
+            self.span_offset = span_position;
+
+            return Some(Token {
+                token_type: TokenType::Float,
+                span_start,
+                span_end: self.span_offset,
+            });
         }
 
         self.span_offset = span_position;
 
         Some(Token {
-            token_type: TokenType::Number,
+            token_type: TokenType::Int,
             span_start,
             span_end: self.span_offset,
         })
