@@ -9,9 +9,9 @@ env:
 jobs:
   build_and_test:
     name: Rust project - latest
-    runs-on: [windows-latest, macos-latest, ubuntu-20.04]
     strategy:
       matrix:
+        platform: [windows-latest, macos-latest, ubuntu-latest]
         toolchain:
           - stable
     steps:
