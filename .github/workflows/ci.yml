@@ -16,6 +16,12 @@ jobs:
           - stable
     runs-on: ${{ matrix.platform }}
     steps:
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
+
       - uses: actions/checkout@v3
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: cargo fmt --all -- --check  
