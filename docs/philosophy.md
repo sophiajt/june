@@ -26,7 +26,7 @@ June is also geared towards application programming. Its direct OO approach coup
 
 One characteristic of June that you'll notice is that it prefers holding on to memory longer than other languages. You can think of this as a kind of memory "bloat" compared to more fine-grained allocation system. In one sense, the style is something more akin to garbage collection, though June does not use a garbage collector.
 
-As it turns out, using intentional memory bloat is fairly common. Rust and C++ developers, for example, use bloat to their advantage regularly. Take for example this Rust code:
+As it turns out, using intentional memory bloat is fairly common. Rust and C++ developers, for example, use bloat to their advantage. Take for example this Rust code:
 
 ```rust
 fn main() {
