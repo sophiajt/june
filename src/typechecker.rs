@@ -269,6 +269,13 @@ impl Typechecker {
                     ret: typed_ret,
                 })
             }
+            AstNode::BufferType { inner } => {
+                let inner = *inner;
+
+                let inner_ty = self.typecheck_typename(inner);
+
+                self.compiler.find_or_create_type(Type::Buffer(inner_ty))
+            }
             _ => {
                 self.error(
                     format!(

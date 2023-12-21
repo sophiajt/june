@@ -44,6 +44,9 @@ pub enum AstNode {
         params: Vec<NodeId>,
         ret: NodeId,
     },
+    BufferType {
+        inner: NodeId,
+    },
 
     // Booleans
     True,
@@ -1681,6 +1684,20 @@ impl Parser {
     }
 
     pub fn typename(&mut self) -> NodeId {
+        if self.is_lsquare() {
+            // Buffer typename
+            // FIXME: this should probably be an array or vector once we support them
+
+            let span_start = self.position();
+            self.lsquare();
+            let name = self.typename();
+
+            let span_end = self.get_span_end(name) + 1;
+            self.rsquare();
+
+            return self.create_node(AstNode::BufferType { inner: name }, span_start, span_end);
+        }
+
         let pointer_type = if self.is_keyword(b"owned") {
             self.next();
             PointerType::Owned

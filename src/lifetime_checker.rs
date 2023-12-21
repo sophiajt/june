@@ -636,6 +636,7 @@ impl LifetimeChecker {
                     self.expand_lifetime_with_node(item, node_id);
                     self.check_node_lifetime(item, scope_level);
                 }
+                self.current_block_may_allocate(scope_level, node_id);
             }
             AstNode::Index { target, .. } => {
                 let target = *target;

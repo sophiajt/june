@@ -1,0 +1,9 @@
+// output: hellogoodbye
+
+fun goodbye(g: [i64]) {
+    println(c"goodbye")
+}
+
+let x = [1, 2, 3]
+defer x goodbye
+println(c"hello")

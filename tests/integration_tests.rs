@@ -199,6 +199,11 @@ fn buffer_assignment_error() -> TestResult {
 }
 
 #[test]
+fn buffer_defer() -> TestResult {
+    test_example("buffers/buffer_defer")
+}
+
+#[test]
 fn buffer_simple() -> TestResult {
     test_example("buffers/buffer_simple")
 }
