@@ -1,0 +1,8 @@
+// output: 20
+
+fun create_buffer() -> raw[i64] {
+    return raw[10, 20, 30]
+}
+
+let buffer = create_buffer()
+println(buffer[1])

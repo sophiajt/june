@@ -209,6 +209,11 @@ fn buffer_defer() -> TestResult {
 }
 
 #[test]
+fn buffer_return() -> TestResult {
+    test_example("buffers/buffer_return")
+}
+
+#[test]
 fn buffer_simple() -> TestResult {
     test_example("buffers/buffer_simple")
 }
