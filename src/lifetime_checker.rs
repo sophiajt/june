@@ -632,10 +632,18 @@ impl LifetimeChecker {
             }
             AstNode::RawBuffer(items) => {
                 let items = items.clone();
+
+                self.expand_lifetime(
+                    node_id,
+                    node_id,
+                    AllocationLifetime::Scope { level: scope_level },
+                );
+
                 for item in items {
                     self.expand_lifetime_with_node(item, node_id);
                     self.check_node_lifetime(item, scope_level);
                 }
+
                 self.current_block_may_allocate(scope_level, node_id);
             }
             AstNode::Index { target, .. } => {
