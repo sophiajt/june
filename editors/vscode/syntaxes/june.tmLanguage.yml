@@ -345,6 +345,9 @@ repository:
       - comment: const keyword
         name: storage.modifier.june
         match: \b(const)\b
+      - comment: raw keyword
+        name: storage.modifier.june
+        match: \b(raw)\b
       - comment: type keyword
         name: keyword.declaration.type.june storage.type.june
         match: \b(type)\b

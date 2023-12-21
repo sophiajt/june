@@ -956,11 +956,11 @@ impl Codegen {
                 let target = *target;
                 let index = *index;
 
-                output.extend_from_slice(b"*((");
+                output.extend_from_slice(b"(*((");
                 self.codegen_node(target, output);
                 output.extend_from_slice(b") + (");
                 self.codegen_node(index, output);
-                output.extend_from_slice(b"))");
+                output.extend_from_slice(b")))");
             }
             AstNode::Statement(node_id) => {
                 self.codegen_node(*node_id, output);

@@ -209,6 +209,11 @@ fn buffer_simple() -> TestResult {
 }
 
 #[test]
+fn buffer_with_pointers() -> TestResult {
+    test_example("buffers/buffer_with_pointers")
+}
+
+#[test]
 fn call_labeled_error() -> TestResult {
     test_example("typechecking/call_labeled_error")
 }

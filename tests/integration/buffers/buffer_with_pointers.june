@@ -1,0 +1,9 @@
+// output: 11
+
+struct Person {
+    height: i64
+}
+
+let a = raw[new Person(height: 11), new Person(height: 12)]
+
+println(a[0].height)
