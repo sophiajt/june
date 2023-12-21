@@ -317,6 +317,13 @@ impl LifetimeChecker {
                     );
                 }
             }
+            AstNode::Index { target, .. } => {
+                let target = *target;
+
+                self.check_lvalue_lifetime(target);
+
+                self.expand_lifetime_with_node(lvalue, target)
+            }
             AstNode::MemberAccess { target, .. } => {
                 let target = *target;
 

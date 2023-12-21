@@ -1,0 +1,5 @@
+// error: variable is not mutable
+
+let buffer = [1, 2, 3]
+buffer[1] = 5
+println(buffer[1])

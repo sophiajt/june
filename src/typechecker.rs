@@ -1700,6 +1700,26 @@ impl Typechecker {
                     VOID_TYPE_ID
                 }
             }
+            AstNode::Index { target, index } => {
+                let target = *target;
+                let index = *index;
+
+                let target_type_id = self.typecheck_lvalue(target);
+
+                let index_type_id = self.typecheck_node(index);
+
+                if index_type_id != I64_TYPE_ID {
+                    self.error("expected integer type for indexing", index);
+                }
+
+                match self.compiler.get_type(target_type_id) {
+                    Type::Buffer(inner_type_id) => *inner_type_id,
+                    _ => {
+                        self.error("expected buffer when indexing", target);
+                        VOID_TYPE_ID
+                    }
+                }
+            }
             AstNode::MemberAccess { target, field } => {
                 let target = *target;
                 let field = *field;

@@ -189,6 +189,16 @@ fn boolean() -> TestResult {
 }
 
 #[test]
+fn buffer_assignment() -> TestResult {
+    test_example("buffers/buffer_assignment")
+}
+
+#[test]
+fn buffer_assignment_error() -> TestResult {
+    test_example("buffers/buffer_assignment_error")
+}
+
+#[test]
 fn buffer_simple() -> TestResult {
     test_example("buffers/buffer_simple")
 }
