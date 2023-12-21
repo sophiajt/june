@@ -624,7 +624,7 @@ impl Compiler {
             Type::Range(type_id) => {
                 format!("range({})", self.pretty_type(*type_id))
             }
-            Type::Buffer(type_id) => {
+            Type::RawBuffer(type_id) => {
                 format!("[{}]", self.pretty_type(*type_id))
             }
             Type::Struct { .. } => {

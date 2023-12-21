@@ -42,7 +42,7 @@ impl Codegen {
                 let typename = self.compiler.get_source(*node_id);
                 output.extend_from_slice(typename);
             }
-            Type::Buffer(internal_type_id) => {
+            Type::RawBuffer(internal_type_id) => {
                 self.codegen_typename(*internal_type_id, output);
                 output.push(b'*');
             }
@@ -349,7 +349,7 @@ impl Codegen {
                     }
                     output.extend_from_slice(b");\n");
                 }
-                Type::Buffer(inner_type_id) => {
+                Type::RawBuffer(inner_type_id) => {
                     self.codegen_typename(*inner_type_id, output);
                     output.extend_from_slice(b"* create_buffer_");
                     output.extend_from_slice(idx.to_string().as_bytes());
@@ -938,7 +938,7 @@ impl Codegen {
                     }
                 }
             }
-            AstNode::Buffer(items) => {
+            AstNode::RawBuffer(items) => {
                 let type_id = self.compiler.get_node_type(node_id);
                 output.extend_from_slice(b"create_buffer_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());

@@ -44,7 +44,7 @@ pub enum AstNode {
         params: Vec<NodeId>,
         ret: NodeId,
     },
-    BufferType {
+    RawBufferType {
         inner: NodeId,
     },
 
@@ -194,7 +194,7 @@ pub enum AstNode {
         pointer: NodeId,
         callback: NodeId,
     },
-    Buffer(Vec<NodeId>),
+    RawBuffer(Vec<NodeId>),
 
     Statement(NodeId),
     Garbage,
@@ -736,6 +736,11 @@ impl Parser {
                 span_start,
                 span_end,
             }) if &self.compiler.source[span_start..span_end] == b"local" => true,
+            Some(Token {
+                token_type: TokenType::Name,
+                span_start,
+                span_end,
+            }) if &self.compiler.source[span_start..span_end] == b"raw" => true,
             Some(Token {
                 token_type: TokenType::Name,
                 ..
@@ -1295,8 +1300,8 @@ impl Parser {
             let output = self.expression();
             self.rparen();
             output
-        } else if self.is_lsquare() {
-            self.buffer()
+        } else if self.is_keyword(b"raw") {
+            self.raw_buffer()
         } else if self.is_keyword(b"true") || self.is_keyword(b"false") {
             self.boolean()
         } else if self.is_keyword(b"none") {
@@ -1684,10 +1689,10 @@ impl Parser {
     }
 
     pub fn typename(&mut self) -> NodeId {
-        if self.is_lsquare() {
+        if self.is_keyword(b"raw") {
             // Buffer typename
             // FIXME: this should probably be an array or vector once we support them
-
+            self.keyword(b"raw");
             let span_start = self.position();
             self.lsquare();
             let name = self.typename();
@@ -1695,7 +1700,7 @@ impl Parser {
             let span_end = self.get_span_end(name) + 1;
             self.rsquare();
 
-            return self.create_node(AstNode::BufferType { inner: name }, span_start, span_end);
+            return self.create_node(AstNode::RawBufferType { inner: name }, span_start, span_end);
         }
 
         let pointer_type = if self.is_keyword(b"owned") {
@@ -1747,9 +1752,10 @@ impl Parser {
         }
     }
 
-    pub fn buffer(&mut self) -> NodeId {
+    pub fn raw_buffer(&mut self) -> NodeId {
         let span_start = self.position();
         let span_end;
+        self.keyword(b"raw");
         let param_list = {
             self.lsquare();
 
@@ -1774,7 +1780,7 @@ impl Parser {
             output
         };
 
-        self.create_node(AstNode::Buffer(param_list), span_start, span_end)
+        self.create_node(AstNode::RawBuffer(param_list), span_start, span_end)
     }
 
     pub fn type_params(&mut self) -> NodeId {

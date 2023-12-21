@@ -1,4 +1,4 @@
 // output: 2
 
-let buffer = [1, 2, 3]
+let buffer = raw[1, 2, 3]
 println(buffer[1])

@@ -630,7 +630,7 @@ impl LifetimeChecker {
 
                 self.current_block_may_allocate(scope_level, node_id);
             }
-            AstNode::Buffer(items) => {
+            AstNode::RawBuffer(items) => {
                 let items = items.clone();
                 for item in items {
                     self.expand_lifetime_with_node(item, node_id);

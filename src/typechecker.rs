@@ -34,7 +34,7 @@ pub enum Type {
     F64,
     Bool,
     Range(TypeId),
-    Buffer(TypeId),
+    RawBuffer(TypeId),
     Fun {
         params: Vec<Param>,
         ret: TypeId,
@@ -269,12 +269,12 @@ impl Typechecker {
                     ret: typed_ret,
                 })
             }
-            AstNode::BufferType { inner } => {
+            AstNode::RawBufferType { inner } => {
                 let inner = *inner;
 
                 let inner_ty = self.typecheck_typename(inner);
 
-                self.compiler.find_or_create_type(Type::Buffer(inner_ty))
+                self.compiler.find_or_create_type(Type::RawBuffer(inner_ty))
             }
             _ => {
                 self.error(
@@ -1503,7 +1503,7 @@ impl Typechecker {
                 self.typecheck_new(allocation_type, allocation_node_id)
             }
             AstNode::NamedValue { value, .. } => self.typecheck_node(*value),
-            AstNode::Buffer(items) => {
+            AstNode::RawBuffer(items) => {
                 let items = items.clone();
                 let mut ty = UNKNOWN_TYPE_ID;
 
@@ -1524,7 +1524,7 @@ impl Typechecker {
                     }
                 }
 
-                self.compiler.find_or_create_type(Type::Buffer(ty))
+                self.compiler.find_or_create_type(Type::RawBuffer(ty))
             }
             AstNode::Index { target, index } => {
                 let target = *target;
@@ -1533,7 +1533,7 @@ impl Typechecker {
                 let index_ty = self.typecheck_node(index);
 
                 match self.compiler.get_type(target_ty) {
-                    Type::Buffer(inner_type_id) => {
+                    Type::RawBuffer(inner_type_id) => {
                         let inner_type_id = *inner_type_id;
 
                         if index_ty != I64_TYPE_ID {
@@ -1720,7 +1720,7 @@ impl Typechecker {
                 }
 
                 match self.compiler.get_type(target_type_id) {
-                    Type::Buffer(inner_type_id) => *inner_type_id,
+                    Type::RawBuffer(inner_type_id) => *inner_type_id,
                     _ => {
                         self.error("expected buffer when indexing", target);
                         VOID_TYPE_ID
