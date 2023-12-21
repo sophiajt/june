@@ -42,6 +42,10 @@ impl Codegen {
                 let typename = self.compiler.get_source(*node_id);
                 output.extend_from_slice(typename);
             }
+            Type::Buffer(internal_type_id) => {
+                self.codegen_typename(*internal_type_id, output);
+                output.push(b'*');
+            }
             _ => {
                 if type_id == VOID_TYPE_ID {
                     output.extend_from_slice(b"void");
@@ -344,6 +348,27 @@ impl Codegen {
                         self.codegen_typename(var_type_id, output);
                     }
                     output.extend_from_slice(b");\n");
+                }
+                Type::Buffer(inner_type_id) => {
+                    self.codegen_typename(*inner_type_id, output);
+                    output.extend_from_slice(b"* create_buffer_");
+                    output.extend_from_slice(idx.to_string().as_bytes());
+                    output.extend_from_slice(b"(int level, int count, ...)\n{\n");
+                    self.codegen_typename(TypeId(idx), output);
+                    output.extend_from_slice(
+                        b" output = allocate_resizeable_page_on_allocator_level(allocator, level, sizeof(",
+                    );
+                    self.codegen_typename(*inner_type_id, output);
+                    output.extend_from_slice(b") * count);\n");
+                    output.extend_from_slice(b"va_list args;\n");
+                    output.extend_from_slice(b"va_start(args, count);\n");
+                    output.extend_from_slice(b"for (int i = 0; i < count; i++) {\n");
+                    output.extend_from_slice(b"*(output + i) = va_arg(args, ");
+                    self.codegen_typename(*inner_type_id, output);
+                    output.extend_from_slice(b");\n");
+                    output.extend_from_slice(b"}\n");
+                    output.extend_from_slice(b"va_end(args);\n");
+                    output.extend_from_slice(b"return output;\n}\n");
                 }
                 _ => {}
             }
@@ -912,6 +937,30 @@ impl Codegen {
                         panic!("internal error: field access on non-struct: {:?}", x)
                     }
                 }
+            }
+            AstNode::Buffer(items) => {
+                let type_id = self.compiler.get_node_type(node_id);
+                output.extend_from_slice(b"create_buffer_");
+                output.extend_from_slice(type_id.0.to_string().as_bytes());
+                output.push(b'(');
+                self.codegen_annotation(node_id, output);
+                output.extend_from_slice(b", ");
+                output.extend_from_slice(items.len().to_string().as_bytes());
+                for item in items {
+                    output.extend_from_slice(b", ");
+                    self.codegen_node(*item, output);
+                }
+                output.push(b')');
+            }
+            AstNode::Index { target, index } => {
+                let target = *target;
+                let index = *index;
+
+                output.extend_from_slice(b"*((");
+                self.codegen_node(target, output);
+                output.extend_from_slice(b") + (");
+                self.codegen_node(index, output);
+                output.extend_from_slice(b"))");
             }
             AstNode::Statement(node_id) => {
                 self.codegen_node(*node_id, output);

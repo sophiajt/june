@@ -189,6 +189,11 @@ fn boolean() -> TestResult {
 }
 
 #[test]
+fn buffer_simple() -> TestResult {
+    test_example("buffers/buffer_simple")
+}
+
+#[test]
 fn call_labeled_error() -> TestResult {
     test_example("typechecking/call_labeled_error")
 }

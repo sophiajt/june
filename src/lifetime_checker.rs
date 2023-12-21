@@ -623,6 +623,18 @@ impl LifetimeChecker {
 
                 self.current_block_may_allocate(scope_level, node_id);
             }
+            AstNode::Buffer(items) => {
+                let items = items.clone();
+                for item in items {
+                    self.expand_lifetime_with_node(item, node_id);
+                    self.check_node_lifetime(item, scope_level);
+                }
+            }
+            AstNode::Index { target, .. } => {
+                let target = *target;
+                self.expand_lifetime_with_node(target, node_id);
+                self.check_node_lifetime(target, scope_level);
+            }
             AstNode::Return(return_expr) => {
                 if let Some(return_expr) = return_expr {
                     let return_expr = *return_expr;

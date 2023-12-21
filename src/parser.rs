@@ -172,6 +172,10 @@ pub enum AstNode {
         target: NodeId,
         field: NodeId,
     },
+    Index {
+        target: NodeId,
+        index: NodeId,
+    },
     Block(BlockId),
     If {
         condition: NodeId,
@@ -187,6 +191,8 @@ pub enum AstNode {
         pointer: NodeId,
         callback: NodeId,
     },
+    Buffer(Vec<NodeId>),
+
     Statement(NodeId),
     Garbage,
 }
@@ -1286,6 +1292,8 @@ impl Parser {
             let output = self.expression();
             self.rparen();
             output
+        } else if self.is_lsquare() {
+            self.buffer()
         } else if self.is_keyword(b"true") || self.is_keyword(b"false") {
             self.boolean()
         } else if self.is_keyword(b"none") {
@@ -1366,6 +1374,22 @@ impl Parser {
                         self.error("expected field or method call");
                     }
                 }
+            } else if self.is_lsquare() {
+                // Indexing operation
+                self.next();
+
+                let item = self.simple_expression();
+                let span_end = self.get_span_end(item);
+                self.rsquare();
+
+                expr = self.create_node(
+                    AstNode::Index {
+                        target: expr,
+                        index: item,
+                    },
+                    span_start,
+                    span_end,
+                );
             } else if self.is_coloncolon() {
                 self.next();
 
@@ -1704,6 +1728,36 @@ impl Parser {
             }
             _ => self.error("expect name"),
         }
+    }
+
+    pub fn buffer(&mut self) -> NodeId {
+        let span_start = self.position();
+        let span_end;
+        let param_list = {
+            self.lsquare();
+
+            let mut output = vec![];
+
+            while self.has_tokens() {
+                if self.is_rsquare() {
+                    break;
+                }
+
+                if self.is_comma() {
+                    self.next();
+                    continue;
+                }
+
+                output.push(self.simple_expression());
+            }
+
+            span_end = self.position() + 1;
+            self.rsquare();
+
+            output
+        };
+
+        self.create_node(AstNode::Buffer(param_list), span_start, span_end)
     }
 
     pub fn type_params(&mut self) -> NodeId {

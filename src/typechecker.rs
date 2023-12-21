@@ -34,6 +34,7 @@ pub enum Type {
     F64,
     Bool,
     Range(TypeId),
+    Buffer(TypeId),
     Fun {
         params: Vec<Param>,
         ret: TypeId,
@@ -1495,6 +1496,50 @@ impl Typechecker {
                 self.typecheck_new(allocation_type, allocation_node_id)
             }
             AstNode::NamedValue { value, .. } => self.typecheck_node(*value),
+            AstNode::Buffer(items) => {
+                let items = items.clone();
+                let mut ty = UNKNOWN_TYPE_ID;
+
+                for item in items {
+                    let item_ty = self.typecheck_node(item);
+
+                    if ty == UNKNOWN_TYPE_ID {
+                        ty = item_ty;
+                    } else if ty != item_ty {
+                        self.error(
+                            format!(
+                                "type mismatch in buffer. expected {}, found: {}",
+                                self.compiler.pretty_type(ty),
+                                self.compiler.pretty_type(item_ty)
+                            ),
+                            node_id,
+                        );
+                    }
+                }
+
+                self.compiler.find_or_create_type(Type::Buffer(ty))
+            }
+            AstNode::Index { target, index } => {
+                let target = *target;
+                let index = *index;
+                let target_ty = self.typecheck_node(target);
+                let index_ty = self.typecheck_node(index);
+
+                match self.compiler.get_type(target_ty) {
+                    Type::Buffer(inner_type_id) => {
+                        let inner_type_id = *inner_type_id;
+
+                        if index_ty != I64_TYPE_ID {
+                            self.error("index with a non-integer type", index);
+                        }
+                        inner_type_id
+                    }
+                    _ => {
+                        self.error("index on a non-buffer type", target);
+                        UNKNOWN_TYPE_ID
+                    }
+                }
+            }
             AstNode::Break => {
                 //FIXME: ensure that we're inside a loop
                 VOID_TYPE_ID

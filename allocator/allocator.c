@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 const long DEFAULT_PAGE_SIZE = 1024;
 const bool DEBUG_ZEROING = true;
@@ -231,6 +232,52 @@ void *allocate_on_allocator_level(struct AllocatorLevel *allocator_level, long s
     ++allocator_level->num_pages;
 
     return output;
+}
+
+void *allocate_resizeable_page_on_allocator_level(struct Allocator *allocator, int level, long size)
+{
+    if (level >= allocator->num_levels)
+    {
+        grow_allocator_levels(allocator, level);
+    }
+
+    if (allocator->levels[level] == NULL)
+    {
+        create_allocator_level(allocator, level);
+    }
+
+    struct AllocatorLevel *allocator_level = allocator->levels[level];
+    // Each resizeable page is isolated, so let's make a new one
+    allocator_level->pages = realloc(allocator_level->pages, sizeof(struct AllocatorPage *) * (allocator_level->num_pages + 1));
+    allocator_level->pages[allocator_level->num_pages] = create_allocator_page();
+
+    allocator_level->pages[allocator_level->num_pages]->block = malloc(size);
+    void *output = allocator_level->pages[allocator_level->num_pages]->block;
+    allocator_level->pages[allocator_level->num_pages]->next_free = allocator_level->pages[allocator_level->num_pages]->block + size;
+    allocator_level->pages[allocator_level->num_pages]->amt_free = 0;
+
+    ++allocator_level->num_pages;
+
+    return output;
+}
+
+void *resize_page_on_allocator_level(struct Allocator *allocator, int level, void *origin, long new_size)
+{
+    struct AllocatorLevel *allocator_level = allocator->levels[level];
+
+    for (int i = 0; i < allocator_level->num_pages; ++i)
+    {
+        if (allocator_level->pages[i]->block == origin)
+        {
+            allocator_level->pages[i]->block = realloc(allocator_level->pages[i]->block, new_size);
+            allocator_level->pages[i]->next_free = allocator_level->pages[i]->block + new_size;
+
+            return allocator_level->pages[i]->block;
+        }
+    }
+
+    printf("INTERNAL ERROR: could not find origin: %p\n", origin);
+    return NULL;
 }
 
 void free_allocator_level(struct Allocator *allocator, int level)
