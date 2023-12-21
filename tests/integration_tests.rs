@@ -189,41 +189,6 @@ fn boolean() -> TestResult {
 }
 
 #[test]
-fn buffer_argument() -> TestResult {
-    test_example("buffers/buffer_argument")
-}
-
-#[test]
-fn buffer_assignment() -> TestResult {
-    test_example("buffers/buffer_assignment")
-}
-
-#[test]
-fn buffer_assignment_error() -> TestResult {
-    test_example("buffers/buffer_assignment_error")
-}
-
-#[test]
-fn buffer_defer() -> TestResult {
-    test_example("buffers/buffer_defer")
-}
-
-#[test]
-fn buffer_return() -> TestResult {
-    test_example("buffers/buffer_return")
-}
-
-#[test]
-fn buffer_simple() -> TestResult {
-    test_example("buffers/buffer_simple")
-}
-
-#[test]
-fn buffer_with_pointers() -> TestResult {
-    test_example("buffers/buffer_with_pointers")
-}
-
-#[test]
 fn call_labeled_error() -> TestResult {
     test_example("typechecking/call_labeled_error")
 }
@@ -609,46 +574,6 @@ fn mutability_mismatch_error() -> TestResult {
 }
 
 #[test]
-fn passthrough_error() -> TestResult {
-    test_example("lifetime_inference/passthrough_error")
-}
-
-#[test]
-fn passthrough_error2() -> TestResult {
-    test_example("lifetime_inference/passthrough_error2")
-}
-
-#[test]
-fn private_by_default() -> TestResult {
-    test_example("classes/private_by_default")
-}
-
-#[test]
-fn return_missing_error() -> TestResult {
-    test_example("typechecking/return_missing_error")
-}
-
-#[test]
-fn return_missing_value_error() -> TestResult {
-    test_example("typechecking/return_missing_value_error")
-}
-
-#[test]
-fn return_top_level_error() -> TestResult {
-    test_example("typechecking/return_top_level_error")
-}
-
-#[test]
-fn return_value() -> TestResult {
-    test_example("typechecking/return_value")
-}
-
-#[test]
-fn return_value_error() -> TestResult {
-    test_example("typechecking/return_value_error")
-}
-
-#[test]
 fn owned_method_doesnt_permanently_move() -> TestResult {
     test_example("owned_abstractions/owned_method_doesnt_permanently_move")
 }
@@ -689,8 +614,83 @@ fn params_dont_leak_error() -> TestResult {
 }
 
 #[test]
+fn passthrough_error() -> TestResult {
+    test_example("lifetime_inference/passthrough_error")
+}
+
+#[test]
+fn passthrough_error2() -> TestResult {
+    test_example("lifetime_inference/passthrough_error2")
+}
+
+#[test]
+fn private_by_default() -> TestResult {
+    test_example("classes/private_by_default")
+}
+
+#[test]
 fn puts() -> TestResult {
     test_example("extern_c/puts")
+}
+
+#[test]
+fn raw_buffer_argument() -> TestResult {
+    test_example("raw_buffers/raw_buffer_argument")
+}
+
+#[test]
+fn raw_buffer_assignment() -> TestResult {
+    test_example("raw_buffers/raw_buffer_assignment")
+}
+
+#[test]
+fn raw_buffer_assignment_error() -> TestResult {
+    test_example("raw_buffers/raw_buffer_assignment_error")
+}
+
+#[test]
+fn raw_buffer_defer() -> TestResult {
+    test_example("raw_buffers/raw_buffer_defer")
+}
+
+#[test]
+fn raw_buffer_return() -> TestResult {
+    test_example("raw_buffers/raw_buffer_return")
+}
+
+#[test]
+fn raw_buffer_simple() -> TestResult {
+    test_example("raw_buffers/raw_buffer_simple")
+}
+
+#[test]
+fn raw_buffer_with_pointers() -> TestResult {
+    test_example("raw_buffers/raw_buffer_with_pointers")
+}
+
+#[test]
+fn return_missing_error() -> TestResult {
+    test_example("typechecking/return_missing_error")
+}
+
+#[test]
+fn return_missing_value_error() -> TestResult {
+    test_example("typechecking/return_missing_value_error")
+}
+
+#[test]
+fn return_top_level_error() -> TestResult {
+    test_example("typechecking/return_top_level_error")
+}
+
+#[test]
+fn return_value() -> TestResult {
+    test_example("typechecking/return_value")
+}
+
+#[test]
+fn return_value_error() -> TestResult {
+    test_example("typechecking/return_value_error")
 }
 
 #[test]
