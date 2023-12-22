@@ -654,6 +654,11 @@ fn raw_buffer_defer() -> TestResult {
 }
 
 #[test]
+fn raw_buffer_resize() -> TestResult {
+    test_example("raw_buffers/raw_buffer_resize")
+}
+
+#[test]
 fn raw_buffer_return() -> TestResult {
     test_example("raw_buffers/raw_buffer_return")
 }

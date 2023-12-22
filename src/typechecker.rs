@@ -1658,6 +1658,25 @@ impl Typechecker {
 
                 VOID_TYPE_ID
             }
+            AstNode::ResizeRawBuffer { pointer, new_size } => {
+                let pointer = *pointer;
+                let new_size = *new_size;
+
+                let pointer_type_id = self.typecheck_node(pointer);
+                let new_size_type_id = self.typecheck_node(new_size);
+
+                if !self.is_binding_mutable(pointer) {
+                    self.error("variable is not mutable", pointer);
+                }
+                if !matches!(self.compiler.get_type(pointer_type_id), Type::RawBuffer(_)) {
+                    self.error("expected raw buffer for resize", pointer);
+                }
+                if !matches!(self.compiler.get_type(new_size_type_id), Type::I64) {
+                    self.error("expected integer size for resize", new_size);
+                }
+
+                VOID_TYPE_ID
+            }
             AstNode::Match { target, match_arms } => {
                 self.typecheck_match(*target, match_arms.clone())
             }

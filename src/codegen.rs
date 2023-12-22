@@ -1036,6 +1036,32 @@ impl Codegen {
                 self.codegen_node(*callback, output);
                 output.extend_from_slice(b");\n");
             }
+            AstNode::ResizeRawBuffer { pointer, new_size } => {
+                let pointer = *pointer;
+                let new_size = *new_size;
+
+                self.codegen_node(pointer, output);
+                output.extend_from_slice(b" = resize_page_on_allocator_level(allocator, ");
+                self.codegen_annotation(pointer, output);
+                output.extend_from_slice(b", ");
+                self.codegen_node(pointer, output);
+                output.extend_from_slice(b", sizeof(");
+
+                let pointer_type_id = self.compiler.get_node_type(pointer);
+
+                match self.compiler.get_type(pointer_type_id) {
+                    Type::RawBuffer(inner_type_id) => {
+                        self.codegen_typename(*inner_type_id, output);
+                    }
+                    _ => {
+                        panic!("internal error: resize of non-buffer type")
+                    }
+                }
+
+                output.extend_from_slice(b") * (");
+                self.codegen_node(new_size, output);
+                output.extend_from_slice(b"));\n");
+            }
             AstNode::Match { target, match_arms } => {
                 output.extend_from_slice(b"{\n");
                 let type_id = self.compiler.get_node_type(*target);

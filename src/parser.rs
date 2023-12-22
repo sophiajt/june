@@ -194,6 +194,10 @@ pub enum AstNode {
         pointer: NodeId,
         callback: NodeId,
     },
+    ResizeRawBuffer {
+        pointer: NodeId,
+        new_size: NodeId,
+    },
     RawBuffer(Vec<NodeId>),
 
     Statement(NodeId),
@@ -832,6 +836,8 @@ impl Parser {
                 code_body.push(self.break_statement());
             } else if self.is_keyword(b"defer") {
                 code_body.push(self.defer_statement());
+            } else if self.is_keyword(b"resize") {
+                code_body.push(self.resize_statement());
             } else {
                 let span_start = self.position();
                 let expression = self.expression_or_assignment();
@@ -2156,6 +2162,26 @@ impl Parser {
         let span_end = self.get_span_end(callback);
 
         self.create_node(AstNode::Defer { pointer, callback }, span_start, span_end)
+    }
+
+    pub fn resize_statement(&mut self) -> NodeId {
+        let span_start = self.position();
+
+        //FIXME: note this syntax is likely going to change. It's here as a placeholder.
+
+        self.keyword(b"resize");
+
+        let pointer = self.variable();
+
+        let new_size = self.simple_expression();
+
+        let span_end = self.get_span_end(new_size);
+
+        self.create_node(
+            AstNode::ResizeRawBuffer { pointer, new_size },
+            span_start,
+            span_end,
+        )
     }
 
     pub fn variable(&mut self) -> NodeId {

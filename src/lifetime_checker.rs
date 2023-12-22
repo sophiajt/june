@@ -492,6 +492,24 @@ impl LifetimeChecker {
                     AllocationLifetime::Unknown => {}
                 }
             }
+            AstNode::ResizeRawBuffer { pointer, .. } => {
+                let pointer = *pointer;
+
+                self.check_node_lifetime(pointer, scope_level);
+
+                let expected_lifetime = self.compiler.get_node_lifetime(pointer);
+                self.expand_lifetime_with_node(node_id, pointer);
+
+                match expected_lifetime {
+                    AllocationLifetime::Return => {}
+                    AllocationLifetime::Param { .. } => {}
+                    AllocationLifetime::Scope { .. } => {
+                        // is this right?
+                        self.current_block_may_allocate(scope_level, node_id);
+                    }
+                    AllocationLifetime::Unknown => {}
+                }
+            }
             AstNode::Call { head, args } => {
                 let head = *head;
                 // FIXME: remove clone
