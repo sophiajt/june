@@ -898,6 +898,11 @@ fn variable() -> TestResult {
 }
 
 #[test]
+fn vector_of_ints() -> TestResult {
+    test_example("data_structures/vector_of_ints")
+}
+
+#[test]
 fn unicode() -> TestResult {
     test_example("parsing/unicode")
 }

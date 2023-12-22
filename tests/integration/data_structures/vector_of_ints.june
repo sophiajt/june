@@ -1,0 +1,44 @@
+// output: 21020
+
+struct Vector {
+    num_items: i64
+    capacity: i64
+    contents: raw[i64]
+
+    fun create_vector() -> Vector {
+        return new Vector(num_items: 0, capacity: 1, contents: raw[0])
+    }
+
+    fun size(self) -> i64 {
+        return .num_items
+    }
+
+    fun push(mut self, data: i64) {
+        if .num_items == .capacity {
+            let new_size = .num_items * 2
+            resize .contents new_size
+            .capacity = .num_items * 2
+        }
+
+        .contents[.num_items] = data
+        .num_items += 1
+    }
+
+    fun get(self, index: i64) -> i64 {
+        if index < .num_items {
+            return .contents[index]
+        } else {
+            println(c"Index past end of vector")
+            return 0
+        }
+    }
+}
+
+mut v = Vector::create_vector()
+v.push(10)
+v.push(20)
+
+println(v.size())
+
+println(v.get(0))
+println(v.get(1))

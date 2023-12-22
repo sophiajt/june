@@ -2171,7 +2171,7 @@ impl Parser {
 
         self.keyword(b"resize");
 
-        let pointer = self.variable();
+        let pointer = self.simple_expression();
 
         let new_size = self.simple_expression();
 

@@ -395,6 +395,7 @@ impl LifetimeChecker {
                 let field_type = self.compiler.get_node_type(node_id);
                 if !self.compiler.is_copyable_type(field_type) {
                     self.expand_lifetime_with_node(target, node_id);
+                    self.expand_lifetime_with_node(node_id, target);
                 }
                 self.check_node_lifetime(target, scope_level);
             }
