@@ -6,7 +6,7 @@ struct Vector {
     contents: raw[i64]
 
     fun create_vector() -> Vector {
-        return new Vector(num_items: 0, capacity: 1, contents: raw[0])
+        return new Vector(num_items: 0, capacity: 0, contents: raw[])
     }
 
     fun size(self) -> i64 {

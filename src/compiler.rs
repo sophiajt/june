@@ -507,6 +507,24 @@ impl Compiler {
         self.node_types[node_id.0]
     }
 
+    pub fn resolve_type(&self, type_id: TypeId, local_inferences: &[TypeId]) -> TypeId {
+        match self.get_type(type_id) {
+            Type::FunLocalTypeVar { offset } => local_inferences[*offset],
+            _ => type_id,
+        }
+    }
+
+    pub fn resolve_node_type(&self, node_id: NodeId, local_inferences: &[TypeId]) -> TypeId {
+        match &self.types[self.node_types[node_id.0].0] {
+            Type::FunLocalTypeVar { offset } => local_inferences[*offset],
+            Type::RawBuffer(inner_type_id) => {
+                let resolved_inner_type_id = self.resolve_type(*inner_type_id, local_inferences);
+                self.find_type(Type::RawBuffer(resolved_inner_type_id))
+            }
+            _ => self.node_types[node_id.0],
+        }
+    }
+
     pub fn set_node_type(&mut self, node_id: NodeId, type_id: TypeId) {
         self.node_types[node_id.0] = type_id;
     }
@@ -551,6 +569,16 @@ impl Compiler {
         self.types.push(ty);
 
         TypeId(self.types.len() - 1)
+    }
+
+    pub fn find_type(&self, ty: Type) -> TypeId {
+        for (idx, t) in self.types.iter().enumerate() {
+            if &ty == t {
+                return TypeId(idx);
+            }
+        }
+
+        panic!("internal error: can't find Type as a TypeId")
     }
 
     pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
@@ -631,6 +659,7 @@ impl Compiler {
                 // FIXME: need more info
                 "struct".into()
             }
+            Type::FunLocalTypeVar { offset } => format!("<local typevar: {}>", offset),
             Type::TypeVariable => "<typevar>".into(),
             Type::Unknown => "<unknown>".into(),
             Type::Void => "void".into(),

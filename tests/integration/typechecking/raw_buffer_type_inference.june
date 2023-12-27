@@ -1,0 +1,8 @@
+// output: done
+
+let x: raw[i64] = raw[]
+
+let y: raw[raw[c_string]] = raw[]
+
+println(c"done")
+

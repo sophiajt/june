@@ -18,8 +18,16 @@ impl Codegen {
         Codegen { compiler }
     }
 
-    pub fn codegen_typename(&self, type_id: TypeId, output: &mut Vec<u8>) {
+    pub fn codegen_typename(
+        &self,
+        type_id: TypeId,
+        local_inferences: &[TypeId],
+        output: &mut Vec<u8>,
+    ) {
         match self.compiler.get_type(type_id) {
+            Type::FunLocalTypeVar { offset } => {
+                self.codegen_typename(local_inferences[*offset], local_inferences, output)
+            }
             Type::Struct { .. } => {
                 output.extend_from_slice(b"struct struct_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
@@ -31,7 +39,7 @@ impl Codegen {
             Type::Pointer {
                 target: type_id, ..
             } => {
-                self.codegen_typename(*type_id, output);
+                self.codegen_typename(*type_id, local_inferences, output);
                 output.push(b'*');
             }
             Type::Fun { .. } => {
@@ -43,7 +51,7 @@ impl Codegen {
                 output.extend_from_slice(typename);
             }
             Type::RawBuffer(internal_type_id) => {
-                self.codegen_typename(*internal_type_id, output);
+                self.codegen_typename(*internal_type_id, local_inferences, output);
                 output.push(b'*');
             }
             _ => {
@@ -96,7 +104,7 @@ impl Codegen {
 
         for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
             output.extend_from_slice(b", ");
-            self.codegen_typename(*ty, output);
+            self.codegen_typename(*ty, &[], output);
             output.push(b' ');
             output.extend_from_slice(format!("field_{}", idx).as_bytes());
             output.extend_from_slice(b" /* ");
@@ -105,9 +113,9 @@ impl Codegen {
         }
         output.extend_from_slice(b") {\n");
 
-        self.codegen_typename(type_id, output);
+        self.codegen_typename(type_id, &[], output);
         output.extend_from_slice(b" tmp = (");
-        self.codegen_typename(type_id, output);
+        self.codegen_typename(type_id, &[], output);
         output.extend_from_slice(b")allocate(allocator, sizeof(struct struct_");
         output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
         output.extend_from_slice(b"), allocation_id);\n");
@@ -150,7 +158,7 @@ impl Codegen {
                 Type::Fun { params, ret } => {
                     // typedef long(*funcPtr)(short, char);
                     output.extend_from_slice(b"typedef ");
-                    self.codegen_typename(*ret, output);
+                    self.codegen_typename(*ret, &[], output);
                     output.extend_from_slice(b"(*fun_ty_");
                     output.extend_from_slice(idx.to_string().as_bytes());
                     // FIXME: we may not always have an allocation_id
@@ -158,7 +166,7 @@ impl Codegen {
                     for param in params {
                         output.extend_from_slice(b", ");
                         let var_type_id = self.compiler.get_variable(param.var_id).ty;
-                        self.codegen_typename(var_type_id, output);
+                        self.codegen_typename(var_type_id, &[], output);
                     }
                     output.extend_from_slice(b");\n");
                 }
@@ -184,12 +192,12 @@ impl Codegen {
                     output.extend_from_slice(idx.to_string().as_bytes());
                     output.extend_from_slice(b"{\n");
                     if *is_allocator {
-                        self.codegen_typename(I64_TYPE_ID, output);
+                        self.codegen_typename(I64_TYPE_ID, &[], output);
                         output.push(b' ');
                         output.extend_from_slice(b"__allocation_id__;\n");
                     }
                     for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
-                        self.codegen_typename(*ty, output);
+                        self.codegen_typename(*ty, &[], output);
                         output.push(b' ');
                         output.extend_from_slice(format!("field_{} ", idx).as_bytes());
                         output.extend_from_slice(b"/* ");
@@ -223,7 +231,7 @@ impl Codegen {
                     for (idx, case) in cases.iter().enumerate() {
                         match case {
                             EnumVariant::Single { name, param: arg } => {
-                                self.codegen_typename(*arg, output);
+                                self.codegen_typename(*arg, &[], output);
                                 output.push(b' ');
                                 output.extend_from_slice(format!("case_{} /* ", idx).as_bytes());
                                 output.extend_from_slice(name);
@@ -236,7 +244,7 @@ impl Codegen {
                                 output.extend_from_slice(b" */ {\n");
 
                                 for (arg_idx, arg) in args.iter().enumerate() {
-                                    self.codegen_typename(arg.1, output);
+                                    self.codegen_typename(arg.1, &[], output);
                                     output.push(b' ');
                                     output.extend_from_slice(
                                         format!("case_{}_{} /* ", idx, arg_idx).as_bytes(),
@@ -257,7 +265,7 @@ impl Codegen {
                     output.extend_from_slice(b"};\n");
 
                     for (case_offset, case) in cases.iter().enumerate() {
-                        self.codegen_typename(TypeId(idx), output);
+                        self.codegen_typename(TypeId(idx), &[], output);
                         output.extend_from_slice(b"* enum_case_");
                         output.extend_from_slice(idx.to_string().as_bytes());
                         output.push(b'_');
@@ -268,7 +276,7 @@ impl Codegen {
                         match case {
                             EnumVariant::Single { param, .. } => {
                                 output.extend_from_slice(b", ");
-                                self.codegen_typename(*param, output);
+                                self.codegen_typename(*param, &[], output);
                                 output.extend_from_slice(b" arg");
                             }
                             EnumVariant::Struct { params, .. } => {
@@ -276,7 +284,7 @@ impl Codegen {
                                     params.iter().enumerate()
                                 {
                                     output.extend_from_slice(b", ");
-                                    self.codegen_typename(*param_type, output);
+                                    self.codegen_typename(*param_type, &[], output);
                                     output.push(b' ');
                                     output.extend_from_slice(
                                         format!("case_{}_{} /* ", case_offset, param_idx)
@@ -290,9 +298,9 @@ impl Codegen {
                         }
                         output.extend_from_slice(b") {\n");
 
-                        self.codegen_typename(TypeId(idx), output);
+                        self.codegen_typename(TypeId(idx), &[], output);
                         output.extend_from_slice(b"* tmp = (");
-                        self.codegen_typename(TypeId(idx), output);
+                        self.codegen_typename(TypeId(idx), &[], output);
                         output.extend_from_slice(b"*)allocate(allocator, sizeof(struct enum_");
                         output.extend_from_slice(idx.to_string().as_bytes());
                         output.extend_from_slice(b"), allocation_id);\n");
@@ -337,7 +345,7 @@ impl Codegen {
                 Type::Fun { params, ret } => {
                     // typedef long(*funcPtr)(short, char);
                     output.extend_from_slice(b"typedef ");
-                    self.codegen_typename(*ret, output);
+                    self.codegen_typename(*ret, &[], output);
                     output.extend_from_slice(b"(*fun_ty_");
                     output.extend_from_slice(idx.to_string().as_bytes());
                     // FIXME: we may not always have an allocation_id
@@ -345,26 +353,32 @@ impl Codegen {
                     for param in params {
                         output.extend_from_slice(b", ");
                         let var_type_id = self.compiler.get_variable(param.var_id).ty;
-                        self.codegen_typename(var_type_id, output);
+                        self.codegen_typename(var_type_id, &[], output);
                     }
                     output.extend_from_slice(b");\n");
                 }
                 Type::RawBuffer(inner_type_id) => {
-                    self.codegen_typename(*inner_type_id, output);
+                    if matches!(
+                        self.compiler.get_type(*inner_type_id),
+                        Type::FunLocalTypeVar { .. }
+                    ) {
+                        continue;
+                    }
+                    self.codegen_typename(*inner_type_id, &[], output);
                     output.extend_from_slice(b"* create_buffer_");
                     output.extend_from_slice(idx.to_string().as_bytes());
                     output.extend_from_slice(b"(int level, int count, ...)\n{\n");
-                    self.codegen_typename(TypeId(idx), output);
+                    self.codegen_typename(TypeId(idx), &[], output);
                     output.extend_from_slice(
                         b" output = allocate_resizeable_page_on_allocator_level(allocator, level, sizeof(",
                     );
-                    self.codegen_typename(*inner_type_id, output);
+                    self.codegen_typename(*inner_type_id, &[], output);
                     output.extend_from_slice(b") * count);\n");
                     output.extend_from_slice(b"va_list args;\n");
                     output.extend_from_slice(b"va_start(args, count);\n");
                     output.extend_from_slice(b"for (int i = 0; i < count; i++) {\n");
                     output.extend_from_slice(b"*(output + i) = va_arg(args, ");
-                    self.codegen_typename(*inner_type_id, output);
+                    self.codegen_typename(*inner_type_id, &[], output);
                     output.extend_from_slice(b");\n");
                     output.extend_from_slice(b"}\n");
                     output.extend_from_slice(b"va_end(args);\n");
@@ -383,7 +397,11 @@ impl Codegen {
         output: &mut Vec<u8>,
         is_extern_c: bool,
     ) {
-        self.codegen_typename(return_type, output);
+        self.codegen_typename(
+            return_type,
+            &self.compiler.functions[fun_id.0].type_vars,
+            output,
+        );
         output.push(b' ');
         if is_extern_c {
             output.extend_from_slice(
@@ -416,7 +434,11 @@ impl Codegen {
             }
 
             let variable_ty = self.compiler.get_variable(param.var_id).ty;
-            self.codegen_typename(variable_ty, output);
+            self.codegen_typename(
+                variable_ty,
+                &self.compiler.functions[fun_id.0].type_vars,
+                output,
+            );
             output.push(b' ');
             output.extend_from_slice(b"variable_");
             output.extend_from_slice(param.var_id.0.to_string().as_bytes());
@@ -448,6 +470,7 @@ impl Codegen {
                 params,
                 return_type,
                 body,
+                type_vars,
                 ..
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)
@@ -456,7 +479,7 @@ impl Codegen {
                 self.codegen_fun_signature(FunId(idx), params, *return_type, output, false);
 
                 output.extend_from_slice(b"{\n");
-                self.codegen_block(*body, output);
+                self.codegen_block(*body, type_vars, output);
                 output.extend_from_slice(b"}\n");
             }
         }
@@ -477,7 +500,7 @@ impl Codegen {
         }
     }
 
-    pub fn codegen_node(&self, node_id: NodeId, output: &mut Vec<u8>) {
+    pub fn codegen_node(&self, node_id: NodeId, local_inferences: &[TypeId], output: &mut Vec<u8>) {
         match &self.compiler.get_node(node_id) {
             AstNode::CString => {
                 let src = self.compiler.get_source(node_id);
@@ -538,7 +561,7 @@ impl Codegen {
 
                 let ty = self.compiler.get_variable(*var_id).ty;
 
-                self.codegen_typename(ty, output);
+                self.codegen_typename(ty, local_inferences, output);
 
                 output.extend_from_slice(b" /* ");
                 output.extend_from_slice(
@@ -551,7 +574,7 @@ impl Codegen {
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
 
                 output.extend_from_slice(b" = ");
-                self.codegen_node(*initializer, output);
+                self.codegen_node(*initializer, local_inferences, output);
             }
             AstNode::Plus => {
                 output.push(b'+');
@@ -608,19 +631,19 @@ impl Codegen {
                 if matches!(self.compiler.get_node(*op), AstNode::As) {
                     output.extend_from_slice(b"((");
                     let rhs_type_id = self.compiler.get_node_type(*rhs);
-                    self.codegen_typename(rhs_type_id, output);
+                    self.codegen_typename(rhs_type_id, local_inferences, output);
                     output.push(b')');
-                    self.codegen_node(*lhs, output);
+                    self.codegen_node(*lhs, local_inferences, output);
                     output.push(b')');
                 } else {
                     output.push(b'(');
-                    self.codegen_node(*lhs, output);
+                    self.codegen_node(*lhs, local_inferences, output);
                     output.push(b')');
 
-                    self.codegen_node(*op, output);
+                    self.codegen_node(*op, local_inferences, output);
 
                     output.push(b'(');
-                    self.codegen_node(*rhs, output);
+                    self.codegen_node(*rhs, local_inferences, output);
                     output.push(b')');
                 }
             }
@@ -656,28 +679,28 @@ impl Codegen {
                             match self.compiler.get_node_type(args[0]) {
                                 C_STRING_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%s\\n\", ");
-                                    self.codegen_node(args[0], output);
+                                    self.codegen_node(args[0], local_inferences, output);
                                 }
                                 I64_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%lli\\n\", ");
-                                    self.codegen_node(args[0], output);
+                                    self.codegen_node(args[0], local_inferences, output);
                                 }
                                 F64_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%lf\\n\", ");
-                                    self.codegen_node(args[0], output);
+                                    self.codegen_node(args[0], local_inferences, output);
                                 }
                                 BOOL_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%s\\n\", (");
-                                    self.codegen_node(args[0], output);
+                                    self.codegen_node(args[0], local_inferences, output);
                                     output.extend_from_slice(br#")?"true":"false""#);
                                 }
                                 C_INT_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%i\\n\", ");
-                                    self.codegen_node(args[0], output);
+                                    self.codegen_node(args[0], local_inferences, output);
                                 }
                                 C_CHAR_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%c\\n\", ");
-                                    self.codegen_node(args[0], output);
+                                    self.codegen_node(args[0], local_inferences, output);
                                 }
                                 x => {
                                     panic!(
@@ -715,7 +738,7 @@ impl Codegen {
                             if !first {
                                 output.extend_from_slice(b", ");
                             }
-                            self.codegen_node(*target, output);
+                            self.codegen_node(*target, local_inferences, output);
                             first = false;
                         }
 
@@ -726,7 +749,7 @@ impl Codegen {
                                 first = false;
                             }
 
-                            self.codegen_node(*arg, output)
+                            self.codegen_node(*arg, local_inferences, output)
                         }
                         output.push(b')');
                     }
@@ -742,13 +765,13 @@ impl Codegen {
                         for arg in args {
                             output.extend_from_slice(b", ");
 
-                            self.codegen_node(*arg, output)
+                            self.codegen_node(*arg, local_inferences, output)
                         }
                         output.push(b')');
                     }
                     CallTarget::NodeId(..) => {
                         output.push(b'(');
-                        self.codegen_node(*head, output);
+                        self.codegen_node(*head, local_inferences, output);
                         output.push(b')');
                         output.push(b'(');
 
@@ -757,7 +780,7 @@ impl Codegen {
                         for arg in args {
                             output.extend_from_slice(b", ");
 
-                            self.codegen_node(*arg, output)
+                            self.codegen_node(*arg, local_inferences, output)
                         }
                         output.push(b')');
                     }
@@ -787,7 +810,7 @@ impl Codegen {
                     for arg in args {
                         output.extend_from_slice(b", ");
 
-                        self.codegen_node(*arg, output)
+                        self.codegen_node(*arg, local_inferences, output)
                     }
                     output.push(b')');
                 } else {
@@ -820,7 +843,7 @@ impl Codegen {
                             for arg in args {
                                 output.extend_from_slice(b", ");
 
-                                self.codegen_node(*arg, output)
+                                self.codegen_node(*arg, local_inferences, output)
                             }
                             output.push(b')');
                         }
@@ -836,7 +859,7 @@ impl Codegen {
                             for arg in args {
                                 output.extend_from_slice(b", ");
 
-                                self.codegen_node(*arg, output)
+                                self.codegen_node(*arg, local_inferences, output)
                             }
                             output.push(b')');
                         }
@@ -882,7 +905,7 @@ impl Codegen {
                         }
                         CallTarget::NodeId(target) => {
                             output.push(b'(');
-                            self.codegen_node(*target, output);
+                            self.codegen_node(*target, local_inferences, output);
                             output.push(b')');
 
                             output.push(b'(');
@@ -900,13 +923,13 @@ impl Codegen {
             AstNode::NamedValue { value, .. } => {
                 // FIXME: this should probably be handled cleanly via typecheck+codegen
                 // rather than ignoring the name
-                self.codegen_node(*value, output)
+                self.codegen_node(*value, local_inferences, output)
             }
             AstNode::Break => {
                 output.extend_from_slice(b"break;\n");
             }
             AstNode::MemberAccess { target, field } => {
-                self.codegen_node(*target, output);
+                self.codegen_node(*target, local_inferences, output);
                 output.extend_from_slice(b"->");
 
                 let field_name = self.compiler.get_source(*field);
@@ -939,7 +962,7 @@ impl Codegen {
                 }
             }
             AstNode::RawBuffer(items) => {
-                let type_id = self.compiler.get_node_type(node_id);
+                let type_id = self.compiler.resolve_node_type(node_id, local_inferences);
                 output.extend_from_slice(b"create_buffer_");
                 output.extend_from_slice(type_id.0.to_string().as_bytes());
                 output.push(b'(');
@@ -948,7 +971,7 @@ impl Codegen {
                 output.extend_from_slice(items.len().to_string().as_bytes());
                 for item in items {
                     output.extend_from_slice(b", ");
-                    self.codegen_node(*item, output);
+                    self.codegen_node(*item, local_inferences, output);
                 }
                 output.push(b')');
             }
@@ -957,13 +980,13 @@ impl Codegen {
                 let index = *index;
 
                 output.extend_from_slice(b"(*((");
-                self.codegen_node(target, output);
+                self.codegen_node(target, local_inferences, output);
                 output.extend_from_slice(b") + (");
-                self.codegen_node(index, output);
+                self.codegen_node(index, local_inferences, output);
                 output.extend_from_slice(b")))");
             }
             AstNode::Statement(node_id) => {
-                self.codegen_node(*node_id, output);
+                self.codegen_node(*node_id, local_inferences, output);
                 output.extend_from_slice(b";\n");
             }
             AstNode::If {
@@ -972,21 +995,21 @@ impl Codegen {
                 else_expression,
             } => {
                 output.extend_from_slice(b"if (");
-                self.codegen_node(*condition, output);
+                self.codegen_node(*condition, local_inferences, output);
                 output.extend_from_slice(b") {");
-                self.codegen_node(*then_block, output);
+                self.codegen_node(*then_block, local_inferences, output);
 
                 if let Some(else_expression) = else_expression {
                     output.extend_from_slice(b"} else {");
-                    self.codegen_node(*else_expression, output);
+                    self.codegen_node(*else_expression, local_inferences, output);
                 }
                 output.extend_from_slice(b"}");
             }
             AstNode::While { condition, block } => {
                 output.extend_from_slice(b"while (");
-                self.codegen_node(*condition, output);
+                self.codegen_node(*condition, local_inferences, output);
                 output.extend_from_slice(b") {");
-                self.codegen_node(*block, output);
+                self.codegen_node(*block, local_inferences, output);
                 output.extend_from_slice(b"}");
             }
             AstNode::For {
@@ -1008,50 +1031,50 @@ impl Codegen {
 
                 let ty = self.compiler.get_variable(*var_id).ty;
 
-                self.codegen_typename(ty, output);
+                self.codegen_typename(ty, local_inferences, output);
 
                 output.extend_from_slice(b" variable_");
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
 
                 output.extend_from_slice(b" = ");
-                self.codegen_node(*lhs, output);
+                self.codegen_node(*lhs, local_inferences, output);
 
                 output.extend_from_slice(b"; variable_");
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
                 output.extend_from_slice(b" <= ");
-                self.codegen_node(*rhs, output);
+                self.codegen_node(*rhs, local_inferences, output);
 
                 output.extend_from_slice(b"; ++variable_");
                 output.extend_from_slice(var_id.0.to_string().as_bytes());
                 output.extend_from_slice(b") {");
-                self.codegen_node(*block, output);
+                self.codegen_node(*block, local_inferences, output);
                 output.extend_from_slice(b"}");
             }
             AstNode::Defer { pointer, callback } => {
                 output.extend_from_slice(b"add_resource_cleanup(allocator, ");
                 self.codegen_annotation(*pointer, output);
                 output.extend_from_slice(b", ");
-                self.codegen_node(*pointer, output);
+                self.codegen_node(*pointer, local_inferences, output);
                 output.extend_from_slice(b", (void (*)(long, void *))");
-                self.codegen_node(*callback, output);
+                self.codegen_node(*callback, local_inferences, output);
                 output.extend_from_slice(b");\n");
             }
             AstNode::ResizeRawBuffer { pointer, new_size } => {
                 let pointer = *pointer;
                 let new_size = *new_size;
 
-                self.codegen_node(pointer, output);
+                self.codegen_node(pointer, local_inferences, output);
                 output.extend_from_slice(b" = resize_page_on_allocator_level(allocator, ");
                 self.codegen_annotation(pointer, output);
                 output.extend_from_slice(b", ");
-                self.codegen_node(pointer, output);
+                self.codegen_node(pointer, local_inferences, output);
                 output.extend_from_slice(b", sizeof(");
 
                 let pointer_type_id = self.compiler.get_node_type(pointer);
 
                 match self.compiler.get_type(pointer_type_id) {
                     Type::RawBuffer(inner_type_id) => {
-                        self.codegen_typename(*inner_type_id, output);
+                        self.codegen_typename(*inner_type_id, local_inferences, output);
                     }
                     _ => {
                         panic!("internal error: resize of non-buffer type")
@@ -1059,19 +1082,19 @@ impl Codegen {
                 }
 
                 output.extend_from_slice(b") * (");
-                self.codegen_node(new_size, output);
+                self.codegen_node(new_size, local_inferences, output);
                 output.extend_from_slice(b"));\n");
             }
             AstNode::Match { target, match_arms } => {
                 output.extend_from_slice(b"{\n");
                 let type_id = self.compiler.get_node_type(*target);
-                self.codegen_typename(type_id, output);
+                self.codegen_typename(type_id, local_inferences, output);
                 output.push(b' ');
                 let match_var = format!("match_var_{}", target.0);
 
                 output.extend_from_slice(match_var.as_bytes());
                 output.extend_from_slice(b" = ");
-                self.codegen_node(*target, output);
+                self.codegen_node(*target, local_inferences, output);
 
                 output.extend_from_slice(b";\n");
 
@@ -1093,7 +1116,7 @@ impl Codegen {
                                 .get(match_arm)
                                 .expect("internal error: unresolved variable in codegen");
                             let var_type = self.compiler.get_variable(*var_id).ty;
-                            self.codegen_typename(var_type, output);
+                            self.codegen_typename(var_type, local_inferences, output);
                             output.extend_from_slice(b" variable_");
                             output.extend_from_slice(var_id.0.to_string().as_bytes());
 
@@ -1101,7 +1124,7 @@ impl Codegen {
                             output.extend_from_slice(match_var.as_bytes());
                             output.extend_from_slice(b";\n");
 
-                            self.codegen_node(*match_result, output);
+                            self.codegen_node(*match_result, local_inferences, output);
 
                             output.extend_from_slice(b"}\n");
                         }
@@ -1125,7 +1148,11 @@ impl Codegen {
                                                 case_offset.0.to_string().as_bytes(),
                                             );
                                             output.extend_from_slice(b") {");
-                                            self.codegen_node(*match_result, output);
+                                            self.codegen_node(
+                                                *match_result,
+                                                local_inferences,
+                                                output,
+                                            );
                                             output.extend_from_slice(b"}\n");
                                         }
                                         x => {
@@ -1161,6 +1188,7 @@ impl Codegen {
                                                             self.compiler.get_variable(*var_id).ty;
                                                         self.codegen_typename(
                                                             var_type,
+                                                            local_inferences,
                                                             &mut variable_assignments,
                                                         );
                                                         variable_assignments
@@ -1229,7 +1257,11 @@ impl Codegen {
 
                                             output.extend_from_slice(&variable_assignments);
 
-                                            self.codegen_node(*match_result, output);
+                                            self.codegen_node(
+                                                *match_result,
+                                                local_inferences,
+                                                output,
+                                            );
                                             output.extend_from_slice(b"}\n");
                                         }
                                         x => {
@@ -1251,7 +1283,7 @@ impl Codegen {
                 output.extend_from_slice(b"}\n");
             }
             AstNode::Block(..) => {
-                self.codegen_block(node_id, output);
+                self.codegen_block(node_id, local_inferences, output);
             }
             AstNode::True => {
                 output.extend_from_slice(b"true");
@@ -1271,14 +1303,18 @@ impl Codegen {
         }
     }
 
-    pub fn codegen_block(&self, block: NodeId, output: &mut Vec<u8>) {
+    pub fn codegen_block(&self, block: NodeId, local_inferences: &[TypeId], output: &mut Vec<u8>) {
         if let AstNode::Block(block_id) = self.compiler.get_node(block) {
             for node_id in &self.compiler.blocks[block_id.0].nodes {
                 if let AstNode::Return(return_expr) = self.compiler.get_node(*node_id) {
                     if let Some(return_expr) = return_expr {
-                        self.codegen_typename(self.compiler.get_node_type(*return_expr), output);
+                        self.codegen_typename(
+                            self.compiler.get_node_type(*return_expr),
+                            local_inferences,
+                            output,
+                        );
                         output.extend_from_slice(b" return_expr = ");
-                        self.codegen_node(*return_expr, output);
+                        self.codegen_node(*return_expr, local_inferences, output);
                         output.extend_from_slice(b";\n");
                     }
                     if let Some(scope_level) = self.compiler.blocks[block_id.0].may_locally_allocate
@@ -1299,7 +1335,7 @@ impl Codegen {
 
                     return;
                 }
-                self.codegen_node(*node_id, output);
+                self.codegen_node(*node_id, local_inferences, output);
                 output.extend_from_slice(b";\n");
             }
             if let Some(scope_level) = self.compiler.blocks[block_id.0].may_locally_allocate {
