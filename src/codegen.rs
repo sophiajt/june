@@ -676,7 +676,7 @@ impl Codegen {
                         let fun = &self.compiler.functions[fun_id.0];
                         if fun_id.0 == 0 {
                             // special case for println
-                            match self.compiler.get_node_type(args[0]) {
+                            match self.compiler.resolve_node_type(args[0], local_inferences) {
                                 C_STRING_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%s\\n\", ");
                                     self.codegen_node(args[0], local_inferences, output);
@@ -1070,7 +1070,7 @@ impl Codegen {
                 self.codegen_node(pointer, local_inferences, output);
                 output.extend_from_slice(b", sizeof(");
 
-                let pointer_type_id = self.compiler.get_node_type(pointer);
+                let pointer_type_id = self.compiler.resolve_node_type(pointer, local_inferences);
 
                 match self.compiler.get_type(pointer_type_id) {
                     Type::RawBuffer(inner_type_id) => {

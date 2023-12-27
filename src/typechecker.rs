@@ -432,7 +432,16 @@ impl Typechecker {
         // Create our local inference variable list we'll use as we infer types
         let mut local_inferences = type_vars.clone();
 
-        self.typecheck_node(body, &mut local_inferences);
+        // Typecheck until we hit a fix point for our inferences
+        loop {
+            let before = local_inferences.clone();
+
+            self.typecheck_node(body, &mut local_inferences);
+
+            if local_inferences == before {
+                break;
+            }
+        }
 
         if return_type != VOID_TYPE_ID && !self.ends_in_return(body) {
             if let Some(return_node) = return_node {
@@ -1306,6 +1315,8 @@ impl Typechecker {
                 let ty = *ty;
 
                 let initializer_ty = self.typecheck_node(initializer, local_inferences);
+                let initializer_ty = self.compiler.resolve_type(initializer_ty, local_inferences);
+
                 self.maybe_move_variable(initializer);
 
                 let var_id = if let Some(ty) = ty {
@@ -1320,9 +1331,56 @@ impl Typechecker {
                             initializer,
                         );
                     }
-                    self.define_variable(variable_name, ty, is_mutable, node_id)
+                    if let Some(var_id) = self.compiler.var_resolution.get(&variable_name) {
+                        let var_id = *var_id;
+
+                        let variable_name = self.compiler.get_source(variable_name).to_vec();
+                        self.add_variable_to_scope(variable_name, var_id);
+
+                        var_id
+                    } else {
+                        self.define_variable(variable_name, ty, is_mutable, node_id)
+                    }
                 } else {
-                    self.define_variable(variable_name, initializer_ty, is_mutable, node_id)
+                    let node_type_id = self.compiler.get_node_type(variable_name);
+                    let ty = if node_type_id == UNKNOWN_TYPE_ID {
+                        let ty = self.compiler.find_or_create_type(Type::FunLocalTypeVar {
+                            offset: local_inferences.len(),
+                        });
+                        local_inferences.push(UNKNOWN_TYPE_ID);
+                        self.compiler.set_node_type(variable_name, ty);
+
+                        ty
+                    } else {
+                        node_type_id
+                    };
+
+                    let ty = if self.compiler.resolve_type(ty, local_inferences) == UNKNOWN_TYPE_ID
+                    {
+                        ty
+                    } else {
+                        self.compiler.resolve_type(ty, local_inferences)
+                    };
+
+                    if !self.unify_types(ty, initializer_ty, local_inferences) {
+                        self.error(
+                            format!(
+                                "initializer and given type do not match (found: {}, expected: {})",
+                                self.compiler.pretty_type(ty),
+                                self.compiler.pretty_type(initializer_ty),
+                            ),
+                            initializer,
+                        );
+                    }
+                    if let Some(var_id) = self.compiler.var_resolution.get(&variable_name) {
+                        let var_id = *var_id;
+
+                        let variable_name = self.compiler.get_source(variable_name).to_vec();
+                        self.add_variable_to_scope(variable_name, var_id);
+                        var_id
+                    } else {
+                        self.define_variable(variable_name, ty, is_mutable, node_id)
+                    }
                 };
 
                 self.compiler.var_resolution.insert(variable_name, var_id);
@@ -1377,6 +1435,7 @@ impl Typechecker {
                 let field = *field;
 
                 let type_id = self.typecheck_node(target, local_inferences);
+                let type_id = self.compiler.resolve_type(type_id, local_inferences);
 
                 let target_name = self.compiler.get_source(target);
 
@@ -1461,7 +1520,7 @@ impl Typechecker {
                     AstNode::Plus | AstNode::Minus | AstNode::Multiply | AstNode::Divide => {
                         let lhs_ty = self.typecheck_node(lhs, local_inferences);
                         let rhs_ty = self.typecheck_node(rhs, local_inferences);
-                        if lhs_ty != rhs_ty {
+                        if !self.unify_types(lhs_ty, rhs_ty, local_inferences) {
                             self.error(
                                 format!(
                                     "type mismatch during operation. expected: {}, found: {}",
@@ -1603,7 +1662,11 @@ impl Typechecker {
             AstNode::NamedValue { value, .. } => self.typecheck_node(*value, local_inferences),
             AstNode::RawBuffer(items) => {
                 let items = items.clone();
-                let mut ty = UNKNOWN_TYPE_ID;
+                let mut ty = self.compiler.get_node_type(node_id);
+
+                if let Type::RawBuffer(x) = self.compiler.get_type(ty) {
+                    ty = *x
+                }
 
                 for item in items {
                     let item_ty = self.typecheck_node(item, local_inferences);
@@ -1635,14 +1698,17 @@ impl Typechecker {
             AstNode::Index { target, index } => {
                 let target = *target;
                 let index = *index;
-                let target_ty = self.typecheck_node(target, local_inferences);
-                let index_ty = self.typecheck_node(index, local_inferences);
+                let target_type_id = self.typecheck_node(target, local_inferences);
 
-                match self.compiler.get_type(target_ty) {
+                let target_type_id = self.compiler.resolve_type(target_type_id, local_inferences);
+
+                let index_type_id = self.typecheck_node(index, local_inferences);
+
+                match self.compiler.get_type(target_type_id) {
                     Type::RawBuffer(inner_type_id) => {
                         let inner_type_id = *inner_type_id;
 
-                        if index_ty != I64_TYPE_ID {
+                        if index_type_id != I64_TYPE_ID {
                             self.error("index with a non-integer type", index);
                         }
                         inner_type_id
@@ -1772,6 +1838,10 @@ impl Typechecker {
                 let pointer_type_id = self.typecheck_node(pointer, local_inferences);
                 let new_size_type_id = self.typecheck_node(new_size, local_inferences);
 
+                let pointer_type_id = self
+                    .compiler
+                    .resolve_type(pointer_type_id, local_inferences);
+
                 if !self.is_binding_mutable(pointer) {
                     self.error("variable is not mutable", pointer);
                 }
@@ -1842,6 +1912,8 @@ impl Typechecker {
                 let index = *index;
 
                 let target_type_id = self.typecheck_lvalue(target, local_inferences);
+
+                let target_type_id = self.compiler.resolve_type(target_type_id, local_inferences);
 
                 let index_type_id = self.typecheck_node(index, local_inferences);
 
@@ -2744,7 +2816,17 @@ impl Typechecker {
         let top_level = NodeId(self.compiler.num_ast_nodes() - 1);
         // Top-level local inferences
         let mut local_inferences = vec![];
-        self.typecheck_node(top_level, &mut local_inferences);
+
+        // Typecheck until we hit a fix point for our inferences
+        loop {
+            let before = local_inferences.clone();
+
+            self.typecheck_node(top_level, &mut local_inferences);
+
+            if local_inferences == before {
+                break;
+            }
+        }
 
         let top_level_type = self.compiler.get_node_type(top_level);
 
