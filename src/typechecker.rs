@@ -403,6 +403,10 @@ impl Typechecker {
             .functions
             .insert(fun_name, FunId(fun_id));
 
+        // Mark the name of the function as resolved, in case type inference needs to run again
+        // we know we don't have to recreate this function
+        self.compiler.fun_resolution.insert(name, FunId(fun_id));
+
         FunId(fun_id)
     }
 
@@ -633,6 +637,8 @@ impl Typechecker {
 
         self.add_type_to_scope(enum_name, type_id);
 
+        self.compiler.type_resolution.insert(typename, type_id);
+
         type_id
     }
 
@@ -793,6 +799,8 @@ impl Typechecker {
 
         self.add_type_to_scope(struct_name, type_id);
 
+        self.compiler.type_resolution.insert(typename, type_id);
+
         type_id
     }
 
@@ -818,6 +826,21 @@ impl Typechecker {
                     return_ty,
                     block,
                 } => {
+                    if let Some(fun_id) = self.compiler.fun_resolution.get(name) {
+                        let fun_id = *fun_id;
+
+                        let fun_name = self.compiler.source
+                            [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
+                            .to_vec();
+
+                        self.scope
+                            .last_mut()
+                            .expect("internal error: missing function scope")
+                            .functions
+                            .insert(fun_name, fun_id);
+
+                        continue;
+                    }
                     let lifetime_annotations = lifetime_annotations.clone();
                     funs.push(self.typecheck_fun_predecl(
                         *name,
@@ -829,13 +852,17 @@ impl Typechecker {
                 }
 
                 AstNode::Struct {
-                    typename: name,
+                    typename,
                     fields,
                     methods,
                     explicit_no_alloc,
                 } => {
+                    if self.compiler.type_resolution.contains_key(typename) {
+                        // we've already created this
+                        continue;
+                    }
                     self.typecheck_struct(
-                        *name,
+                        *typename,
                         fields.clone(),
                         methods.clone(),
                         *explicit_no_alloc,
@@ -847,6 +874,10 @@ impl Typechecker {
                     cases,
                     methods,
                 } => {
+                    if self.compiler.type_resolution.contains_key(typename) {
+                        // we've already created this
+                        continue;
+                    }
                     self.typecheck_enum(*typename, cases.clone(), methods.clone());
                 }
 
