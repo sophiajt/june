@@ -933,9 +933,10 @@ impl Codegen {
                 output.extend_from_slice(b"->");
 
                 let field_name = self.compiler.get_source(*field);
-                let type_id = self
-                    .compiler
-                    .get_underlying_type_id(self.compiler.get_node_type(*target));
+
+                let type_id = self.compiler.get_node_type(*target);
+                let type_id = self.compiler.resolve_type(type_id, local_inferences);
+                let type_id = self.compiler.get_underlying_type_id(type_id);
 
                 // FIXME: we can do this because the fields are unique, but we probably want
                 // the resolution to tell us which one to use

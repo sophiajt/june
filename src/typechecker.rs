@@ -857,8 +857,13 @@ impl Typechecker {
                     methods,
                     explicit_no_alloc,
                 } => {
-                    if self.compiler.type_resolution.contains_key(typename) {
-                        // we've already created this
+                    if let Some(type_id) = self.compiler.type_resolution.get(typename) {
+                        // we've already created this. Instead of recreating it, put the previous
+                        // definition into scope
+                        let struct_name = self.compiler.get_source(*typename).to_vec();
+
+                        self.add_type_to_scope(struct_name, *type_id);
+
                         continue;
                     }
                     self.typecheck_struct(
@@ -874,8 +879,13 @@ impl Typechecker {
                     cases,
                     methods,
                 } => {
-                    if self.compiler.type_resolution.contains_key(typename) {
-                        // we've already created this
+                    if let Some(type_id) = self.compiler.type_resolution.get(typename) {
+                        // we've already created this. Instead of recreating it, put the previous
+                        // definition into scope
+                        let struct_name = self.compiler.get_source(*typename).to_vec();
+
+                        self.add_type_to_scope(struct_name, *type_id);
+
                         continue;
                     }
                     self.typecheck_enum(*typename, cases.clone(), methods.clone());
@@ -915,13 +925,14 @@ impl Typechecker {
         None
     }
 
-    pub fn maybe_move_variable(&mut self, node_id: NodeId) {
+    pub fn maybe_move_variable(&mut self, node_id: NodeId, local_inferences: &Vec<TypeId>) {
         if let AstNode::Name = self.compiler.get_node(node_id) {
             let var_id = self.compiler.var_resolution.get(&node_id);
 
             // Assume the mistyped variable error has already been reported
             if let Some(var_id) = var_id {
                 let var_type = self.compiler.get_variable(*var_id).ty;
+                let var_type = self.compiler.resolve_type(var_type, local_inferences);
                 let var_ty = self.compiler.get_type(var_type);
 
                 if let Type::Pointer { pointer_type, .. } = var_ty {
@@ -1070,6 +1081,7 @@ impl Typechecker {
         local_inferences: &mut Vec<TypeId>,
     ) -> TypeId {
         let type_id = self.compiler.get_node_type(name);
+        let type_id = self.compiler.resolve_type(type_id, local_inferences);
 
         if let Type::Fun { params, ret } = self.compiler.get_type(type_id) {
             let params = params.clone();
@@ -1184,7 +1196,7 @@ impl Typechecker {
                         self.typecheck_node(value, local_inferences)
                     };
 
-                    self.maybe_move_variable(value);
+                    self.maybe_move_variable(value, local_inferences);
 
                     if self.compiler.get_variable(param.var_id).is_mutable
                         && !self.is_binding_mutable(value)
@@ -1229,7 +1241,7 @@ impl Typechecker {
                         self.typecheck_node(arg, local_inferences)
                     };
 
-                    self.maybe_move_variable(arg);
+                    self.maybe_move_variable(arg, local_inferences);
 
                     let variable = &self.compiler.get_variable(param.var_id);
 
@@ -1310,6 +1322,7 @@ impl Typechecker {
             AstNode::None => {
                 // FIXME: check that this is an optional type
                 let type_id = self.compiler.get_node_type(node_id);
+                let type_id = self.compiler.resolve_type(type_id, local_inferences);
 
                 match self.compiler.get_type(type_id) {
                     Type::Pointer { optional, .. } => {
@@ -1348,14 +1361,14 @@ impl Typechecker {
                 let initializer_ty = self.typecheck_node(initializer, local_inferences);
                 let initializer_ty = self.compiler.resolve_type(initializer_ty, local_inferences);
 
-                self.maybe_move_variable(initializer);
+                self.maybe_move_variable(initializer, local_inferences);
 
                 let var_id = if let Some(ty) = ty {
                     let ty = self.typecheck_typename(ty);
                     if !self.unify_types(ty, initializer_ty, local_inferences) {
                         self.error(
                             format!(
-                                "initializer and given type do not match (found: {}, expected: {})",
+                                "initializer and given type do not match (expected: {}, found: {})",
                                 self.compiler.pretty_type(ty),
                                 self.compiler.pretty_type(initializer_ty),
                             ),
@@ -1396,7 +1409,7 @@ impl Typechecker {
                     if !self.unify_types(ty, initializer_ty, local_inferences) {
                         self.error(
                             format!(
-                                "initializer and given type do not match (found: {}, expected: {})",
+                                "initializer and given type do not match (expected: {}, found: {})",
                                 self.compiler.pretty_type(ty),
                                 self.compiler.pretty_type(initializer_ty),
                             ),
@@ -1608,7 +1621,7 @@ impl Typechecker {
                     | AstNode::DivideAssignment => {
                         let lhs_ty = self.typecheck_lvalue(lhs, local_inferences);
                         let rhs_ty = self.typecheck_node(rhs, local_inferences);
-                        self.maybe_move_variable(rhs);
+                        self.maybe_move_variable(rhs, local_inferences);
 
                         if !self.unify_types(lhs_ty, rhs_ty, local_inferences) {
                             self.error(
@@ -1665,7 +1678,10 @@ impl Typechecker {
                 let rhs = *rhs;
 
                 let lhs_type = self.typecheck_node(lhs, local_inferences);
+                let lhs_type = self.compiler.resolve_type(lhs_type, local_inferences);
+
                 let rhs_type = self.typecheck_node(rhs, local_inferences);
+                let rhs_type = self.compiler.resolve_type(rhs_type, local_inferences);
 
                 if lhs_type != I64_TYPE_ID {
                     self.error("expected i64 in range", lhs);
@@ -1867,7 +1883,14 @@ impl Typechecker {
                 let new_size = *new_size;
 
                 let pointer_type_id = self.typecheck_node(pointer, local_inferences);
+                let pointer_type_id = self
+                    .compiler
+                    .resolve_type(pointer_type_id, local_inferences);
+
                 let new_size_type_id = self.typecheck_node(new_size, local_inferences);
+                let new_size_type_id = self
+                    .compiler
+                    .resolve_type(new_size_type_id, local_inferences);
 
                 let pointer_type_id = self
                     .compiler
@@ -1965,6 +1988,7 @@ impl Typechecker {
                 let field = *field;
 
                 let head_type_id = self.typecheck_lvalue(target, local_inferences);
+                let head_type_id = self.compiler.resolve_type(head_type_id, local_inferences);
 
                 let field_name = self.compiler.get_source(field);
 
@@ -2571,7 +2595,9 @@ impl Typechecker {
         local_inferences: &mut Vec<TypeId>,
     ) -> TypeId {
         let target_type_id = self.typecheck_node(target, local_inferences);
-        self.maybe_move_variable(target);
+        self.maybe_move_variable(target, local_inferences);
+
+        let target_type_id = self.compiler.resolve_type(target_type_id, local_inferences);
 
         let inner_type_id = match self.compiler.get_type(target_type_id) {
             Type::Pointer { target, .. } => *target,
