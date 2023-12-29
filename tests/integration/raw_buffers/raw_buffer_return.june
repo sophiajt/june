@@ -5,4 +5,4 @@ fun create_buffer() -> raw[i64] {
 }
 
 let buffer = create_buffer()
-println(buffer[1])
+unsafe { println(buffer[1]) }

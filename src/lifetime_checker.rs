@@ -342,6 +342,7 @@ impl LifetimeChecker {
             AstNode::Block(block_id) => {
                 self.check_block_lifetime(*block_id, scope_level + 1);
             }
+            AstNode::UnsafeBlock(block) => self.check_node_lifetime(*block, scope_level),
             AstNode::Int
             | AstNode::Float
             | AstNode::True

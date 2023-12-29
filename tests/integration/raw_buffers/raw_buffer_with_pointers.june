@@ -6,4 +6,4 @@ struct Person {
 
 let a = raw[new Person(height: 11), new Person(height: 12)]
 
-println(a[0].height)
+unsafe { println(a[0].height) }

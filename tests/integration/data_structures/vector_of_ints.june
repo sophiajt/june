@@ -15,24 +15,26 @@ struct Vector {
 
     fun push(mut self, data: i64) {
         if .capacity == 0 {
-            resize .contents 1
+            unsafe { resize .contents 1 } 
             .capacity = 1
         } else if .num_items == .capacity {
             let new_capacity = .capacity * 2
-            resize .contents new_capacity
+            unsafe { resize .contents new_capacity }
             .capacity = new_capacity
         }
 
-        .contents[.num_items] = data
+        unsafe { .contents[.num_items] = data }
         .num_items += 1
     }
 
     fun get(self, index: i64) -> i64 {
-        if index < .num_items {
-            return .contents[index]
-        } else {
-            println(c"Index past end of vector")
-            return 0
+        unsafe {
+            if index < .num_items {
+                return .contents[index]
+            } else {
+                println(c"Index past end of vector")
+                return 0
+            }
         }
     }
 }

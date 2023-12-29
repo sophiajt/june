@@ -1286,6 +1286,7 @@ impl Codegen {
             AstNode::Block(..) => {
                 self.codegen_block(node_id, local_inferences, output);
             }
+            AstNode::UnsafeBlock(block) => self.codegen_node(*block, local_inferences, output),
             AstNode::True => {
                 output.extend_from_slice(b"true");
             }

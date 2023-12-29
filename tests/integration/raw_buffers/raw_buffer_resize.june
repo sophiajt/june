@@ -2,8 +2,8 @@
 
 mut x = raw[1]
 
-resize x 2000
-
-x[1999] = 100
-
-println(x[1999])
+unsafe {
+    resize x 2000 
+    x[1999] = 100
+    println(x[1999])
+}

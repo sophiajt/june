@@ -129,6 +129,7 @@ pub struct Scope {
     types: HashMap<Vec<u8>, TypeId>,
     expected_return_type: Option<TypeId>,
     moved_owned_values: HashMap<VarId, NodeId>,
+    allow_unsafe: bool,
 }
 
 impl Scope {
@@ -139,7 +140,12 @@ impl Scope {
             types: HashMap::new(),
             expected_return_type: None,
             moved_owned_values: HashMap::new(),
+            allow_unsafe: false,
         }
+    }
+
+    pub fn set_unsafe(&mut self) {
+        self.allow_unsafe = true;
     }
 }
 
@@ -204,6 +210,17 @@ impl Typechecker {
             .insert(b"println".to_vec(), FunId(0));
 
         Self { compiler, scope }
+    }
+
+    pub fn unsafe_allowed(&self) -> bool {
+        self.scope.iter().any(|x| x.allow_unsafe)
+    }
+
+    pub fn set_unsafe(&mut self) {
+        self.scope
+            .last_mut()
+            .expect("internal error: missing scope during typecheck")
+            .set_unsafe()
     }
 
     pub fn typecheck_typename(&mut self, node_id: NodeId) -> TypeId {
@@ -442,7 +459,7 @@ impl Typechecker {
 
             self.typecheck_node(body, &mut local_inferences);
 
-            if local_inferences == before {
+            if local_inferences == before || !self.compiler.errors.is_empty() {
                 break;
             }
         }
@@ -925,7 +942,7 @@ impl Typechecker {
         None
     }
 
-    pub fn maybe_move_variable(&mut self, node_id: NodeId, local_inferences: &Vec<TypeId>) {
+    pub fn maybe_move_variable(&mut self, node_id: NodeId, local_inferences: &[TypeId]) {
         if let AstNode::Name = self.compiler.get_node(node_id) {
             let var_id = self.compiler.var_resolution.get(&node_id);
 
@@ -1314,6 +1331,14 @@ impl Typechecker {
         let node_type = match &self.compiler.get_node(node_id) {
             AstNode::Block(block_id) => {
                 self.typecheck_block(node_id, *block_id, local_inferences);
+                VOID_TYPE_ID
+            }
+            AstNode::UnsafeBlock(block) => {
+                let block = *block;
+                self.enter_scope();
+                self.set_unsafe();
+                self.typecheck_node(block, local_inferences);
+                self.exit_scope();
                 VOID_TYPE_ID
             }
             AstNode::Int => I64_TYPE_ID,
@@ -1758,6 +1783,9 @@ impl Typechecker {
                         if index_type_id != I64_TYPE_ID {
                             self.error("index with a non-integer type", index);
                         }
+                        if !self.unsafe_allowed() {
+                            self.error("index into raw buffer requires 'unsafe' block", node_id)
+                        }
                         inner_type_id
                     }
                     _ => {
@@ -1906,6 +1934,10 @@ impl Typechecker {
                     self.error("expected integer size for resize", new_size);
                 }
 
+                if !self.unsafe_allowed() {
+                    self.error("buffer resize requires 'unsafe' block", node_id);
+                }
+
                 VOID_TYPE_ID
             }
             AstNode::Match { target, match_arms } => {
@@ -1973,6 +2005,9 @@ impl Typechecker {
 
                 if index_type_id != I64_TYPE_ID {
                     self.error("expected integer type for indexing", index);
+                }
+                if !self.unsafe_allowed() {
+                    self.error("index into raw buffer requires 'unsafe' block", lvalue)
                 }
 
                 match self.compiler.get_type(target_type_id) {
@@ -2880,7 +2915,7 @@ impl Typechecker {
 
             self.typecheck_node(top_level, &mut local_inferences);
 
-            if local_inferences == before {
+            if local_inferences == before || !self.compiler.errors.is_empty() {
                 break;
             }
         }
@@ -3155,6 +3190,7 @@ impl Typechecker {
                         .expect("internal error: missing last statement in block"),
                 )
             }
+            AstNode::UnsafeBlock(block) => self.ends_in_return(*block),
             AstNode::If {
                 then_block,
                 else_expression,

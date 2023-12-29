@@ -1,7 +1,7 @@
 // output: world
 
 fun greet(greetings: raw[c_string]) {
-    println(greetings[1])
+    unsafe { println(greetings[1]) } 
 }
 
 greet(raw[c"hello", c"world"])

@@ -2,9 +2,9 @@
 
 mut x = raw[]
 
-resize x 1
-
-x[0] = c"abc"
-
-println(x[0])
+unsafe {
+    resize x 1
+    x[0] = c"abc"
+    println(x[0])
+}
 

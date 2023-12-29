@@ -199,6 +199,7 @@ pub enum AstNode {
         new_size: NodeId,
     },
     RawBuffer(Vec<NodeId>),
+    UnsafeBlock(NodeId),
 
     Statement(NodeId),
     Garbage,
@@ -679,7 +680,7 @@ impl Parser {
     }
 
     pub fn is_expression(&mut self) -> bool {
-        self.is_simple_expression() || self.is_keyword(b"if") || self.is_keyword(b"where")
+        self.is_simple_expression() || self.is_keyword(b"if")
     }
 
     pub fn is_simple_expression(&mut self) -> bool {
@@ -745,6 +746,11 @@ impl Parser {
                 span_start,
                 span_end,
             }) if &self.compiler.source[span_start..span_end] == b"raw" => true,
+            Some(Token {
+                token_type: TokenType::Name,
+                span_start,
+                span_end,
+            }) if &self.compiler.source[span_start..span_end] == b"unsafe" => true,
             Some(Token {
                 token_type: TokenType::Name,
                 ..
@@ -838,6 +844,8 @@ impl Parser {
                 code_body.push(self.defer_statement());
             } else if self.is_keyword(b"resize") {
                 code_body.push(self.resize_statement());
+            } else if self.is_keyword(b"unsafe") {
+                code_body.push(self.unsafe_block());
             } else {
                 let span_start = self.position();
                 let expression = self.expression_or_assignment();
@@ -1393,7 +1401,7 @@ impl Parser {
                 self.next();
 
                 let item = self.simple_expression();
-                let span_end = self.get_span_end(item);
+                let span_end = self.position() + 1;
                 self.rsquare();
 
                 expr = self.create_node(
@@ -2182,6 +2190,16 @@ impl Parser {
             span_start,
             span_end,
         )
+    }
+
+    pub fn unsafe_block(&mut self) -> NodeId {
+        let span_start = self.position();
+        self.keyword(b"unsafe");
+
+        let block = self.block(true);
+        let span_end = self.get_span_end(block);
+
+        self.create_node(AstNode::UnsafeBlock(block), span_start, span_end)
     }
 
     pub fn variable(&mut self) -> NodeId {
