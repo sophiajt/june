@@ -676,7 +676,7 @@ impl Codegen {
                         let fun = &self.compiler.functions[fun_id.0];
                         if fun_id.0 == 0 {
                             // special case for println
-                            match self.compiler.get_node_type(args[0]) {
+                            match self.compiler.resolve_node_type(args[0], local_inferences) {
                                 C_STRING_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%s\\n\", ");
                                     self.codegen_node(args[0], local_inferences, output);
@@ -933,9 +933,10 @@ impl Codegen {
                 output.extend_from_slice(b"->");
 
                 let field_name = self.compiler.get_source(*field);
-                let type_id = self
-                    .compiler
-                    .get_underlying_type_id(self.compiler.get_node_type(*target));
+
+                let type_id = self.compiler.get_node_type(*target);
+                let type_id = self.compiler.resolve_type(type_id, local_inferences);
+                let type_id = self.compiler.get_underlying_type_id(type_id);
 
                 // FIXME: we can do this because the fields are unique, but we probably want
                 // the resolution to tell us which one to use
@@ -1070,7 +1071,7 @@ impl Codegen {
                 self.codegen_node(pointer, local_inferences, output);
                 output.extend_from_slice(b", sizeof(");
 
-                let pointer_type_id = self.compiler.get_node_type(pointer);
+                let pointer_type_id = self.compiler.resolve_node_type(pointer, local_inferences);
 
                 match self.compiler.get_type(pointer_type_id) {
                     Type::RawBuffer(inner_type_id) => {

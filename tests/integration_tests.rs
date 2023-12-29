@@ -674,6 +674,11 @@ fn raw_buffer_type_inference() -> TestResult {
 }
 
 #[test]
+fn raw_buffer_type_inference2() -> TestResult {
+    test_example("typechecking/raw_buffer_type_inference2")
+}
+
+#[test]
 fn raw_buffer_with_pointers() -> TestResult {
     test_example("raw_buffers/raw_buffer_with_pointers")
 }

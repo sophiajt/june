@@ -88,8 +88,11 @@ impl Compiler {
         println!("{:?}", self.ast_nodes.last());
         for (node_id, node) in self.ast_nodes.iter().enumerate() {
             println!(
-                "  {}: {:?} ({:?}) @ ({:?})",
-                node_id, node, self.node_types[node_id], self.node_lifetimes[node_id]
+                "  {}: {:?} ({}) (lifetime: {:?})",
+                node_id,
+                node,
+                self.pretty_type(self.node_types[node_id]),
+                self.node_lifetimes[node_id]
             );
         }
 
@@ -578,7 +581,7 @@ impl Compiler {
             }
         }
 
-        panic!("internal error: can't find Type as a TypeId")
+        panic!("internal error: can't find Type as a TypeId for: {:?}", ty)
     }
 
     pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
@@ -655,9 +658,9 @@ impl Compiler {
             Type::RawBuffer(type_id) => {
                 format!("[{}]", self.pretty_type(*type_id))
             }
-            Type::Struct { .. } => {
+            Type::Struct { fields, .. } => {
                 // FIXME: need more info
-                "struct".into()
+                format!("({:?})struct({:?})", type_id, fields)
             }
             Type::FunLocalTypeVar { offset } => format!("<local typevar: {}>", offset),
             Type::TypeVariable => "<typevar>".into(),
