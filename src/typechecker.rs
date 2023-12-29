@@ -1166,6 +1166,15 @@ impl Typechecker {
             return return_type;
         }
 
+        if self.compiler.functions[fun_id.0].body.is_none() && !self.unsafe_allowed() {
+            // This is an external function. For now, assume an `extern "C"` function
+            // These must be called in an unsafe block
+            self.error(
+                "call to extern \"C\" functions requires 'unsafe' block",
+                name,
+            )
+        }
+
         // TODO: do we want to wait until all params are checked
         // before we mark this as resolved?
         self.compiler

@@ -8,7 +8,7 @@ extern "C" fun fgetc(file: FILE?) -> c_int;
 
 fun cleanup(f: FILE?) {
     println(c"closing")
-    fclose(f)
+    unsafe { fclose(f) }
 }
 
 enum Output {
@@ -20,19 +20,23 @@ class File {
     file: FILE?
 
     fun open(fname: c_string) -> File {
-        let file = fopen(fname, c"rb")
-        defer file cleanup
+        unsafe {
+            let file = fopen(fname, c"rb")
+            defer file cleanup
 
-        return new File(file: file)
+            return new File(file: file)
+        }
     }
 
     fun get_char(mut self) -> Output {
-        let x = fgetc(self.file)
+        unsafe {
+            let x = fgetc(self.file)
 
-        if x == -1 {
-            return Output::EOF
-        } else {
-            return Output::Char(x)
+            if x == -1 {
+                return Output::EOF
+            } else {
+                return Output::Char(x)
+            }
         }
     }
 }

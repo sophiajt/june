@@ -2,4 +2,4 @@
 
 extern "C" fun puts(s: c_string) -> c_int
 
-puts(c"hello world")
+unsafe { puts(c"hello world") }

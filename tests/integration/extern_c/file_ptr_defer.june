@@ -8,14 +8,16 @@ extern "C" fun fgetc(file: FILE?) -> c_int;
 
 fun cleanup(f: FILE?) {
     println(c"closing")
-    fclose(f)
+    unsafe { fclose(f) }
 }
 
 fun main() {
-    let file = fopen(c"tests/test_data/alphabet.txt", c"rb");
-    defer file cleanup
-    if file != none {
-        let x = fgetc(file)
-        println(x as c_char)
+    unsafe { 
+        let file = fopen(c"tests/test_data/alphabet.txt", c"rb");
+        defer file cleanup
+        if file != none {
+            let x = fgetc(file)
+            println(x as c_char)
+        }
     }
 }
