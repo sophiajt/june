@@ -3,7 +3,6 @@ type TestResult = Result<(), Report>;
 
 use color_eyre::{eyre::eyre, eyre::Report, Section, SectionExt};
 use std::process::Command;
-// use tracing::instrument;
 
 #[cfg(test)]
 fn test_example(test_name: &str) -> TestResult {
