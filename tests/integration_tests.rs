@@ -1,8 +1,9 @@
 #[cfg(test)]
-use std::error::Error;
+type TestResult = Result<(), Report>;
 
-#[cfg(test)]
-type TestResult = Result<(), Box<dyn Error>>;
+use color_eyre::{eyre::eyre, eyre::Report, Section, SectionExt};
+use std::process::Command;
+// use tracing::instrument;
 
 #[cfg(test)]
 fn test_example(test_name: &str) -> TestResult {
@@ -10,8 +11,13 @@ fn test_example(test_name: &str) -> TestResult {
         fs::{create_dir_all, File},
         io::{stdout, Write},
         path::PathBuf,
-        process::Command,
+        sync::Once,
     };
+
+    static INIT_REPORTER: Once = Once::new();
+    INIT_REPORTER.call_once(|| {
+        color_eyre::install().unwrap();
+    });
 
     // Create it if it's not there
     let mut temp_dir = std::env::temp_dir();
@@ -85,17 +91,19 @@ fn test_example(test_name: &str) -> TestResult {
         app_filepath
     };
 
-    let command = Command::new("./target/debug/june")
+    let output = Command::new("./target/debug/june")
         .arg(&test_filepath)
-        .output();
-    let command = command.unwrap();
-    if !command.status.success() && expected_error.is_none() {
-        panic!("June did not compile successfully");
+        .output()?;
+    let command_err = String::from_utf8_lossy(&output.stderr);
+    let command_out = String::from_utf8_lossy(&output.stdout);
+
+    if !output.status.success() && expected_error.is_none() {
+        Err(eyre!("June did not compile successfully"))
+            .with_section(|| command_out.trim().to_string().header("Stdout:"))
+            .with_section(|| command_err.trim().to_string().header("Stderr:"))?;
     }
 
     if let Some(expected_error) = &expected_error {
-        let command_err = String::from_utf8_lossy(&command.stderr);
-
         println!("Checking:\n{}expected: {}\n", command_err, expected_error);
 
         assert!(command_err.contains(expected_error));
@@ -105,7 +113,7 @@ fn test_example(test_name: &str) -> TestResult {
         // Now, output our C to a file
         eprintln!("c_output_filepath: {:?}", c_output_filepath);
         let mut output_file = File::create(&c_output_filepath).unwrap();
-        let _ = output_file.write_all(&command.stdout);
+        let _ = output_file.write_all(&output.stdout);
 
         // Next, compile the file
         let compiler = Command::new("clang")
