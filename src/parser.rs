@@ -112,6 +112,7 @@ pub enum AstNode {
     // Definitions
     Fun {
         name: NodeId,
+        type_params: Option<NodeId>,
         params: NodeId,
         lifetime_annotations: Vec<NodeId>,
         return_ty: Option<NodeId>,
@@ -911,6 +912,7 @@ impl Parser {
             self.create_node(
                 AstNode::Fun {
                     name,
+                    type_params: None,
                     params,
                     lifetime_annotations: vec![],
                     return_ty,
@@ -927,6 +929,13 @@ impl Parser {
         self.keyword(b"fun");
 
         let name = self.name();
+
+        let type_params = if self.is_less_than() {
+            Some(self.type_params())
+        } else {
+            None
+        };
+
         let params = self.params();
 
         let mut lifetime_annotations = vec![];
@@ -988,6 +997,7 @@ impl Parser {
         self.create_node(
             AstNode::Fun {
                 name,
+                type_params,
                 params,
                 lifetime_annotations,
                 return_ty,
@@ -1810,12 +1820,10 @@ impl Parser {
                     break;
                 }
 
+                output.push(self.name());
                 if self.is_comma() {
                     self.next();
-                    continue;
                 }
-
-                output.push(self.name());
             }
 
             span_end = self.position() + 1;

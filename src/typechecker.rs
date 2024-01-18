@@ -314,17 +314,42 @@ impl Typechecker {
     pub fn typecheck_fun_predecl(
         &mut self,
         name: NodeId,
+        type_params: Option<NodeId>,
         params: NodeId,
         lifetime_annotations: &[NodeId],
         return_ty: Option<NodeId>,
         block: Option<NodeId>,
     ) -> FunId {
         let mut fun_params = vec![];
+        let mut type_vars = vec![];
+
         let fun_name = self.compiler.source
             [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
             .to_vec();
 
         self.enter_scope();
+
+        if let Some(type_params) = type_params {
+            let AstNode::Params(type_params) = self.compiler.get_node(type_params) else {
+                panic!("internal error: enum generic params are not proper ast node");
+            };
+
+            let type_params = type_params.clone();
+
+            for type_param in type_params {
+                let type_id = self.compiler.fresh_type_variable();
+
+                type_vars.push(type_id);
+
+                let type_id = self.compiler.find_or_create_type(Type::FunLocalTypeVar {
+                    offset: type_vars.len() - 1,
+                });
+
+                let type_var_name = self.compiler.get_source(type_param).to_vec();
+
+                self.add_type_to_scope(type_var_name, type_id);
+            }
+        }
 
         //FIXME: remove clone?
         if let AstNode::Params(unchecked_params) = self.compiler.get_node(params).clone() {
@@ -610,6 +635,7 @@ impl Typechecker {
             for method in methods {
                 let AstNode::Fun {
                     name,
+                    type_params,
                     params,
                     lifetime_annotations,
                     return_ty,
@@ -623,6 +649,7 @@ impl Typechecker {
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
+                let type_params = *type_params;
                 let params = *params;
                 let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
@@ -630,6 +657,7 @@ impl Typechecker {
 
                 fun_ids.push(self.typecheck_fun_predecl(
                     name,
+                    type_params,
                     params,
                     &lifetime_annotations,
                     return_ty,
@@ -773,6 +801,7 @@ impl Typechecker {
             for method in methods {
                 let AstNode::Fun {
                     name,
+                    type_params,
                     params,
                     lifetime_annotations,
                     return_ty,
@@ -786,6 +815,7 @@ impl Typechecker {
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
+                let type_params = *type_params;
                 let params = *params;
                 let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
@@ -793,6 +823,7 @@ impl Typechecker {
 
                 fun_ids.push(self.typecheck_fun_predecl(
                     name,
+                    type_params,
                     params,
                     &lifetime_annotations,
                     return_ty,
@@ -838,6 +869,7 @@ impl Typechecker {
             match &self.compiler.get_node(*node_id) {
                 AstNode::Fun {
                     name,
+                    type_params,
                     params,
                     lifetime_annotations,
                     return_ty,
@@ -861,6 +893,7 @@ impl Typechecker {
                     let lifetime_annotations = lifetime_annotations.clone();
                     funs.push(self.typecheck_fun_predecl(
                         *name,
+                        *type_params,
                         *params,
                         &lifetime_annotations,
                         *return_ty,
@@ -1174,6 +1207,9 @@ impl Typechecker {
                 name,
             )
         }
+
+        // We need to instantiate if this is a generic function
+        if !self.compiler.functions[fun_id.0].type_vars.is_empty() {}
 
         // TODO: do we want to wait until all params are checked
         // before we mark this as resolved?

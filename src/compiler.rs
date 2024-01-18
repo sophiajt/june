@@ -165,12 +165,16 @@ impl Compiler {
             AstNode::Fun {
                 name,
                 params,
+                type_params,
                 lifetime_annotations,
                 return_ty,
                 block,
             } => {
                 println!("Fun:[{}]", node_id.0);
                 self.print_helper(name, indent + 2);
+                if let Some(type_params) = type_params {
+                    self.print_helper(type_params, indent + 2);
+                }
                 self.print_helper(params, indent + 2);
                 for lifetime_annotation in lifetime_annotations {
                     self.print_helper(lifetime_annotation, indent + 2);
