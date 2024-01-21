@@ -1381,6 +1381,7 @@ impl Typechecker {
                 UNKNOWN_TYPE_ID
             }
             AstNode::CString => C_STRING_TYPE_ID,
+            AstNode::CChar => C_CHAR_TYPE_ID,
             AstNode::Let {
                 variable_name,
                 initializer,
