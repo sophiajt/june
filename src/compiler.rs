@@ -357,13 +357,13 @@ impl Compiler {
         (line_number, line_start, line_end)
     }
 
-    pub fn print_error(&self, error: &SourceError) {
-        let SourceError {
-            node_id,
-            message,
-            severity,
-        } = error;
-
+    fn print_error_helper(
+        &self,
+        node_id: NodeId,
+        message: &str,
+        severity: Severity,
+        indent: usize,
+    ) {
         let span_start = self.span_start[node_id.0];
         let span_end = self.span_end[node_id.0];
 
@@ -393,6 +393,9 @@ impl Compiler {
             line_number_width
         };
 
+        for _ in 0..indent {
+            eprint!(" ");
+        }
         for _ in 0..(max_number_width + 2) {
             eprint!("─");
         }
@@ -402,6 +405,10 @@ impl Compiler {
             line_number,
             span_start - line_start + 1
         );
+
+        for _ in 0..indent {
+            eprint!(" ");
+        }
 
         // Previous line in the source code, if available
         if line_start > (file_span_start + 1) {
@@ -421,6 +428,9 @@ impl Compiler {
         }
 
         // Line being highlighted
+        for _ in 0..indent {
+            eprint!(" ");
+        }
         for _ in 0..(max_number_width - line_number_width) {
             eprint!(" ")
         }
@@ -431,6 +441,9 @@ impl Compiler {
             String::from_utf8_lossy(&self.source[line_start..line_end])
         );
 
+        for _ in 0..indent {
+            eprint!(" ");
+        }
         for _ in 0..(max_number_width + 2) {
             eprint!(" ");
         }
@@ -455,6 +468,9 @@ impl Compiler {
                 eprintln!(" note: {}", message);
             }
         }
+        for _ in 0..indent {
+            eprint!(" ");
+        }
         eprint!("\x1b[0m");
 
         // Next line after error, for context
@@ -469,10 +485,31 @@ impl Compiler {
             );
         }
 
+        for _ in 0..indent {
+            eprint!(" ");
+        }
         for _ in 0..(max_number_width + 2) {
             eprint!("─");
         }
         eprintln!("┴─");
+    }
+
+    pub fn print_error(&self, error: &SourceError) {
+        let SourceError {
+            node_id,
+            message,
+            severity,
+            note,
+        } = error;
+
+        let node_id = *node_id;
+        let severity = *severity;
+
+        self.print_error_helper(node_id, message, severity, 0);
+
+        if let Some(note) = note {
+            self.print_error_helper(note.1, &note.0, Severity::Note, 2);
+        }
     }
 
     pub fn add_file(&mut self, fname: &str, contents: &[u8]) {

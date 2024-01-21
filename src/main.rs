@@ -28,7 +28,14 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     let parser = Parser::new(compiler, span_offset);
     let compiler = parser.parse();
 
+    let mut first_error = true;
+
     for error in &compiler.errors {
+        if !first_error {
+            eprintln!();
+        } else {
+            first_error = true;
+        }
         compiler.print_error(error)
     }
 
@@ -40,6 +47,11 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     let compiler = typechecker.typecheck();
 
     for error in &compiler.errors {
+        if !first_error {
+            eprintln!();
+        } else {
+            first_error = true;
+        }
         compiler.print_error(error)
     }
 
@@ -51,6 +63,11 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     let compiler = lifetime_checker.check_lifetimes();
 
     for error in &compiler.errors {
+        if !first_error {
+            eprintln!();
+        } else {
+            first_error = true;
+        }
         compiler.print_error(error)
     }
 

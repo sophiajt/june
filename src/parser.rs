@@ -764,6 +764,7 @@ impl Parser {
             message: message.into(),
             node_id,
             severity: Severity::Error,
+            note: None,
         });
     }
 
@@ -779,6 +780,7 @@ impl Parser {
                 message: message.into(),
                 node_id,
                 severity: Severity::Error,
+                note: None,
             });
 
             node_id
@@ -789,6 +791,7 @@ impl Parser {
                 message: message.into(),
                 node_id,
                 severity: Severity::Error,
+                note: None,
             });
 
             node_id

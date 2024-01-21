@@ -69,14 +69,22 @@ impl LifetimeChecker {
             message: message.into(),
             node_id,
             severity: Severity::Error,
+            note: None,
         });
     }
 
-    pub fn note(&mut self, message: impl Into<String>, node_id: NodeId) {
+    pub fn error_with_note(
+        &mut self,
+        message: impl Into<String>,
+        node_id: NodeId,
+        note: impl Into<String>,
+        note_node_id: NodeId,
+    ) {
         self.compiler.errors.push(SourceError {
             message: message.into(),
             node_id,
-            severity: Severity::Note,
+            severity: Severity::Error,
+            note: Some((note.into(), note_node_id)),
         });
     }
 
@@ -147,8 +155,7 @@ impl LifetimeChecker {
                         )
                         .to_string();
                         if incoming_var_id != var_id {
-                            self.error(format!("can't find compatible lifetime between param '{}' and param '{}'", param_name1, param_name2), node_id);
-                            self.note(
+                            self.error_with_note(format!("can't find compatible lifetime between param '{}' and param '{}'", param_name1, param_name2), node_id,
                                 format!(
                                     "add a lifetime annotation to the function, e.g. [{} == {}]",
                                     param_name1, param_name2
@@ -164,14 +171,12 @@ impl LifetimeChecker {
                         let param_name1 =
                             String::from_utf8_lossy(self.compiler.get_variable_name(var_id))
                                 .to_string();
-                        self.error(
+                        self.error_with_note(
                             format!(
                                 "can't find compatible lifetime between param '{}' and return",
                                 param_name1
                             ),
                             node_id,
-                        );
-                        self.note(
                             format!(
                                 "add a lifetime annotation to the function, e.g. [{} == return]",
                                 param_name1
