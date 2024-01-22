@@ -1,0 +1,7 @@
+// output: hello
+
+use utils;
+
+fun main() {
+    utils::say_hello()
+}

@@ -5,8 +5,6 @@ mod lifetime_checker;
 mod parser;
 mod typechecker;
 
-use std::process::exit;
-
 use compiler::Compiler;
 use lifetime_checker::LifetimeChecker;
 use parser::Parser;
@@ -15,15 +13,8 @@ use typechecker::Typechecker;
 fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     let debug_output = false;
 
-    let contents = std::fs::read(fname);
-
-    let Ok(contents) = contents else {
-        eprintln!("can't find {}", fname);
-        exit(1);
-    };
-
     let span_offset = compiler.span_offset();
-    compiler.add_file(fname, &contents);
+    compiler.add_file(fname);
 
     let parser = Parser::new(compiler, span_offset);
     let compiler = parser.parse();

@@ -3,8 +3,14 @@ use crate::errors::{Severity, SourceError};
 
 pub struct Parser {
     pub compiler: Compiler,
-    pub span_offset: usize,
+    current_file: FileCursor,
     content_length: usize,
+}
+
+struct FileCursor {
+    pub span_offset: usize,
+    /// index into `Compiler::file_offsets` vector
+    pub file_index: usize,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -108,6 +114,9 @@ pub enum AstNode {
     NamespacedLookup {
         namespace: NodeId,
         item: NodeId,
+    },
+    Use {
+        path: NodeId,
     },
 
     // Definitions
@@ -324,10 +333,14 @@ fn is_symbol(b: u8) -> bool {
 impl Parser {
     pub fn new(compiler: Compiler, span_offset: usize) -> Self {
         let content_length = compiler.source.len() - span_offset;
+        let current_file = FileCursor {
+            span_offset,
+            file_index: 0,
+        };
         Self {
             compiler,
             content_length,
-            span_offset,
+            current_file,
         }
     }
 
@@ -826,7 +839,7 @@ impl Parser {
             self.lcurly();
         }
 
-        while self.has_tokens() {
+        while dbg!(self.position()) < dbg!(self.current_file_end()) {
             if self.is_rcurly() && expect_curly_braces {
                 span_end = self.position() + 1;
                 self.rcurly();
@@ -844,6 +857,8 @@ impl Parser {
                 code_body.push(self.class_struct_definition(true));
             } else if self.is_keyword(b"enum") {
                 code_body.push(self.enum_definition());
+            } else if self.is_keyword(b"use") {
+                code_body.push(self.use_statement());
             } else if self.is_keyword(b"let") {
                 code_body.push(self.let_statement());
             } else if self.is_keyword(b"mut") {
@@ -1370,12 +1385,12 @@ impl Parser {
                 // Member access
                 self.next();
 
-                let prev_offset = self.span_offset;
+                let prev_offset = self.current_file.span_offset;
 
                 let name = self.name();
 
                 let field_or_call = if self.is_lparen() {
-                    self.span_offset = prev_offset;
+                    self.current_file.span_offset = prev_offset;
                     self.variable_or_call()
                 } else {
                     name
@@ -2516,7 +2531,7 @@ impl Parser {
     }
 
     pub fn lex_quoted_string(&mut self) -> Option<Token> {
-        let span_start = self.span_offset;
+        let span_start = self.current_file.span_offset;
         let mut span_position = span_start + 1;
         let mut is_escaped = false;
         while span_position < self.compiler.source.len() {
@@ -2531,17 +2546,17 @@ impl Parser {
             span_position += 1;
         }
 
-        self.span_offset = span_position;
+        self.current_file.span_offset = span_position;
 
         Some(Token {
             token_type: TokenType::String,
             span_start,
-            span_end: self.span_offset,
+            span_end: self.current_file.span_offset,
         })
     }
 
     pub fn lex_quoted_c_string(&mut self) -> Option<Token> {
-        let span_start = self.span_offset + 1;
+        let span_start = self.current_file.span_offset + 1;
         let mut span_position = span_start + 1;
         let mut is_escaped = false;
         while span_position < self.compiler.source.len() {
@@ -2556,17 +2571,17 @@ impl Parser {
             span_position += 1;
         }
 
-        self.span_offset = span_position;
+        self.current_file.span_offset = span_position;
 
         Some(Token {
             token_type: TokenType::CString,
             span_start,
-            span_end: self.span_offset,
+            span_end: self.current_file.span_offset,
         })
     }
 
     pub fn lex_quoted_c_char(&mut self) -> Option<Token> {
-        let span_start = self.span_offset + 1;
+        let span_start = self.current_file.span_offset + 1;
         let mut span_position = span_start + 1;
         let mut is_escaped = false;
         while span_position < self.compiler.source.len() {
@@ -2581,17 +2596,17 @@ impl Parser {
             span_position += 1;
         }
 
-        self.span_offset = span_position;
+        self.current_file.span_offset = span_position;
 
         Some(Token {
             token_type: TokenType::CChar,
             span_start,
-            span_end: self.span_offset,
+            span_end: self.current_file.span_offset,
         })
     }
 
     pub fn lex_number(&mut self) -> Option<Token> {
-        let span_start = self.span_offset;
+        let span_start = self.current_file.span_offset;
         let mut span_position = span_start;
         while span_position < self.compiler.source.len() {
             if !self.compiler.source[span_position].is_ascii_digit() {
@@ -2611,12 +2626,12 @@ impl Parser {
                 span_position += 1;
             }
 
-            self.span_offset = span_position;
+            self.current_file.span_offset = span_position;
 
             return Some(Token {
                 token_type: TokenType::Int,
                 span_start,
-                span_end: self.span_offset,
+                span_end: self.current_file.span_offset,
             });
         } else if span_position < self.compiler.source.len()
             && self.compiler.source[span_position] == b'o'
@@ -2631,12 +2646,12 @@ impl Parser {
                 span_position += 1;
             }
 
-            self.span_offset = span_position;
+            self.current_file.span_offset = span_position;
 
             return Some(Token {
                 token_type: TokenType::Int,
                 span_start,
-                span_end: self.span_offset,
+                span_end: self.current_file.span_offset,
             });
         } else if span_position < self.compiler.source.len()
             && self.compiler.source[span_position] == b'b'
@@ -2651,12 +2666,12 @@ impl Parser {
                 span_position += 1;
             }
 
-            self.span_offset = span_position;
+            self.current_file.span_offset = span_position;
 
             return Some(Token {
                 token_type: TokenType::Int,
                 span_start,
-                span_end: self.span_offset,
+                span_end: self.current_file.span_offset,
             });
         } else if span_position < self.compiler.source.len()
             && self.compiler.source[span_position] == b'.'
@@ -2692,26 +2707,26 @@ impl Parser {
                 }
             }
 
-            self.span_offset = span_position;
+            self.current_file.span_offset = span_position;
 
             return Some(Token {
                 token_type: TokenType::Float,
                 span_start,
-                span_end: self.span_offset,
+                span_end: self.current_file.span_offset,
             });
         }
 
-        self.span_offset = span_position;
+        self.current_file.span_offset = span_position;
 
         Some(Token {
             token_type: TokenType::Int,
             span_start,
-            span_end: self.span_offset,
+            span_end: self.current_file.span_offset,
         })
     }
 
     pub fn skip_space(&mut self) {
-        let mut span_position = self.span_offset;
+        let mut span_position = self.current_file.span_offset;
         let whitespace: &[u8] = &[b' ', b'\t'];
         while span_position < self.compiler.source.len() {
             if !whitespace.contains(&self.compiler.source[span_position]) {
@@ -2719,11 +2734,11 @@ impl Parser {
             }
             span_position += 1;
         }
-        self.span_offset = span_position;
+        self.current_file.span_offset = span_position;
     }
 
     pub fn newline(&mut self) -> Option<Token> {
-        let mut span_position = self.span_offset;
+        let mut span_position = self.current_file.span_offset;
         let whitespace: &[u8] = &[b'\r', b'\n'];
         while span_position < self.compiler.source.len() {
             if !whitespace.contains(&self.compiler.source[span_position]) {
@@ -2732,31 +2747,31 @@ impl Parser {
             span_position += 1;
         }
 
-        if self.span_offset == span_position {
+        if self.current_file.span_offset == span_position {
             None
         } else {
             let output = Some(Token {
                 token_type: TokenType::Newline,
-                span_start: self.span_offset,
+                span_start: self.current_file.span_offset,
                 span_end: span_position,
             });
-            self.span_offset = span_position;
+            self.current_file.span_offset = span_position;
             output
         }
     }
 
     pub fn skip_comment(&mut self) {
-        let mut span_position = self.span_offset;
+        let mut span_position = self.current_file.span_offset;
         while span_position < self.compiler.source.len()
             && self.compiler.source[span_position] != b'\n'
         {
             span_position += 1;
         }
-        self.span_offset = span_position;
+        self.current_file.span_offset = span_position;
     }
 
     pub fn lex_name(&mut self) -> Option<Token> {
-        let span_start = self.span_offset;
+        let span_start = self.current_file.span_offset;
         let mut span_position = span_start;
         while span_position < self.compiler.source.len()
             && ((!self.compiler.source[span_position].is_ascii_whitespace()
@@ -2765,17 +2780,17 @@ impl Parser {
         {
             span_position += 1;
         }
-        self.span_offset = span_position;
+        self.current_file.span_offset = span_position;
 
         Some(Token {
             token_type: TokenType::Name,
             span_start,
-            span_end: self.span_offset,
+            span_end: self.current_file.span_offset,
         })
     }
 
     pub fn lex_symbol(&mut self) -> Option<Token> {
-        let span_start = self.span_offset;
+        let span_start = self.current_file.span_offset;
 
         let result = match self.compiler.source[span_start] {
             b'(' => Token {
@@ -2794,8 +2809,8 @@ impl Parser {
                 span_end: span_start + 1,
             },
             b'<' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::LessThanEqual,
@@ -2826,8 +2841,8 @@ impl Parser {
                 span_end: span_start + 1,
             },
             b'>' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::GreaterThanEqual,
@@ -2843,16 +2858,16 @@ impl Parser {
                 }
             }
             b'+' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'+'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'+'
                 {
                     Token {
                         token_type: TokenType::PlusPlus,
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::PlusEquals,
@@ -2868,16 +2883,16 @@ impl Parser {
                 }
             }
             b'-' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'>'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'>'
                 {
                     Token {
                         token_type: TokenType::ThinArrow,
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::DashEquals,
@@ -2893,16 +2908,16 @@ impl Parser {
                 }
             }
             b'*' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'*'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'*'
                 {
                     Token {
                         token_type: TokenType::AsteriskAsterisk,
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::AsteriskEquals,
@@ -2918,16 +2933,16 @@ impl Parser {
                 }
             }
             b'/' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'/'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'/'
                 {
                     Token {
                         token_type: TokenType::ForwardSlashForwardSlash,
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::ForwardSlashEquals,
@@ -2943,24 +2958,24 @@ impl Parser {
                 }
             }
             b'=' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::EqualsEquals,
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'~'
+                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'~'
                 {
                     Token {
                         token_type: TokenType::EqualsTilde,
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'>'
+                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'>'
                 {
                     Token {
                         token_type: TokenType::ThickArrow,
@@ -2976,8 +2991,8 @@ impl Parser {
                 }
             }
             b':' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b':'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b':'
                 {
                     Token {
                         token_type: TokenType::ColonColon,
@@ -2998,8 +3013,8 @@ impl Parser {
                 span_end: span_start + 1,
             },
             b'.' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'.'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'.'
                 {
                     Token {
                         token_type: TokenType::DotDot,
@@ -3015,16 +3030,16 @@ impl Parser {
                 }
             }
             b'!' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'='
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
                         token_type: TokenType::ExclamationEquals,
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'~'
+                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'~'
                 {
                     Token {
                         token_type: TokenType::ExclamationTilde,
@@ -3040,8 +3055,8 @@ impl Parser {
                 }
             }
             b'|' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'|'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'|'
                 {
                     Token {
                         token_type: TokenType::PipePipe,
@@ -3057,8 +3072,8 @@ impl Parser {
                 }
             }
             b'&' => {
-                if self.span_offset < (self.compiler.source.len() - 1)
-                    && self.compiler.source[self.span_offset + 1] == b'&'
+                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'&'
                 {
                     Token {
                         token_type: TokenType::AmpersandAmpersand,
@@ -3091,64 +3106,105 @@ impl Parser {
             }
         };
 
-        self.span_offset = result.span_end;
+        self.current_file.span_offset = result.span_end;
 
         Some(result)
     }
 
     pub fn peek(&mut self) -> Option<Token> {
-        let prev_offset = self.span_offset;
+        let prev_offset = self.current_file.span_offset;
         let output = self.next();
-        self.span_offset = prev_offset;
+        self.current_file.span_offset = prev_offset;
 
         output
     }
 
     pub fn next(&mut self) -> Option<Token> {
         loop {
-            if self.span_offset >= self.compiler.source.len() {
+            if self.current_file.span_offset >= self.compiler.source.len() {
                 return None;
-            } else if self.compiler.source[self.span_offset].is_ascii_digit() {
+            } else if self.compiler.source[self.current_file.span_offset].is_ascii_digit() {
                 return self.lex_number();
-            } else if self.compiler.source[self.span_offset] == b'"' {
+            } else if self.compiler.source[self.current_file.span_offset] == b'"' {
                 return self.lex_quoted_string();
-            } else if self.span_offset < (self.compiler.source.len() - 1)
-                && self.compiler.source[self.span_offset] == b'c'
-                && self.compiler.source[self.span_offset + 1] == b'"'
+            } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                && self.compiler.source[self.current_file.span_offset] == b'c'
+                && self.compiler.source[self.current_file.span_offset + 1] == b'"'
             {
                 return self.lex_quoted_c_string();
-            } else if self.span_offset < (self.compiler.source.len() - 1)
-                && self.compiler.source[self.span_offset] == b'c'
-                && self.compiler.source[self.span_offset + 1] == b'\''
+            } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                && self.compiler.source[self.current_file.span_offset] == b'c'
+                && self.compiler.source[self.current_file.span_offset + 1] == b'\''
             {
                 return self.lex_quoted_c_char();
-            } else if self.compiler.source[self.span_offset] == b'/'
-                && self.span_offset < (self.compiler.source.len() - 1)
-                && self.compiler.source[self.span_offset + 1] == b'/'
+            } else if self.compiler.source[self.current_file.span_offset] == b'/'
+                && self.current_file.span_offset < (self.compiler.source.len() - 1)
+                && self.compiler.source[self.current_file.span_offset + 1] == b'/'
             {
                 // Comment
                 self.skip_comment();
-            } else if is_symbol(self.compiler.source[self.span_offset]) {
+            } else if is_symbol(self.compiler.source[self.current_file.span_offset]) {
                 return self.lex_symbol();
-            } else if self.compiler.source[self.span_offset] == b' '
-                || self.compiler.source[self.span_offset] == b'\t'
+            } else if self.compiler.source[self.current_file.span_offset] == b' '
+                || self.compiler.source[self.current_file.span_offset] == b'\t'
             {
                 self.skip_space()
-            } else if self.compiler.source[self.span_offset] == b'\r'
-                || self.compiler.source[self.span_offset] == b'\n'
+            } else if self.compiler.source[self.current_file.span_offset] == b'\r'
+                || self.compiler.source[self.current_file.span_offset] == b'\n'
             {
                 return self.newline();
-            // } else if self.compiler.source[self.span_offset].is_ascii_alphanumeric()
-            //     || self.compiler.source[self.span_offset] == b'_'
-            // {
-            //     return self.lex_name();
+                // } else if self.compiler.source[self.current_file.span_offset].is_ascii_alphanumeric()
+                //     || self.compiler.source[self.current_file.span_offset] == b'_'
+                // {
+                //     return self.lex_name();
             } else {
                 return self.lex_name();
                 // panic!(
                 //         "unsupported character: {}",
-                //         self.compiler.source[self.span_offset] as char
+                //         self.compiler.source[self.current_file.span_offset] as char
                 //     )
             }
         }
+    }
+
+    fn use_statement(&mut self) -> NodeId {
+        let span_start = self.position();
+        self.keyword(b"use");
+
+        let path = self.simple_expression();
+        let span_end = self.get_span_end(path);
+
+        let use_statement = self.create_node(AstNode::Use { path }, span_start, span_end);
+        let parent_path = self
+            .compiler
+            .get_source_path(span_start)
+            .parent()
+            .expect("source path should be the file itself and have a valid parent directory");
+
+        // TODO get the path of the current file
+        // get the path segment of use statement to figure out what the module is and therefore the expected filename
+        let use_ident = "utils.june"; // TODO lookup from ast of simple_expression above
+        let fname = parent_path.join(use_ident);
+
+        self.compiler.add_file(fname);
+        let file_index = self.compiler.file_offsets.len() - 1;
+        let span_offset = self.compiler.file_offsets[file_index].1;
+
+        let mut current_file = FileCursor {
+            file_index,
+            span_offset,
+        };
+
+        // swap out the file cursor with the new file and restart parsing
+        std::mem::swap(&mut current_file, &mut self.current_file);
+        self.block(false);
+        // swap back previous file and resume parsing
+        std::mem::swap(&mut current_file, &mut self.current_file);
+
+        use_statement
+    }
+
+    fn current_file_end(&mut self) -> usize {
+        self.compiler.file_offsets[self.current_file.file_index].2
     }
 }

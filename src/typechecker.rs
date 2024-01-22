@@ -1731,6 +1731,7 @@ impl Typechecker {
             AstNode::NamespacedLookup { namespace, item } => {
                 self.typecheck_namespaced_lookup(*namespace, *item, local_inferences)
             }
+            AstNode::Use { .. } => VOID_TYPE_ID,
             AstNode::Call { head, args } => {
                 let head = *head;
                 let args = args.clone();

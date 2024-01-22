@@ -246,6 +246,11 @@ fn defer_simple_error() -> TestResult {
 }
 
 #[test]
+fn module_simple() -> TestResult {
+    test_example("modules/main")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("data_types/double")
 }

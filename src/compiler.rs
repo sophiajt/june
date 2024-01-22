@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
@@ -29,7 +30,7 @@ pub struct Compiler {
 
     pub source: Vec<u8>,
 
-    pub file_offsets: Vec<(String, usize, usize)>, // fname, start, end
+    pub file_offsets: Vec<(PathBuf, usize, usize)>, // fname, start, end
 
     // Definitions:
     // indexed by VarId
@@ -373,7 +374,7 @@ impl Compiler {
 
         for (fname, file_start, file_end) in &self.file_offsets {
             if span_start >= *file_start && span_start < *file_end {
-                filename = fname.clone();
+                filename = fname.display().to_string();
                 file_span_start = *file_start;
                 file_span_end = *file_end;
                 break;
@@ -475,13 +476,24 @@ impl Compiler {
         eprintln!("┴─");
     }
 
-    pub fn add_file(&mut self, fname: &str, contents: &[u8]) {
+    pub fn add_file<P>(&mut self, fname: P)
+    where
+        P: AsRef<Path>,
+    {
+        let fname = fname.as_ref();
+        let contents = std::fs::read(fname);
+
+        let Ok(contents) = contents else {
+            eprintln!("can't find {}", fname.display());
+            std::process::exit(1)
+        };
+
         let span_offset = self.source.len();
 
         self.file_offsets
-            .push((fname.to_string(), span_offset, span_offset + contents.len()));
+            .push((fname.to_owned(), span_offset, span_offset + contents.len()));
 
-        self.source.extend_from_slice(contents);
+        self.source.extend_from_slice(&contents);
     }
 
     pub fn span_offset(&self) -> usize {
@@ -704,5 +716,14 @@ impl Compiler {
 
     pub fn is_copyable_type(&self, type_id: TypeId) -> bool {
         matches!(self.types[type_id.0], Type::Bool | Type::F64 | Type::I64)
+    }
+
+    pub(crate) fn get_source_path(&self, position: usize) -> &Path {
+        for &(ref file, start, end) in &self.file_offsets {
+            if position >= start && position < end {
+                return file.as_path();
+            }
+        }
+        unreachable!("position should always be a valid offset into source content that's already been loaded")
     }
 }
