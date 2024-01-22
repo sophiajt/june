@@ -2534,7 +2534,7 @@ impl Parser {
         let span_start = self.current_file.span_offset;
         let mut span_position = span_start + 1;
         let mut is_escaped = false;
-        while span_position < self.compiler.source.len() {
+        while span_position < self.current_file_end() {
             if is_escaped {
                 is_escaped = false;
             } else if self.compiler.source[span_position] == b'\\' {
@@ -2559,7 +2559,7 @@ impl Parser {
         let span_start = self.current_file.span_offset + 1;
         let mut span_position = span_start + 1;
         let mut is_escaped = false;
-        while span_position < self.compiler.source.len() {
+        while span_position < self.current_file_end() {
             if is_escaped {
                 is_escaped = false;
             } else if self.compiler.source[span_position] == b'\\' {
@@ -2608,7 +2608,7 @@ impl Parser {
     pub fn lex_number(&mut self) -> Option<Token> {
         let span_start = self.current_file.span_offset;
         let mut span_position = span_start;
-        while span_position < self.compiler.source.len() {
+        while span_position < self.current_file_end() {
             if !self.compiler.source[span_position].is_ascii_digit() {
                 break;
             }
@@ -2616,10 +2616,9 @@ impl Parser {
         }
 
         // Check to see if we have a hex/octal/binary number
-        if span_position < self.compiler.source.len() && self.compiler.source[span_position] == b'x'
-        {
+        if span_position < self.current_file_end() && self.compiler.source[span_position] == b'x' {
             span_position += 1;
-            while span_position < self.compiler.source.len() {
+            while span_position < self.current_file_end() {
                 if !self.compiler.source[span_position].is_ascii_hexdigit() {
                     break;
                 }
@@ -2633,11 +2632,11 @@ impl Parser {
                 span_start,
                 span_end: self.current_file.span_offset,
             });
-        } else if span_position < self.compiler.source.len()
+        } else if span_position < self.current_file_end()
             && self.compiler.source[span_position] == b'o'
         {
             span_position += 1;
-            while span_position < self.compiler.source.len() {
+            while span_position < self.current_file_end() {
                 if !(self.compiler.source[span_position] >= b'0'
                     && self.compiler.source[span_position] <= b'7')
                 {
@@ -2653,11 +2652,11 @@ impl Parser {
                 span_start,
                 span_end: self.current_file.span_offset,
             });
-        } else if span_position < self.compiler.source.len()
+        } else if span_position < self.current_file_end()
             && self.compiler.source[span_position] == b'b'
         {
             span_position += 1;
-            while span_position < self.compiler.source.len() {
+            while span_position < self.current_file_end() {
                 if !(self.compiler.source[span_position] >= b'0'
                     && self.compiler.source[span_position] <= b'1')
                 {
@@ -2673,33 +2672,33 @@ impl Parser {
                 span_start,
                 span_end: self.current_file.span_offset,
             });
-        } else if span_position < self.compiler.source.len()
+        } else if span_position < self.current_file_end()
             && self.compiler.source[span_position] == b'.'
-            && (span_position + 1 < self.compiler.source.len())
+            && (span_position + 1 < self.current_file_end())
             && self.compiler.source[span_position + 1].is_ascii_digit()
         {
             // Looks like a float
             span_position += 1;
-            while span_position < self.compiler.source.len() {
+            while span_position < self.current_file_end() {
                 if !self.compiler.source[span_position].is_ascii_digit() {
                     break;
                 }
                 span_position += 1;
             }
 
-            if span_position < self.compiler.source.len()
+            if span_position < self.current_file_end()
                 && (self.compiler.source[span_position] == b'e'
                     || self.compiler.source[span_position] == b'E')
             {
                 span_position += 1;
 
-                if span_position < self.compiler.source.len()
+                if span_position < self.current_file_end()
                     && self.compiler.source[span_position] == b'-'
                 {
                     span_position += 1;
                 }
 
-                while span_position < self.compiler.source.len() {
+                while span_position < self.current_file_end() {
                     if !self.compiler.source[span_position].is_ascii_digit() {
                         break;
                     }
@@ -2728,7 +2727,7 @@ impl Parser {
     pub fn skip_space(&mut self) {
         let mut span_position = self.current_file.span_offset;
         let whitespace: &[u8] = &[b' ', b'\t'];
-        while span_position < self.compiler.source.len() {
+        while span_position < self.current_file_end() {
             if !whitespace.contains(&self.compiler.source[span_position]) {
                 break;
             }
@@ -2740,7 +2739,7 @@ impl Parser {
     pub fn newline(&mut self) -> Option<Token> {
         let mut span_position = self.current_file.span_offset;
         let whitespace: &[u8] = &[b'\r', b'\n'];
-        while span_position < self.compiler.source.len() {
+        while span_position < self.current_file_end() {
             if !whitespace.contains(&self.compiler.source[span_position]) {
                 break;
             }
@@ -2762,7 +2761,7 @@ impl Parser {
 
     pub fn skip_comment(&mut self) {
         let mut span_position = self.current_file.span_offset;
-        while span_position < self.compiler.source.len()
+        while span_position < self.current_file_end()
             && self.compiler.source[span_position] != b'\n'
         {
             span_position += 1;
@@ -2773,7 +2772,7 @@ impl Parser {
     pub fn lex_name(&mut self) -> Option<Token> {
         let span_start = self.current_file.span_offset;
         let mut span_position = span_start;
-        while span_position < self.compiler.source.len()
+        while span_position < self.current_file_end()
             && ((!self.compiler.source[span_position].is_ascii_whitespace()
                 && !self.compiler.source[span_position].is_ascii_punctuation())
                 || self.compiler.source[span_position] == b'_')
@@ -2809,7 +2808,7 @@ impl Parser {
                 span_end: span_start + 1,
             },
             b'<' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -2841,7 +2840,7 @@ impl Parser {
                 span_end: span_start + 1,
             },
             b'>' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -2858,7 +2857,7 @@ impl Parser {
                 }
             }
             b'+' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'+'
                 {
                     Token {
@@ -2866,7 +2865,7 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -2883,7 +2882,7 @@ impl Parser {
                 }
             }
             b'-' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'>'
                 {
                     Token {
@@ -2891,7 +2890,7 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -2908,7 +2907,7 @@ impl Parser {
                 }
             }
             b'*' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'*'
                 {
                     Token {
@@ -2916,7 +2915,7 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -2933,7 +2932,7 @@ impl Parser {
                 }
             }
             b'/' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'/'
                 {
                     Token {
@@ -2941,7 +2940,7 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -2958,7 +2957,7 @@ impl Parser {
                 }
             }
             b'=' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -2966,7 +2965,7 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'~'
                 {
                     Token {
@@ -2974,7 +2973,7 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'>'
                 {
                     Token {
@@ -2991,7 +2990,7 @@ impl Parser {
                 }
             }
             b':' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b':'
                 {
                     Token {
@@ -3013,7 +3012,7 @@ impl Parser {
                 span_end: span_start + 1,
             },
             b'.' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'.'
                 {
                     Token {
@@ -3030,7 +3029,7 @@ impl Parser {
                 }
             }
             b'!' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'='
                 {
                     Token {
@@ -3038,7 +3037,7 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
-                } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'~'
                 {
                     Token {
@@ -3055,7 +3054,7 @@ impl Parser {
                 }
             }
             b'|' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'|'
                 {
                     Token {
@@ -3072,7 +3071,7 @@ impl Parser {
                 }
             }
             b'&' => {
-                if self.current_file.span_offset < (self.compiler.source.len() - 1)
+                if self.current_file.span_offset < (self.current_file_end() - 1)
                     && self.compiler.source[self.current_file.span_offset + 1] == b'&'
                 {
                     Token {
@@ -3121,13 +3120,13 @@ impl Parser {
 
     pub fn next(&mut self) -> Option<Token> {
         loop {
-            if self.current_file.span_offset >= self.compiler.source.len() {
+            if self.current_file.span_offset >= self.current_file_end() {
                 return None;
             } else if self.compiler.source[self.current_file.span_offset].is_ascii_digit() {
                 return self.lex_number();
             } else if self.compiler.source[self.current_file.span_offset] == b'"' {
                 return self.lex_quoted_string();
-            } else if self.current_file.span_offset < (self.compiler.source.len() - 1)
+            } else if self.current_file.span_offset < (self.current_file_end() - 1)
                 && self.compiler.source[self.current_file.span_offset] == b'c'
                 && self.compiler.source[self.current_file.span_offset + 1] == b'"'
             {
@@ -3138,7 +3137,7 @@ impl Parser {
             {
                 return self.lex_quoted_c_char();
             } else if self.compiler.source[self.current_file.span_offset] == b'/'
-                && self.current_file.span_offset < (self.compiler.source.len() - 1)
+                && self.current_file.span_offset < (self.current_file_end() - 1)
                 && self.compiler.source[self.current_file.span_offset + 1] == b'/'
             {
                 // Comment
