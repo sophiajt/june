@@ -105,7 +105,6 @@ fn test_example(test_name: &str) -> TestResult {
         // Now, output our C to a file
         eprintln!("c_output_filepath: {:?}", c_output_filepath);
         let mut output_file = File::create(&c_output_filepath).unwrap();
-
         let _ = output_file.write_all(&command.stdout);
 
         // Next, compile the file
