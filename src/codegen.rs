@@ -507,6 +507,11 @@ impl Codegen {
 
                 output.extend_from_slice(src);
             }
+            AstNode::CChar => {
+                let src = self.compiler.get_source(node_id);
+
+                output.extend_from_slice(src);
+            }
             AstNode::Int => {
                 let src = self.compiler.get_source(node_id);
 

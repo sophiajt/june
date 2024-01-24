@@ -349,6 +349,7 @@ impl LifetimeChecker {
             | AstNode::False
             | AstNode::String
             | AstNode::CString
+            | AstNode::CChar
             | AstNode::None => {}
             AstNode::Let { initializer, .. } => {
                 // Push lifetime requirement from let into the variable and initializer

@@ -196,6 +196,16 @@ fn boolean() -> TestResult {
 }
 
 #[test]
+fn c_char() -> TestResult {
+    test_example("data_types/c_char")
+}
+
+#[test]
+fn c_string() -> TestResult {
+    test_example("data_types/c_string")
+}
+
+#[test]
 fn call_labeled_error() -> TestResult {
     test_example("typechecking/call_labeled_error")
 }
@@ -732,11 +742,6 @@ fn scope_struct_to_upper_scope2() -> TestResult {
 #[test]
 fn static_method() -> TestResult {
     test_example("structs/static_method")
-}
-
-#[test]
-fn string_() -> TestResult {
-    test_example("data_types/string")
 }
 
 #[test]
