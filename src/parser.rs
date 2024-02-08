@@ -7,6 +7,7 @@ pub struct Parser {
     content_length: usize,
 }
 
+#[derive(Debug)]
 struct FileCursor {
     pub span_offset: usize,
     /// index into `Compiler::file_offsets` vector
@@ -348,7 +349,7 @@ impl Parser {
         if let Some(Token { span_start, .. }) = self.peek() {
             span_start
         } else {
-            self.content_length
+            self.current_file_end()
         }
     }
 
@@ -839,7 +840,7 @@ impl Parser {
             self.lcurly();
         }
 
-        while dbg!(self.position()) < dbg!(self.current_file_end()) {
+        while self.position() < self.current_file_end() {
             if self.is_rcurly() && expect_curly_braces {
                 span_end = self.position() + 1;
                 self.rcurly();
@@ -3166,6 +3167,7 @@ impl Parser {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     fn use_statement(&mut self) -> NodeId {
         let span_start = self.position();
         self.keyword(b"use");
@@ -3174,18 +3176,15 @@ impl Parser {
         let span_end = self.get_span_end(path);
 
         let use_statement = self.create_node(AstNode::Use { path }, span_start, span_end);
-        let parent_path = self
-            .compiler
-            .get_source_path(span_start)
-            .parent()
-            .expect("source path should be the file itself and have a valid parent directory");
+        tracing::debug!(?use_statement, ?path);
+        let fname = self.compiler.path_from_use(path);
 
-        // TODO get the path of the current file
-        // get the path segment of use statement to figure out what the module is and therefore the expected filename
-        let use_ident = "utils.june"; // TODO lookup from ast of simple_expression above
-        let fname = parent_path.join(use_ident);
+        if let Some(block) = self.compiler.module_lookup.get(&fname) {
+            self.compiler.module_lookup_use.insert(path, *block);
+            return use_statement;
+        }
 
-        self.compiler.add_file(fname);
+        self.compiler.add_file(&fname);
         let file_index = self.compiler.file_offsets.len() - 1;
         let span_offset = self.compiler.file_offsets[file_index].1;
 
@@ -3196,9 +3195,12 @@ impl Parser {
 
         // swap out the file cursor with the new file and restart parsing
         std::mem::swap(&mut current_file, &mut self.current_file);
-        self.block(false);
+        let module_block = self.block(false);
         // swap back previous file and resume parsing
         std::mem::swap(&mut current_file, &mut self.current_file);
+
+        self.compiler.module_lookup.insert(fname, module_block);
+        self.compiler.module_lookup_use.insert(path, module_block);
 
         use_statement
     }

@@ -8,6 +8,8 @@ mod typechecker;
 use compiler::Compiler;
 use lifetime_checker::LifetimeChecker;
 use parser::Parser;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 use typechecker::Typechecker;
 
 fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
@@ -59,6 +61,20 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
 }
 
 fn main() {
+    let fmt_layer = tracing_tree::HierarchicalLayer::default()
+        .with_writer(std::io::stderr)
+        .with_indent_lines(true)
+        .with_targets(true)
+        .with_indent_amount(2);
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
+    tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(fmt_layer)
+        .init();
+
     let mut compiler = Compiler::new();
 
     for fname in std::env::args().skip(1) {

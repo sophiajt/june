@@ -1,4 +1,5 @@
 // output: hello
+// RUST_LOG: june::parser[use_statement]=debug,june::typechecker[typecheck_namespaced_lookup]=debug,june::typechecker[typecheck_module]=debug
 
 use utils;
 

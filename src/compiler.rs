@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, NodeId, PointerType};
-use crate::typechecker::{FunId, Function, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID};
+use crate::typechecker::{
+    FunId, Function, Module, ModuleId, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CaseOffset(pub usize);
@@ -16,6 +18,10 @@ pub enum CallTarget {
     NodeId(NodeId),
 }
 
+// Indexing into these vectors by the correct index type is enforced by the following factors
+// * vectors are private and can only be accessed from within this file
+// * this file does not contain any of the implementation details of the june compiler, it is purely an abstraction over the compiler's data moved_owned_values
+// * the only way to interact with these vectors is through helper methods that take the required indexing type as an argument
 #[derive(Debug)]
 pub struct Compiler {
     // Core information, indexed by NodeId
@@ -39,12 +45,23 @@ pub struct Compiler {
     pub functions: Vec<Function>,
     // indexed by TypeId
     types: Vec<Type>,
+    // indexed by ModuleId
+    modules: Vec<Module>,
+
+    // `modules` and `module_resolution` are populated by the typechecker
+    // `module_lookup` and `module_lookup_use` are populated by the parser
+    // lookup the node_id of the parsed block representing a module using it's absolute path
+    pub module_lookup: HashMap<PathBuf, NodeId>,
+    // lookup the id of the block (eg the entire module's loaded source) from the node_id of the path in the use statement
+    pub module_lookup_use: HashMap<NodeId, NodeId>,
 
     // Use/def
     pub call_resolution: HashMap<NodeId, CallTarget>,
     pub var_resolution: HashMap<NodeId, VarId>,
     pub fun_resolution: HashMap<NodeId, FunId>,
     pub type_resolution: HashMap<NodeId, TypeId>,
+    // lookup the id of a Module from the id of the block (value field from module_lookup_use) in the ast
+    pub module_resolution: HashMap<NodeId, ModuleId>,
 
     pub errors: Vec<SourceError>,
 }
@@ -67,11 +84,16 @@ impl Compiler {
             variables: vec![],
             functions: vec![],
             types: vec![],
+            modules: vec![],
+
+            module_lookup: HashMap::new(),
+            module_lookup_use: HashMap::new(),
 
             call_resolution: HashMap::new(),
             var_resolution: HashMap::new(),
             fun_resolution: HashMap::new(),
             type_resolution: HashMap::new(),
+            module_resolution: HashMap::new(),
 
             errors: vec![],
         }
@@ -718,12 +740,38 @@ impl Compiler {
         matches!(self.types[type_id.0], Type::Bool | Type::F64 | Type::I64)
     }
 
-    pub(crate) fn get_source_path(&self, position: usize) -> &Path {
+    pub(crate) fn get_source_path(&self, node: NodeId) -> &Path {
+        let position = self.span_start[node.0];
         for &(ref file, start, end) in &self.file_offsets {
             if position >= start && position < end {
                 return file.as_path();
             }
         }
         unreachable!("position should always be a valid offset into source content that's already been loaded")
+    }
+
+    pub(crate) fn path_from_use(&self, path: NodeId) -> PathBuf {
+        let parent_path = self
+            .get_source_path(path)
+            .parent()
+            .expect("source path should be the file itself and have a valid parent directory");
+
+        // TODO get the path of the current file
+        // get the path segment of use statement to figure out what the module is and therefore the expected filename
+        let use_ident = "utils.june"; // TODO lookup from ast of simple_expression above
+        parent_path.join(use_ident)
+    }
+
+    pub(crate) fn get_module(&self, module: ModuleId) -> &Module {
+        self.modules
+            .get(module.0)
+            .unwrap_or_else(|| panic!("internal error: cannot find module for {module:?}"))
+    }
+
+    pub(crate) fn add_module(&mut self, module_block: NodeId, module: Module) -> ModuleId {
+        let module_id = ModuleId(self.modules.len());
+        self.modules.push(module);
+        self.module_resolution.insert(module_block, module_id);
+        module_id
     }
 }
