@@ -33,6 +33,7 @@ pub enum AstNode {
     Float,
     String,
     CString,
+    CChar,
     Name,
     Type {
         name: NodeId,
@@ -246,6 +247,7 @@ pub enum TokenType {
     Float,
     Comma,
     CString,
+    CChar,
     String,
     Dot,
     DotDot,
@@ -659,6 +661,16 @@ impl Parser {
         )
     }
 
+    pub fn is_c_char(&mut self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token {
+                token_type: TokenType::CChar,
+                ..
+            })
+        )
+    }
+
     pub fn is_keyword(&mut self, keyword: &[u8]) -> bool {
         matches!(
             self.peek(),
@@ -704,6 +716,10 @@ impl Parser {
             })
             | Some(Token {
                 token_type: TokenType::CString,
+                ..
+            })
+            | Some(Token {
+                token_type: TokenType::CChar,
                 ..
             })
             | Some(Token {
@@ -1336,6 +1352,8 @@ impl Parser {
             self.string()
         } else if self.is_c_string() {
             self.c_string()
+        } else if self.is_c_char() {
+            self.c_char()
         } else if self.is_float() || self.is_int() || self.is_minus() {
             self.number()
         } else if self.is_name() {
@@ -1651,6 +1669,21 @@ impl Parser {
                 self.create_node(AstNode::CString, span_start, span_end)
             }
             _ => self.error("expected: C-based string"),
+        }
+    }
+
+    pub fn c_char(&mut self) -> NodeId {
+        match self.peek() {
+            Some(Token {
+                token_type: TokenType::CChar,
+                span_start,
+                span_end,
+                ..
+            }) => {
+                self.next();
+                self.create_node(AstNode::CChar, span_start, span_end)
+            }
+            _ => self.error("expected: C-based char"),
         }
     }
 
@@ -2540,6 +2573,31 @@ impl Parser {
         })
     }
 
+    pub fn lex_quoted_c_char(&mut self) -> Option<Token> {
+        let span_start = self.span_offset + 1;
+        let mut span_position = span_start + 1;
+        let mut is_escaped = false;
+        while span_position < self.compiler.source.len() {
+            if is_escaped {
+                is_escaped = false;
+            } else if self.compiler.source[span_position] == b'\\' {
+                is_escaped = true;
+            } else if self.compiler.source[span_position] == b'\'' {
+                span_position += 1;
+                break;
+            }
+            span_position += 1;
+        }
+
+        self.span_offset = span_position;
+
+        Some(Token {
+            token_type: TokenType::CChar,
+            span_start,
+            span_end: self.span_offset,
+        })
+    }
+
     pub fn lex_number(&mut self) -> Option<Token> {
         let span_start = self.span_offset;
         let mut span_position = span_start;
@@ -3067,6 +3125,11 @@ impl Parser {
                 && self.compiler.source[self.span_offset + 1] == b'"'
             {
                 return self.lex_quoted_c_string();
+            } else if self.span_offset < (self.compiler.source.len() - 1)
+                && self.compiler.source[self.span_offset] == b'c'
+                && self.compiler.source[self.span_offset + 1] == b'\''
+            {
+                return self.lex_quoted_c_char();
             } else if self.compiler.source[self.span_offset] == b'/'
                 && self.span_offset < (self.compiler.source.len() - 1)
                 && self.compiler.source[self.span_offset + 1] == b'/'
