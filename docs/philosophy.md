@@ -1,6 +1,6 @@
 ## Goal: Teachability, learnability, and readability
 
-June was born of multiple years of experience teaching Rust. Rust, while being a powerful systems language, is also incredibly difficult to learn and a special challenge as a teacher to deliver complex concepts to classrooms of diverse technical backgrounds. In essence, it came from the idea: "what if we could do safe systems programming in a simpler way?"
+June was born of multiple years of experience teaching Rust. Rust, while being a powerful systems language, is also incredibly difficult to learn and a special challenge as a teacher to deliver complex concepts to classrooms of diverse technical backgrounds. In essence, June comes from the idea: "what if we could do safe systems programming in a simpler way?"
 
 From this vision came a language that used a different granularity for lifetimes, which allowed for easier inference and an easier lifetime mental model: "related things are allocated together".
 
@@ -48,7 +48,7 @@ fn main() {
 }
 ```
 
-Notice how capacity does not decrease, even as you empty the vector of its contents. The same is true in C++. This is an intentional design choice to allow you to begin pushing values again, and already have ample space.
+Notice how capacity does not decrease, even as you empty the vector of its contents. The same is true in C++. This is an intentional design choice to allow you to begin pushing values again and already have ample space.
 
 In a way, vectors in C++ and Rust assume a "high-water mark" style of allocation, where they don't aggressively deallocate as the container shrinks its content size. Instead, they keep the highest allocation size as the working set.
 
