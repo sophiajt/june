@@ -279,6 +279,11 @@ fn module_simple() -> TestResult {
 }
 
 #[test]
+fn module_collision() -> TestResult {
+    test_example("modules/collisions")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("data_types/double")
 }

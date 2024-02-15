@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use tracing::debug;
+
 use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, NodeId, PointerType};
@@ -756,10 +758,12 @@ impl Compiler {
             .parent()
             .expect("source path should be the file itself and have a valid parent directory");
 
-        // TODO get the path of the current file
-        // get the path segment of use statement to figure out what the module is and therefore the expected filename
-        let use_ident = "utils.june"; // TODO lookup from ast of simple_expression above
-        parent_path.join(use_ident)
+        let bytes = self.get_source(path);
+        let ident = unsafe { std::ffi::OsStr::from_encoded_bytes_unchecked(bytes) };
+
+        let mut path = parent_path.join(ident);
+        path.set_extension("june");
+        path
     }
 
     pub(crate) fn get_module(&self, module: ModuleId) -> &Module {

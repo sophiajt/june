@@ -1,0 +1,15 @@
+// output: hellooooohello!
+// RUST_LOG: june::parser[use_statement]=debug,june::typechecker[typecheck_namespaced_lookup]=debug,june::typechecker[typecheck_module]=debug
+
+fun say_message(message: i64) {
+    println(message)
+}
+
+use utils2;
+
+
+fun main() {
+    let message = 123
+    say_message(message)
+    utils2::say_message(message)
+}
