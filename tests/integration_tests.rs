@@ -486,6 +486,11 @@ fn int_math() -> TestResult {
 }
 
 #[test]
+fn int_math_negative() -> TestResult {
+    test_example("math/int_math_negative")
+}
+
+#[test]
 fn int() -> TestResult {
     test_example("data_types/int")
 }
