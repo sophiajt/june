@@ -165,6 +165,14 @@ impl Scope {
         self.types.get(name).copied()
     }
 
+    fn find_fun(&self, name: &[u8]) -> Option<FunId> {
+        if let Some(fun_id) = self.functions.get(name) {
+            return Some(*fun_id);
+        }
+
+        None
+    }
+
     fn find_name(&self, name: &[u8]) -> Option<VarOrFunId> {
         if let Some(var_id) = self.variables.get(name) {
             return Some(VarOrFunId::VarId(*var_id));
@@ -176,6 +184,7 @@ impl Scope {
 
         None
     }
+
 }
 
 pub struct Typechecker {
@@ -2394,8 +2403,14 @@ impl Typechecker {
                     "looking for {name} in module",
                     name = std::str::from_utf8(name).unwrap()
                 );
-                let var_or_fun_id = module.scope.find_name(name);
-                self.typecheck_var_or_fun(*head, var_or_fun_id)
+                let fun_id = module.scope.find_fun(name);
+                if let Some(fun_id) = fun_id {
+                    self.typecheck_call_with_fun_id(*head, fun_id, args, None, local_inferences)
+                } else {
+                    debug!(?node);
+                    self.error("could not find item in namespace", namespace);
+                    VOID_TYPE_ID
+                }
             }
             _ => {
                 debug!(?node);
