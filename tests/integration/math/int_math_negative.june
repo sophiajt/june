@@ -1,0 +1,3 @@
+// output: -18
+
+println(2 + 4 * -5)
