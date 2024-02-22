@@ -184,7 +184,6 @@ impl Scope {
 
         None
     }
-
 }
 
 pub struct Typechecker {
@@ -1225,6 +1224,7 @@ impl Typechecker {
 
         // TODO: do we want to wait until all params are checked
         // before we mark this as resolved?
+        self.compiler.debug_node(name);
         self.compiler
             .call_resolution
             .insert(name, CallTarget::Function(fun_id));
@@ -1740,7 +1740,7 @@ impl Typechecker {
                 RANGE_I64_TYPE_ID
             }
             AstNode::NamespacedLookup { namespace, item } => {
-                self.typecheck_namespaced_lookup(*namespace, *item, local_inferences)
+                self.typecheck_namespaced_lookup(node_id, *namespace, *item, local_inferences)
             }
             AstNode::Use { path } => self.typecheck_module(*path, local_inferences),
             AstNode::Call { head, args } => {
@@ -2370,12 +2370,19 @@ impl Typechecker {
     #[instrument(skip(self))]
     pub fn typecheck_namespaced_lookup(
         &mut self,
+        node_id: NodeId,
         namespace: NodeId,
         item: NodeId,
         local_inferences: &mut Vec<TypeId>,
     ) -> TypeId {
         if let Some(module_id) = self.find_module_in_scope(namespace) {
-            self.typecheck_namespaced_item_lookup(namespace, module_id, item, local_inferences)
+            self.typecheck_namespaced_item_lookup(
+                node_id,
+                namespace,
+                module_id,
+                item,
+                local_inferences,
+            )
         } else if let Some(type_id) = self.find_type_in_scope(namespace) {
             self.typecheck_namespaced_type_lookup(namespace, type_id, item, local_inferences)
         } else {
@@ -2387,35 +2394,57 @@ impl Typechecker {
     // enter the module's scope then recurse and call typecheck_namespaced_lookup?
     fn typecheck_namespaced_item_lookup(
         &mut self,
+        node_id: NodeId,
         namespace: NodeId,
-        module: ModuleId,
+        module_id: ModuleId,
         item: NodeId,
         local_inferences: &mut Vec<TypeId>,
     ) -> TypeId {
-        let module = self.compiler.get_module(module);
-        let node = self.compiler.get_node(item).clone();
-        match &node {
-            AstNode::Call { head, args } => {
-                // self.typecheck_call(item, head, &args, local_inferences)
-                let name = self.compiler.get_source(*head);
-                debug!(
-                    ?node,
-                    "looking for {name} in module",
-                    name = std::str::from_utf8(name).unwrap()
-                );
-                let fun_id = module.scope.find_fun(name);
-                if let Some(fun_id) = fun_id {
-                    self.typecheck_call_with_fun_id(*head, fun_id, args, None, local_inferences)
-                } else {
+        let mut module = self.compiler.get_module(module_id);
+        let mut node = self.compiler.get_node(item).clone();
+        loop {
+            match &node {
+                AstNode::Call { head, args } => {
+                    let name = self.compiler.get_source(*head);
+                    debug!(
+                        ?node,
+                        "looking for {name} in module",
+                        name = std::str::from_utf8(name).unwrap()
+                    );
+                    let fun_id = module.scope.find_fun(name);
+                    return if let Some(fun_id) = fun_id {
+                        debug!(
+                            ?fun_id,
+                            "found {name}",
+                            name = std::str::from_utf8(name).unwrap()
+                        );
+                        self.typecheck_call_with_fun_id(
+                            node_id,
+                            fun_id,
+                            args,
+                            None,
+                            local_inferences,
+                        )
+                    } else {
+                        debug!(?node);
+                        self.error("could not find item in namespace", namespace);
+                        VOID_TYPE_ID
+                    };
+                }
+                AstNode::NamespacedLookup { namespace, item } => {
+                    let Some(inner_module_id) = self.find_module_in_module(*namespace, module)
+                    else {
+                        self.error("could not find module", *namespace);
+                        return VOID_TYPE_ID;
+                    };
+                    module = self.compiler.get_module(inner_module_id);
+                    node = self.compiler.get_node(*item).clone();
+                }
+                _ => {
                     debug!(?node);
                     self.error("could not find item in namespace", namespace);
-                    VOID_TYPE_ID
+                    return VOID_TYPE_ID;
                 }
-            }
-            _ => {
-                debug!(?node);
-                self.error("could not find item in namespace", namespace);
-                VOID_TYPE_ID
             }
         }
     }
@@ -3129,8 +3158,34 @@ impl Typechecker {
                         if file_name
                             == unsafe { std::ffi::OsStr::from_encoded_bytes_unchecked(name) }
                         {
+                            debug!(?module_id, "found module");
                             return Some(*module_id);
                         }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    #[instrument(skip(self))]
+    pub fn find_module_in_module(&self, namespace: NodeId, module: &Module) -> Option<ModuleId> {
+        let name = self.compiler.get_source(namespace);
+        debug!(
+            "searching for module \"{name}\"",
+            name = std::str::from_utf8(name).unwrap()
+        );
+        let scope = &module.scope;
+        for (path, module_id) in scope.modules.iter() {
+            trace!(?path, ?module_id);
+            // definitely incorrect, but we currently only have one path segment
+            // this needs to somehow be able to resolve the path against all the segments of the path
+            for path in path.ancestors() {
+                if let Some(file_name) = path.file_stem() {
+                    if file_name == unsafe { std::ffi::OsStr::from_encoded_bytes_unchecked(name) } {
+                        debug!(?module_id, "found module");
+                        return Some(*module_id);
                     }
                 }
             }

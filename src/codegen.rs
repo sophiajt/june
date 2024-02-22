@@ -1,3 +1,5 @@
+use tracing::debug;
+
 use crate::{
     compiler::{CallTarget, Compiler},
     lifetime_checker::AllocationLifetime,
@@ -494,7 +496,11 @@ impl Codegen {
                 output.extend_from_slice(format!("allocation_id + {} ", level).as_bytes())
             }
             AllocationLifetime::Unknown => {
-                // panic!("found 'unknown' lifetime during codegen")
+                debug!(
+                    ?node_id,
+                    name = ?String::from_utf8_lossy(self.compiler.get_source(node_id)),
+                    "found 'unknown' lifetime during codegen",
+                );
                 output.extend_from_slice(b"/* UNKNOWN, */ ")
             }
         }
@@ -822,109 +828,129 @@ impl Codegen {
                     panic!("internal error: expected allocation call during allocation")
                 }
             }
-            AstNode::NamespacedLookup { item, .. } => match self.compiler.get_node(*item) {
-                AstNode::Call { head, args } => {
-                    let call_target = self
-                        .compiler
-                        .call_resolution
-                        .get(head)
-                        .expect("internal error: missing call resolution in codegen");
+            AstNode::NamespacedLookup { item, .. } => {
+                let mut codegen_call = |call_target, args: &[NodeId]| match call_target {
+                    CallTarget::Function(fun_id) => {
+                        output.extend_from_slice(b"/* ");
+                        output.extend_from_slice(
+                            self.compiler
+                                .get_source(self.compiler.functions[fun_id.0].name),
+                        );
+                        output.extend_from_slice(b" */ ");
 
-                    match call_target {
-                        CallTarget::Function(fun_id) => {
-                            output.extend_from_slice(b"/* ");
-                            output.extend_from_slice(
-                                self.compiler
-                                    .get_source(self.compiler.functions[fun_id.0].name),
-                            );
-                            output.extend_from_slice(b" */ ");
+                        output.extend_from_slice(b"function_");
+                        output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                        output.push(b'(');
 
-                            output.extend_from_slice(b"function_");
-                            output.extend_from_slice(fun_id.0.to_string().as_bytes());
-                            output.push(b'(');
+                        self.codegen_annotation(node_id, output);
 
-                            self.codegen_annotation(node_id, output);
+                        for arg in args {
+                            output.extend_from_slice(b", ");
 
-                            for arg in args {
-                                output.extend_from_slice(b", ");
-
-                                self.codegen_node(*arg, local_inferences, output)
-                            }
-                            output.push(b')');
+                            self.codegen_node(*arg, local_inferences, output)
                         }
-                        CallTarget::EnumConstructor(target, offset) => {
-                            output.extend_from_slice(b"enum_case_");
-                            output.extend_from_slice(target.0.to_string().as_bytes());
-                            output.push(b'_');
-                            output.extend_from_slice(offset.0.to_string().as_bytes());
-                            output.push(b'(');
+                        output.push(b')');
+                    }
+                    CallTarget::EnumConstructor(target, offset) => {
+                        output.extend_from_slice(b"enum_case_");
+                        output.extend_from_slice(target.0.to_string().as_bytes());
+                        output.push(b'_');
+                        output.extend_from_slice(offset.0.to_string().as_bytes());
+                        output.push(b'(');
 
-                            self.codegen_annotation(node_id, output);
+                        self.codegen_annotation(node_id, output);
 
-                            for arg in args {
-                                output.extend_from_slice(b", ");
+                        for arg in args {
+                            output.extend_from_slice(b", ");
 
-                                self.codegen_node(*arg, local_inferences, output)
+                            self.codegen_node(*arg, local_inferences, output)
+                        }
+                        output.push(b')');
+                    }
+                    _ => {
+                        unimplemented!("namedspaced lookup of non-namedspaced value")
+                    }
+                };
+
+                self.compiler.debug_node(node_id);
+
+                if let Some(call_target) = self.compiler.call_resolution.get(&node_id) {
+                    let mut curr_item = *item;
+
+                    let args = loop {
+                        match self.compiler.get_node(curr_item) {
+                            AstNode::NamespacedLookup { item, .. } => curr_item = *item,
+                            AstNode::Call { args, .. } => break args.clone(),
+                            _ => unreachable!("having a valid call target should guarantee that this namespaced lookup ends in a call"),
+                        }
+                    };
+
+                    codegen_call(*call_target, &args);
+                } else {
+                    match self.compiler.get_node(*item) {
+                        AstNode::Call { head, args } => {
+                            let call_target = self
+                                .compiler
+                                .call_resolution
+                                .get(head)
+                                .expect("internal error: missing call resolution in codegen");
+
+                            codegen_call(*call_target, args)
+                        }
+                        AstNode::Name => {
+                            let call_target = self
+                                .compiler
+                                .call_resolution
+                                .get(item)
+                                .expect("internal error: missing call resolution in codegen");
+
+                            match call_target {
+                                CallTarget::Function(fun_id) => {
+                                    output.extend_from_slice(b"/* ");
+                                    output.extend_from_slice(
+                                        self.compiler
+                                            .get_source(self.compiler.functions[fun_id.0].name),
+                                    );
+                                    output.extend_from_slice(b" */ ");
+
+                                    output.extend_from_slice(b"function_");
+                                    output.extend_from_slice(fun_id.0.to_string().as_bytes());
+                                    output.push(b'(');
+
+                                    self.codegen_annotation(node_id, output);
+
+                                    output.push(b')');
+                                }
+                                CallTarget::EnumConstructor(target, offset) => {
+                                    output.extend_from_slice(b"enum_case_");
+                                    output.extend_from_slice(target.0.to_string().as_bytes());
+                                    output.push(b'_');
+                                    output.extend_from_slice(offset.0.to_string().as_bytes());
+                                    output.push(b'(');
+
+                                    self.codegen_annotation(node_id, output);
+
+                                    output.push(b')');
+                                }
+                                CallTarget::NodeId(target) => {
+                                    output.push(b'(');
+                                    self.codegen_node(*target, local_inferences, output);
+                                    output.push(b')');
+
+                                    output.push(b'(');
+
+                                    self.codegen_annotation(node_id, output);
+
+                                    output.push(b')');
+                                }
                             }
-                            output.push(b')');
                         }
                         _ => {
-                            unimplemented!("namedspaced lookup of non-namedspaced value")
+                            panic!("unsupported namespace lookup")
                         }
                     }
                 }
-                AstNode::Name => {
-                    let call_target = self
-                        .compiler
-                        .call_resolution
-                        .get(item)
-                        .expect("internal error: missing call resolution in codegen");
-
-                    match call_target {
-                        CallTarget::Function(fun_id) => {
-                            output.extend_from_slice(b"/* ");
-                            output.extend_from_slice(
-                                self.compiler
-                                    .get_source(self.compiler.functions[fun_id.0].name),
-                            );
-                            output.extend_from_slice(b" */ ");
-
-                            output.extend_from_slice(b"function_");
-                            output.extend_from_slice(fun_id.0.to_string().as_bytes());
-                            output.push(b'(');
-
-                            self.codegen_annotation(node_id, output);
-
-                            output.push(b')');
-                        }
-                        CallTarget::EnumConstructor(target, offset) => {
-                            output.extend_from_slice(b"enum_case_");
-                            output.extend_from_slice(target.0.to_string().as_bytes());
-                            output.push(b'_');
-                            output.extend_from_slice(offset.0.to_string().as_bytes());
-                            output.push(b'(');
-
-                            self.codegen_annotation(node_id, output);
-
-                            output.push(b')');
-                        }
-                        CallTarget::NodeId(target) => {
-                            output.push(b'(');
-                            self.codegen_node(*target, local_inferences, output);
-                            output.push(b')');
-
-                            output.push(b'(');
-
-                            self.codegen_annotation(node_id, output);
-
-                            output.push(b')');
-                        }
-                    }
-                }
-                _ => {
-                    panic!("unsupported namespace lookup")
-                }
-            },
+            }
             AstNode::NamedValue { value, .. } => {
                 // FIXME: this should probably be handled cleanly via typecheck+codegen
                 // rather than ignoring the name
