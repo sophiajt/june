@@ -759,7 +759,7 @@ impl Compiler {
             .expect("source path should be the file itself and have a valid parent directory");
 
         let bytes = self.get_source(path);
-        let ident = unsafe { std::ffi::OsStr::from_encoded_bytes_unchecked(bytes) };
+        let ident = std::str::from_utf8(bytes).expect("source should be valid utf8");
 
         let mut path = parent_path.join(ident);
         path.set_extension("june");
