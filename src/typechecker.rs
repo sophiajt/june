@@ -3208,7 +3208,10 @@ impl Typechecker {
                 })
             }
             _ => {
-                panic!("not yet supported variant for generic instantiation")
+                // The above are the only kind of data types that can currently be generic
+                // so instead, we just return the original type_id
+
+                type_id
             }
         }
     }
