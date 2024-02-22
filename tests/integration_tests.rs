@@ -284,6 +284,11 @@ fn module_collision() -> TestResult {
 }
 
 #[test]
+fn module_deep() -> TestResult {
+    test_example("modules/deep")
+}
+
+#[test]
 fn double() -> TestResult {
     test_example("data_types/double")
 }
