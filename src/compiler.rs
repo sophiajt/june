@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use tracing::debug;
-
 use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, NodeId, PointerType};
