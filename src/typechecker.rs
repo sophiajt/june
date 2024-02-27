@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
+
+use tracing::{debug, instrument, trace};
 
 use crate::{
     compiler::{CallTarget, CaseOffset, Compiler},
@@ -17,6 +19,9 @@ pub struct FunId(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeId(pub usize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ModuleId(pub usize);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedField {
@@ -123,7 +128,9 @@ pub struct Function {
     pub body: Option<NodeId>,
 }
 
+#[derive(Debug)]
 pub struct Scope {
+    modules: HashMap<PathBuf, ModuleId>,
     variables: HashMap<Vec<u8>, VarId>,
     functions: HashMap<Vec<u8>, FunId>,
     types: HashMap<Vec<u8>, TypeId>,
@@ -132,9 +139,15 @@ pub struct Scope {
     allow_unsafe: bool,
 }
 
+#[derive(Debug)]
+pub struct Module {
+    scope: Scope,
+}
+
 impl Scope {
     pub fn new() -> Scope {
         Scope {
+            modules: HashMap::new(),
             variables: HashMap::new(),
             functions: HashMap::new(),
             types: HashMap::new(),
@@ -147,6 +160,31 @@ impl Scope {
     pub fn set_unsafe(&mut self) {
         self.allow_unsafe = true;
     }
+
+    fn find_type(&self, name: &[u8]) -> Option<TypeId> {
+        self.types.get(name).copied()
+    }
+
+    fn find_fun(&self, name: &[u8]) -> Option<FunId> {
+        if let Some(fun_id) = self.functions.get(name) {
+            return Some(*fun_id);
+        }
+
+        None
+    }
+
+    fn find_name(&self, name: &[u8]) -> Option<VarOrFunId> {
+        if let Some(var_id) = self.variables.get(name) {
+            return Some(VarOrFunId::VarId(*var_id));
+        }
+
+        if let Some(fun_id) = self.functions.get(name) {
+            return Some(VarOrFunId::FunId(*fun_id));
+        }
+
+        None
+    }
+
 }
 
 pub struct Typechecker {
@@ -852,12 +890,13 @@ impl Typechecker {
         type_id
     }
 
+    #[instrument(skip(self))]
     pub fn typecheck_block(
         &mut self,
         node_id: NodeId,
         block_id: BlockId,
         local_inferences: &mut Vec<TypeId>,
-    ) {
+    ) -> Scope {
         let mut funs = vec![];
 
         self.enter_scope();
@@ -866,7 +905,9 @@ impl Typechecker {
         let block = self.compiler.blocks[block_id.0].clone();
 
         for node_id in &block.nodes {
-            match &self.compiler.get_node(*node_id) {
+            let node = self.compiler.get_node(*node_id);
+            debug!(?node);
+            match &node {
                 AstNode::Fun {
                     name,
                     type_params,
@@ -949,6 +990,10 @@ impl Typechecker {
                     self.add_type_to_scope(type_name, type_id);
                 }
 
+                AstNode::Use { path } => {
+                    self.typecheck_module(*path, local_inferences);
+                }
+
                 _ => {}
             }
         }
@@ -962,7 +1007,10 @@ impl Typechecker {
         }
         self.compiler.set_node_type(node_id, VOID_TYPE_ID);
 
-        self.exit_scope()
+        // self.exit_scope()
+        self.scope
+            .pop()
+            .expect("internal error: no scope object found for current block")
     }
 
     pub fn var_was_previously_moved(&self, var_id: VarId) -> Option<NodeId> {
@@ -1506,44 +1554,7 @@ impl Typechecker {
                 // This looks like a variable, but may also be the name of a function
                 let var_or_fun_id = self.find_name_in_scope(node_id);
 
-                match var_or_fun_id {
-                    Some(VarOrFunId::VarId(var_id)) => {
-                        if let Some(where_moved) = self.var_was_previously_moved(var_id) {
-                            self.error("moved variable accessed after move", node_id);
-                            self.note("location of variable move", where_moved);
-                        }
-                        self.compiler.var_resolution.insert(node_id, var_id);
-
-                        let variable = &self.compiler.get_variable(var_id);
-                        variable.ty
-                    }
-                    Some(VarOrFunId::FunId(fun_id)) => {
-                        let fun = &self.compiler.functions[fun_id.0];
-
-                        self.compiler.fun_resolution.insert(node_id, fun_id);
-
-                        // FIXME: I'm going to hate having these workarounds soon, I bet
-                        if fun_id.0 != 0 {
-                            self.compiler.find_or_create_type(Type::Fun {
-                                params: fun.params.clone(),
-                                ret: fun.return_type,
-                            })
-                        } else {
-                            UNKNOWN_TYPE_ID
-                        }
-                    }
-                    None => {
-                        let name = self.compiler.get_source(node_id);
-
-                        // Reserved name for synthetic self variables
-                        if name == b"." {
-                            self.error("can't find 'self' variable", node_id);
-                        } else {
-                            self.error("can't find variable", node_id);
-                        }
-                        UNKNOWN_TYPE_ID
-                    }
-                }
+                self.typecheck_var_or_fun(node_id, var_or_fun_id)
             }
             AstNode::MemberAccess { target, field } => {
                 let target = *target;
@@ -1767,6 +1778,7 @@ impl Typechecker {
             AstNode::NamespacedLookup { namespace, item } => {
                 self.typecheck_namespaced_lookup(*namespace, *item, local_inferences)
             }
+            AstNode::Use { path } => self.typecheck_module(*path, local_inferences),
             AstNode::Call { head, args } => {
                 let head = *head;
                 let args = args.clone();
@@ -2357,7 +2369,7 @@ impl Typechecker {
                                         local_inferences,
                                     ) {
                                         self.error(format!("incompatible type for argument, expected: {}, found: {}, ",
-                                        self.compiler.pretty_type(value_type), self.compiler.pretty_type(known_field_type)), value)
+                                                    self.compiler.pretty_type(value_type), self.compiler.pretty_type(known_field_type)), value)
                                     }
                                 };
 
@@ -2391,19 +2403,69 @@ impl Typechecker {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn typecheck_namespaced_lookup(
         &mut self,
         namespace: NodeId,
         item: NodeId,
         local_inferences: &mut Vec<TypeId>,
     ) -> TypeId {
-        let type_id = self.find_type_in_scope(namespace);
-
-        let Some(mut type_id) = type_id else {
+        if let Some(module_id) = self.find_module_in_scope(namespace) {
+            self.typecheck_namespaced_item_lookup(namespace, module_id, item, local_inferences)
+        } else if let Some(type_id) = self.find_type_in_scope(namespace) {
+            self.typecheck_namespaced_type_lookup(namespace, type_id, item, local_inferences)
+        } else {
             self.error("could not find namespace", namespace);
-            return VOID_TYPE_ID;
-        };
+            VOID_TYPE_ID
+        }
+    }
 
+    // enter the module's scope then recurse and call typecheck_namespaced_lookup?
+    fn typecheck_namespaced_item_lookup(
+        &mut self,
+        namespace: NodeId,
+        module: ModuleId,
+        item: NodeId,
+        local_inferences: &mut Vec<TypeId>,
+    ) -> TypeId {
+        let module = self.compiler.get_module(module);
+        let node = self.compiler.get_node(item).clone();
+        match &node {
+            AstNode::Call { head, args } => {
+                // self.typecheck_call(item, head, &args, local_inferences)
+                let name = self.compiler.get_source(*head);
+                debug!(
+                    ?node,
+                    "looking for {name} in module",
+                    name = std::str::from_utf8(name).unwrap()
+                );
+                let fun_id = module.scope.find_fun(name);
+                if let Some(fun_id) = fun_id {
+                    self.typecheck_call_with_fun_id(*head, fun_id, args, None, local_inferences)
+                } else {
+                    debug!(?node);
+                    self.error("could not find item in namespace", namespace);
+                    VOID_TYPE_ID
+                }
+            }
+            _ => {
+                debug!(?node);
+                self.error("could not find item in namespace", namespace);
+                VOID_TYPE_ID
+            }
+        }
+    }
+
+    // lookup what kind of type we're working with (struct vs enum)
+    // resolve matching method
+    // typecheck against the resolved method
+    fn typecheck_namespaced_type_lookup(
+        &mut self,
+        namespace: NodeId,
+        mut type_id: TypeId,
+        item: NodeId,
+        local_inferences: &mut Vec<TypeId>,
+    ) -> TypeId {
         match self.compiler.get_type(type_id) {
             Type::Struct { methods, .. } => {
                 let AstNode::Call { head, args } = self.compiler.get_node(item) else {
@@ -3011,6 +3073,14 @@ impl Typechecker {
             .insert(type_name, type_id);
     }
 
+    pub fn add_module_to_scope(&mut self, path: PathBuf, module_id: ModuleId) {
+        self.scope
+            .last_mut()
+            .expect("internal error: missing typechecking scope")
+            .modules
+            .insert(path, module_id);
+    }
+
     pub fn define_variable(
         &mut self,
         name: NodeId,
@@ -3034,18 +3104,15 @@ impl Typechecker {
     }
 
     pub fn find_name_in_scope(&self, name: NodeId) -> Option<VarOrFunId> {
-        let name =
-            &self.compiler.source[self.compiler.span_start[name.0]..self.compiler.span_end[name.0]];
+        let name = self.compiler.get_source(name);
 
         // Expand the shorthand, and look for 'self' instead
         let name = if name == b"." { b"self" } else { name };
 
         for scope in self.scope.iter().rev() {
-            if let Some(var_id) = scope.variables.get(name) {
-                return Some(VarOrFunId::VarId(*var_id));
-            }
-            if let Some(fun_id) = scope.functions.get(name) {
-                return Some(VarOrFunId::FunId(*fun_id));
+            let opt = scope.find_name(name);
+            if opt.is_some() {
+                return opt;
             }
         }
 
@@ -3069,8 +3136,7 @@ impl Typechecker {
     }
 
     // pub fn find_function_in_scope(&self, function_name: NodeId) -> Option<FunId> {
-    //     let name = &self.compiler.source
-    //         [self.compiler.span_start[function_name.0]..self.compiler.span_end[function_name.0]];
+    //     let name = self.compiler.get_source(function_name);
     //     for scope in self.scope.iter().rev() {
     //         if let Some(fun_id) = scope.functions.get(name) {
     //             return Some(*fun_id);
@@ -3080,12 +3146,41 @@ impl Typechecker {
     //     None
     // }
 
-    pub fn find_type_in_scope(&self, type_name: NodeId) -> Option<TypeId> {
-        let name = &self.compiler.source
-            [self.compiler.span_start[type_name.0]..self.compiler.span_end[type_name.0]];
+    // find a module based on the given path segment naming it
+    #[instrument(skip(self))]
+    pub fn find_module_in_scope(&self, namespace: NodeId) -> Option<ModuleId> {
+        let name = self.compiler.get_source(namespace);
+        debug!(
+            "searching for module \"{name}\"",
+            name = std::str::from_utf8(name).unwrap()
+        );
         for scope in self.scope.iter().rev() {
-            if let Some(type_id) = scope.types.get(name) {
-                return Some(*type_id);
+            trace!(num_modules = scope.modules.len());
+            for (path, module_id) in scope.modules.iter() {
+                trace!(?path, ?module_id);
+                // definitely incorrect, but we currently only have one path segment
+                // this needs to somehow be able to resolve the path against all the segments of the path
+                for path in path.ancestors() {
+                    if let Some(file_name) = path.file_stem() {
+                        if file_name
+                            == unsafe { std::ffi::OsStr::from_encoded_bytes_unchecked(name) }
+                        {
+                            return Some(*module_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn find_type_in_scope(&self, type_name: NodeId) -> Option<TypeId> {
+        let name = self.compiler.get_source(type_name);
+        for scope in self.scope.iter().rev() {
+            let opt = scope.find_type(name);
+            if opt.is_some() {
+                return opt;
             }
         }
 
@@ -3281,5 +3376,74 @@ impl Typechecker {
             node_id,
             severity: Severity::Note,
         });
+    }
+
+    #[instrument(skip(self))]
+    fn typecheck_module(&mut self, path: NodeId, local_inferences: &mut Vec<TypeId>) -> TypeId {
+        let Some(&block) = self.compiler.module_lookup_use.get(&path) else {
+            unreachable!("all paths should have valid module blocks associated with them")
+        };
+
+        if self.compiler.module_resolution.contains_key(&block) {
+            VOID_TYPE_ID
+        } else {
+            let AstNode::Block(block_id) = &self.compiler.get_node(block) else {
+                unreachable!(
+                    "module block node ids should always refer to a valid Block in the ast"
+                )
+            };
+            let scope = self.typecheck_block(block, *block_id, local_inferences);
+            let module = Module { scope };
+            let module_id = self.compiler.add_module(block, module);
+            let path = self.compiler.get_source_path(block).to_owned();
+            self.add_module_to_scope(path.clone(), module_id);
+            debug!(?path, ?module_id, "successfully typechecked module");
+            VOID_TYPE_ID
+        }
+    }
+
+    fn typecheck_var_or_fun(
+        &mut self,
+        node_id: NodeId,
+        var_or_fun_id: Option<VarOrFunId>,
+    ) -> TypeId {
+        match var_or_fun_id {
+            Some(VarOrFunId::VarId(var_id)) => {
+                if let Some(where_moved) = self.var_was_previously_moved(var_id) {
+                    self.error("moved variable accessed after move", node_id);
+                    self.note("location of variable move", where_moved);
+                }
+                self.compiler.var_resolution.insert(node_id, var_id);
+
+                let variable = &self.compiler.get_variable(var_id);
+                variable.ty
+            }
+            Some(VarOrFunId::FunId(fun_id)) => {
+                let fun = &self.compiler.functions[fun_id.0];
+
+                self.compiler.fun_resolution.insert(node_id, fun_id);
+
+                // FIXME: I'm going to hate having these workarounds soon, I bet
+                if fun_id.0 != 0 {
+                    self.compiler.find_or_create_type(Type::Fun {
+                        params: fun.params.clone(),
+                        ret: fun.return_type,
+                    })
+                } else {
+                    UNKNOWN_TYPE_ID
+                }
+            }
+            None => {
+                let name = self.compiler.get_source(node_id);
+
+                // Reserved name for synthetic self variables
+                if name == b"." {
+                    self.error("can't find 'self' variable", node_id);
+                } else {
+                    self.error("can't find variable", node_id);
+                }
+                UNKNOWN_TYPE_ID
+            }
+        }
     }
 }

@@ -2,7 +2,7 @@
 type TestResult = Result<(), Report>;
 
 use color_eyre::{eyre::eyre, eyre::Report, Section, SectionExt};
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 #[cfg(test)]
 fn test_example(test_name: &str) -> TestResult {
@@ -44,24 +44,7 @@ fn test_example(test_name: &str) -> TestResult {
         test_filepath
     };
 
-    let (expected_output, expected_error) = {
-        let example_file_contents = std::fs::read_to_string(&test_filepath).unwrap();
-        let first_line = example_file_contents.lines().next().unwrap().to_string();
-
-        if first_line.starts_with("// output: ") {
-            (
-                Some(first_line.strip_prefix("// output: ").unwrap().to_string()),
-                None,
-            )
-        } else if first_line.starts_with("// error: ") {
-            (
-                None,
-                Some(first_line.strip_prefix("// error: ").unwrap().to_string()),
-            )
-        } else {
-            panic!("missing \"output:\" or \"error:\" in test")
-        }
-    };
+    let config = parse_special_comments(&test_filepath);
 
     let c_output_filepath = {
         let c_output_filename = PathBuf::from(test_name);
@@ -90,25 +73,38 @@ fn test_example(test_name: &str) -> TestResult {
         app_filepath
     };
 
-    let output = Command::new("./target/debug/june")
-        .arg(&test_filepath)
-        .output()?;
+    let mut command = Command::new("./target/debug/june");
+    command.arg(&test_filepath);
+    let log_env = match (std::env::var("RUST_LOG"), config.log_config) {
+        (Ok(env), None) => Some(env),
+        (Ok(env), Some(test_cfg)) => {
+            let joined = env + "," + &test_cfg;
+            Some(joined)
+        }
+        (Err(_), Some(test_cfg)) => Some(test_cfg),
+        (Err(_), None) => None,
+    };
+    if let Some(log_env) = log_env {
+        command.env("RUST_LOG", log_env);
+    }
+
+    let output = command.output()?;
     let command_err = String::from_utf8_lossy(&output.stderr);
     let command_out = String::from_utf8_lossy(&output.stdout);
 
-    if !output.status.success() && expected_error.is_none() {
+    if !output.status.success() && config.expected_error.is_none() {
         Err(eyre!("June did not compile successfully"))
             .with_section(|| command_out.trim().to_string().header("Stdout:"))
             .with_section(|| command_err.trim().to_string().header("Stderr:"))?;
     }
 
-    if let Some(expected_error) = &expected_error {
+    if let Some(expected_error) = &config.expected_error {
         println!("Checking:\n{}expected: {}\n", command_err, expected_error);
 
         assert!(command_err.contains(expected_error));
     }
 
-    let app_output = if expected_error.is_none() {
+    let app_output = if config.expected_error.is_none() {
         // Now, output our C to a file
         eprintln!("c_output_filepath: {:?}", c_output_filepath);
         let mut output_file = File::create(&c_output_filepath).unwrap();
@@ -143,11 +139,43 @@ fn test_example(test_name: &str) -> TestResult {
         String::new()
     };
 
-    if let Some(expected_output) = expected_output {
+    if let Some(expected_output) = config.expected_output {
         assert_eq!(expected_output, app_output);
     }
 
     Ok(())
+}
+
+struct TestConfig {
+    expected_output: Option<String>,
+    expected_error: Option<String>,
+    log_config: Option<String>,
+}
+
+fn parse_special_comments(test_filepath: &Path) -> TestConfig {
+    let example_file_contents = std::fs::read_to_string(test_filepath).unwrap();
+    let mut expected_output = None;
+    let mut expected_error = None;
+    let mut log_config = None;
+    for line in example_file_contents.lines() {
+        if line.starts_with("// output: ") && expected_output.is_none() {
+            expected_output = line.strip_prefix("// output: ").map(ToOwned::to_owned);
+        } else if line.starts_with("// error: ") && expected_error.is_none() {
+            expected_error = line.strip_prefix("// error: ").map(ToOwned::to_owned);
+        } else if line.starts_with("// RUST_LOG: ") && log_config.is_none() {
+            log_config = line.strip_prefix("// RUST_LOG: ").map(ToOwned::to_owned);
+        }
+    }
+
+    if expected_output.is_none() && expected_error.is_none() {
+        panic!("missing \"output:\" or \"error:\" in test")
+    }
+
+    TestConfig {
+        expected_output,
+        expected_error,
+        log_config,
+    }
 }
 
 #[test]
@@ -243,6 +271,16 @@ fn defer_simple() -> TestResult {
 #[test]
 fn defer_simple_error() -> TestResult {
     test_example("defer/defer_simple_error")
+}
+
+#[test]
+fn module_simple() -> TestResult {
+    test_example("modules/main")
+}
+
+#[test]
+fn module_collision() -> TestResult {
+    test_example("modules/collisions")
 }
 
 #[test]

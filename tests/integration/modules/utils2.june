@@ -1,0 +1,3 @@
+fun say_message(message: i64) {
+    println(message)
+}
