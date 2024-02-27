@@ -156,6 +156,14 @@ impl Codegen {
                     output.extend_from_slice(b";\n");
                 }
                 Type::Fun { params, ret } => {
+                    if params.iter().any(|x| {
+                        let var_id = x.var_id;
+                        self.compiler
+                            .is_type_variable(self.compiler.get_variable(var_id).ty)
+                    }) || self.compiler.is_type_variable(*ret)
+                    {
+                        continue;
+                    }
                     // typedef long(*funcPtr)(short, char);
                     output.extend_from_slice(b"typedef ");
                     self.codegen_typename(*ret, &[], output);
@@ -343,6 +351,15 @@ impl Codegen {
                     }
                 }
                 Type::Fun { params, ret } => {
+                    if params.iter().any(|x| {
+                        let var_id = x.var_id;
+                        self.compiler
+                            .is_type_variable(self.compiler.get_variable(var_id).ty)
+                    }) || self.compiler.is_type_variable(*ret)
+                    {
+                        continue;
+                    }
+
                     // typedef long(*funcPtr)(short, char);
                     output.extend_from_slice(b"typedef ");
                     self.codegen_typename(*ret, &[], output);
@@ -452,15 +469,24 @@ impl Codegen {
             idx,
             Function {
                 params,
+                type_params,
                 return_type,
                 body,
                 ..
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)
         {
-            self.codegen_fun_signature(FunId(idx), params, *return_type, output, body.is_none());
+            if type_params.is_empty() {
+                self.codegen_fun_signature(
+                    FunId(idx),
+                    params,
+                    *return_type,
+                    output,
+                    body.is_none(),
+                );
 
-            output.extend_from_slice(b";\n");
+                output.extend_from_slice(b";\n");
+            }
         }
         output.push(b'\n');
 
@@ -468,6 +494,7 @@ impl Codegen {
             idx,
             Function {
                 params,
+                type_params,
                 return_type,
                 body,
                 inference_vars: type_vars,
@@ -475,12 +502,14 @@ impl Codegen {
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)
         {
-            if let Some(body) = body {
-                self.codegen_fun_signature(FunId(idx), params, *return_type, output, false);
+            if type_params.is_empty() {
+                if let Some(body) = body {
+                    self.codegen_fun_signature(FunId(idx), params, *return_type, output, false);
 
-                output.extend_from_slice(b"{\n");
-                self.codegen_block(*body, type_vars, output);
-                output.extend_from_slice(b"}\n");
+                    output.extend_from_slice(b"{\n");
+                    self.codegen_block(*body, type_vars, output);
+                    output.extend_from_slice(b"}\n");
+                }
             }
         }
     }

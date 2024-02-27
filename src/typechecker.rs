@@ -299,7 +299,7 @@ impl Typechecker {
                     b"void" => VOID_TYPE_ID,
                     _ => {
                         if let Some(type_id) = self.find_type_in_scope(name_node_id) {
-                            if self.is_type_variable(type_id) {
+                            if self.compiler.is_type_variable(type_id) {
                                 type_id
                             } else {
                                 // Assume custom types are pointers
@@ -1064,10 +1064,6 @@ impl Typechecker {
         }
     }
 
-    pub fn is_type_variable(&self, type_id: TypeId) -> bool {
-        matches!(self.compiler.get_type(type_id), Type::TypeVariable(_))
-    }
-
     pub fn unify_types(
         &mut self,
         lhs: TypeId,
@@ -1217,7 +1213,7 @@ impl Typechecker {
                 &mut type_var_replacements,
             );
 
-            if self.is_type_variable(ret) {
+            if self.compiler.is_type_variable(ret) {
                 if let Some(ret) = type_var_replacements.get(&ret) {
                     *ret
                 } else {
@@ -1315,7 +1311,7 @@ impl Typechecker {
             self.exit_scope();
         }
 
-        if self.is_type_variable(return_type) {
+        if self.compiler.is_type_variable(return_type) {
             if let Some(ret) = type_var_replacements.get(&return_type) {
                 *ret
             } else {
@@ -1414,7 +1410,7 @@ impl Typechecker {
 
                     let variable_ty = variable.ty;
 
-                    if self.is_type_variable(variable_ty) {
+                    if self.compiler.is_type_variable(variable_ty) {
                         if let Some(replacement) = type_var_replacements.get(&variable_ty) {
                             if !self.unify_types(*replacement, arg_type, local_inferences) {
                                 self.error(
@@ -2429,7 +2425,7 @@ impl Typechecker {
                                 }
                                 let known_field_type = *ty;
 
-                                if self.is_type_variable(known_field_type) {
+                                if self.compiler.is_type_variable(known_field_type) {
                                     let value_type = self.typecheck_node(value, local_inferences);
 
                                     replacements.push((known_field_type, value_type));
@@ -2601,7 +2597,7 @@ impl Typechecker {
                                             let arg_type_id =
                                                 self.typecheck_node(args[0], local_inferences);
 
-                                            if self.is_type_variable(param) {
+                                            if self.compiler.is_type_variable(param) {
                                                 type_id = self.instantiate_generic(
                                                     type_id,
                                                     &[(param, arg_type_id)],
@@ -2673,7 +2669,10 @@ impl Typechecker {
                                                     let arg_type_id = self
                                                         .typecheck_node(value, local_inferences);
 
-                                                    if self.is_type_variable(*param_type_id) {
+                                                    if self
+                                                        .compiler
+                                                        .is_type_variable(*param_type_id)
+                                                    {
                                                         replacements
                                                             .push((*param_type_id, arg_type_id));
                                                     } else if !self.unify_types(

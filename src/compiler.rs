@@ -622,6 +622,10 @@ impl Compiler {
         panic!("internal error: can't find Type as a TypeId for: {:?}", ty)
     }
 
+    pub fn is_type_variable(&self, type_id: TypeId) -> bool {
+        matches!(self.get_type(type_id), Type::TypeVariable(_))
+    }
+
     pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
         match self.get_type(type_id) {
             Type::Pointer {

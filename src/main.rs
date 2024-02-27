@@ -13,7 +13,7 @@ use tracing_subscriber::EnvFilter;
 use typechecker::Typechecker;
 
 fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
-    let debug_output = false;
+    let debug_output = true;
 
     let span_offset = compiler.span_offset();
     compiler.add_file(fname);
