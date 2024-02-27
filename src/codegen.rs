@@ -399,7 +399,7 @@ impl Codegen {
     ) {
         self.codegen_typename(
             return_type,
-            &self.compiler.functions[fun_id.0].type_vars,
+            &self.compiler.functions[fun_id.0].inference_vars,
             output,
         );
         output.push(b' ');
@@ -436,7 +436,7 @@ impl Codegen {
             let variable_ty = self.compiler.get_variable(param.var_id).ty;
             self.codegen_typename(
                 variable_ty,
-                &self.compiler.functions[fun_id.0].type_vars,
+                &self.compiler.functions[fun_id.0].inference_vars,
                 output,
             );
             output.push(b' ');
@@ -470,7 +470,7 @@ impl Codegen {
                 params,
                 return_type,
                 body,
-                type_vars,
+                inference_vars: type_vars,
                 ..
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)

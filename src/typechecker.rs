@@ -65,7 +65,7 @@ pub enum Type {
         optional: bool,
         target: TypeId,
     },
-    TypeVariable,
+    TypeVariable(NodeId),
     FunLocalTypeVar {
         offset: usize,
     },
@@ -107,6 +107,18 @@ impl Param {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TypeParam {
+    pub name: Vec<u8>,
+    pub type_id: TypeId,
+}
+
+impl TypeParam {
+    pub fn new(name: Vec<u8>, type_id: TypeId) -> TypeParam {
+        TypeParam { name, type_id }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Lifetime {
     Variable(VarId),
     Return,
@@ -122,7 +134,8 @@ pub struct Function {
     pub name: NodeId,
     pub params: Vec<Param>,
     pub lifetime_annotations: Vec<LifetimeAnnotation>,
-    pub type_vars: Vec<TypeId>,
+    pub type_params: Vec<TypeParam>,
+    pub inference_vars: Vec<TypeId>,
     pub return_node: Option<NodeId>,
     pub return_type: TypeId,
     pub body: Option<NodeId>,
@@ -184,7 +197,6 @@ impl Scope {
 
         None
     }
-
 }
 
 pub struct Typechecker {
@@ -221,8 +233,9 @@ impl Typechecker {
             name: NodeId(0),
             params: vec![Param::new(b"input".to_vec(), VarId(0))],
             body: None,
+            type_params: vec![],
             lifetime_annotations: vec![],
-            type_vars: vec![],
+            inference_vars: vec![],
             return_node: None,
             return_type: VOID_TYPE_ID,
         });
@@ -359,7 +372,7 @@ impl Typechecker {
         block: Option<NodeId>,
     ) -> FunId {
         let mut fun_params = vec![];
-        let mut type_vars = vec![];
+        let mut fun_type_params = vec![];
 
         let fun_name = self.compiler.source
             [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
@@ -375,15 +388,11 @@ impl Typechecker {
             let type_params = type_params.clone();
 
             for type_param in type_params {
-                let type_id = self.compiler.fresh_type_variable();
-
-                type_vars.push(type_id);
-
-                let type_id = self.compiler.find_or_create_type(Type::FunLocalTypeVar {
-                    offset: type_vars.len() - 1,
-                });
+                let type_id = self.compiler.fresh_type_variable(type_param);
 
                 let type_var_name = self.compiler.get_source(type_param).to_vec();
+
+                fun_type_params.push(TypeParam::new(type_var_name.clone(), type_id));
 
                 self.add_type_to_scope(type_var_name, type_id);
             }
@@ -468,8 +477,9 @@ impl Typechecker {
         self.compiler.functions.push(Function {
             name,
             params: fun_params,
+            type_params: fun_type_params,
             lifetime_annotations: checked_lifetime_annotations,
-            type_vars: vec![], // Change this once functions have type params
+            inference_vars: vec![],
             return_type,
             return_node: return_ty,
             body: block,
@@ -493,11 +503,12 @@ impl Typechecker {
     pub fn typecheck_fun(&mut self, fun_id: FunId) {
         let Function {
             params,
+            type_params,
             body,
             return_type,
             return_node,
             name,
-            type_vars,
+            inference_vars: type_vars,
             ..
         } = self.compiler.functions[fun_id.0].clone();
 
@@ -506,6 +517,10 @@ impl Typechecker {
         };
 
         self.enter_scope();
+
+        for type_param in type_params {
+            self.add_type_to_scope(type_param.name.clone(), type_param.type_id)
+        }
 
         self.set_expected_return_type(return_type);
 
@@ -543,7 +558,10 @@ impl Typechecker {
 
         self.exit_scope();
 
-        let Function { type_vars, .. } = &mut self.compiler.functions[fun_id.0];
+        let Function {
+            inference_vars: type_vars,
+            ..
+        } = &mut self.compiler.functions[fun_id.0];
 
         *type_vars = local_inferences;
     }
@@ -573,7 +591,7 @@ impl Typechecker {
             let params = params.clone();
 
             for param in params {
-                let type_id = self.compiler.fresh_type_variable();
+                let type_id = self.compiler.fresh_type_variable(param);
 
                 generic_params.push(type_id);
 
@@ -753,7 +771,7 @@ impl Typechecker {
             let params = params.clone();
 
             for param in params {
-                let type_id = self.compiler.fresh_type_variable();
+                let type_id = self.compiler.fresh_type_variable(param);
 
                 // be conservative and assume generic parameters might be pointers
                 has_pointers = true;
@@ -1047,7 +1065,7 @@ impl Typechecker {
     }
 
     pub fn is_type_variable(&self, type_id: TypeId) -> bool {
-        matches!(self.compiler.get_type(type_id), Type::TypeVariable)
+        matches!(self.compiler.get_type(type_id), Type::TypeVariable(_))
     }
 
     pub fn unify_types(
@@ -1189,9 +1207,26 @@ impl Typechecker {
                 .call_resolution
                 .insert(name, CallTarget::NodeId(node_id));
 
-            self.typecheck_call_helper(args, params, None, local_inferences);
+            let mut type_var_replacements = HashMap::new();
 
-            ret
+            self.typecheck_call_helper(
+                args,
+                params,
+                None,
+                local_inferences,
+                &mut type_var_replacements,
+            );
+
+            if self.is_type_variable(ret) {
+                if let Some(ret) = type_var_replacements.get(&ret) {
+                    *ret
+                } else {
+                    self.error("unknown type variable in return", name);
+                    UNKNOWN_TYPE_ID
+                }
+            } else {
+                ret
+            }
         } else {
             self.error("attempt to call a non-function", name);
 
@@ -1256,9 +1291,6 @@ impl Typechecker {
             )
         }
 
-        // We need to instantiate if this is a generic function
-        if !self.compiler.functions[fun_id.0].type_vars.is_empty() {}
-
         // TODO: do we want to wait until all params are checked
         // before we mark this as resolved?
         self.compiler
@@ -1269,13 +1301,30 @@ impl Typechecker {
             self.enter_scope();
         }
 
-        self.typecheck_call_helper(&args, params, method_target, local_inferences);
+        let mut type_var_replacements = HashMap::new();
+
+        self.typecheck_call_helper(
+            &args,
+            params,
+            method_target,
+            local_inferences,
+            &mut type_var_replacements,
+        );
 
         if method_target.is_some() {
             self.exit_scope();
         }
 
-        return_type
+        if self.is_type_variable(return_type) {
+            if let Some(ret) = type_var_replacements.get(&return_type) {
+                *ret
+            } else {
+                self.error("unknown type variable in return", name);
+                UNKNOWN_TYPE_ID
+            }
+        } else {
+            return_type
+        }
     }
 
     fn typecheck_call_helper(
@@ -1284,6 +1333,7 @@ impl Typechecker {
         params: Vec<Param>,
         method_target: Option<NodeId>,
         local_inferences: &mut Vec<TypeId>,
+        type_var_replacements: &mut HashMap<TypeId, TypeId>,
     ) {
         for (idx, (arg, param)) in args.iter().zip(params).enumerate() {
             let arg = *arg;
@@ -1323,8 +1373,15 @@ impl Typechecker {
                         self.compiler.get_variable(param.var_id).ty,
                         local_inferences,
                     ) {
-                        // FIXME: make this a better error
-                        self.error("types incompatible with function", value);
+                        self.error(
+                            format!(
+                                "type mismatch for arg. expected {}, found {}",
+                                self.compiler.pretty_type(arg_ty),
+                                self.compiler
+                                    .pretty_type(self.compiler.get_variable(param.var_id).ty)
+                            ),
+                            arg,
+                        );
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
@@ -1355,9 +1412,36 @@ impl Typechecker {
 
                     let variable = &self.compiler.get_variable(param.var_id);
 
-                    if !self.unify_types(variable.ty, arg_type, local_inferences) {
-                        // FIXME: make this a better type error
-                        self.error("type mismatch for arg", arg);
+                    let variable_ty = variable.ty;
+
+                    if self.is_type_variable(variable_ty) {
+                        if let Some(replacement) = type_var_replacements.get(&variable_ty) {
+                            if !self.unify_types(*replacement, arg_type, local_inferences) {
+                                self.error(
+                                    format!(
+                                        "type mismatch for arg. expected {}, found {}",
+                                        self.compiler.pretty_type(*replacement),
+                                        self.compiler.pretty_type(arg_type)
+                                    ),
+                                    arg,
+                                );
+                                self.note(
+                                    "parameter defined here",
+                                    self.compiler.get_variable(param.var_id).where_defined,
+                                );
+                            }
+                        } else {
+                            type_var_replacements.insert(variable_ty, arg_type);
+                        }
+                    } else if !self.unify_types(variable_ty, arg_type, local_inferences) {
+                        self.error(
+                            format!(
+                                "type mismatch for arg. expected {}, found {}",
+                                self.compiler.pretty_type(variable_ty),
+                                self.compiler.pretty_type(arg_type)
+                            ),
+                            arg,
+                        );
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
@@ -3046,8 +3130,9 @@ impl Typechecker {
             self.compiler.functions.push(Function {
                 name: main_node,
                 params: vec![],
+                type_params: vec![],
                 lifetime_annotations: vec![],
-                type_vars: local_inferences,
+                inference_vars: local_inferences,
                 return_type: top_level_type,
                 return_node: None,
                 body: Some(top_level),

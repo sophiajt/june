@@ -635,8 +635,8 @@ impl Compiler {
         &self.variables[var_id.0]
     }
 
-    pub fn fresh_type_variable(&mut self) -> TypeId {
-        self.types.push(Type::TypeVariable);
+    pub fn fresh_type_variable(&mut self, node_id: NodeId) -> TypeId {
+        self.types.push(Type::TypeVariable(node_id));
 
         TypeId(self.types.len() - 1)
     }
@@ -701,7 +701,9 @@ impl Compiler {
                 format!("({:?})struct({:?})", type_id, fields)
             }
             Type::FunLocalTypeVar { offset } => format!("<local typevar: {}>", offset),
-            Type::TypeVariable => "<typevar>".into(),
+            Type::TypeVariable(node_id) => {
+                format!("<{}>", String::from_utf8_lossy(self.get_source(*node_id)))
+            }
             Type::Unknown => "<unknown>".into(),
             Type::Void => "void".into(),
         }
