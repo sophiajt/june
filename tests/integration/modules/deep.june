@@ -1,0 +1,8 @@
+// output: hello!
+// RUST_LOG: june::parser[use_statement]=debug,june::typechecker[typecheck_namespaced_lookup]=debug,june::typechecker[typecheck_module]=debug
+
+use deep2;
+
+fun main() {
+    deep2::deep3::say_hello()
+}

@@ -776,4 +776,9 @@ impl Compiler {
         self.module_resolution.insert(module_block, module_id);
         module_id
     }
+
+    pub(crate) fn debug_node(&self, node_id: NodeId) {
+        let node = String::from_utf8_lossy(self.get_source(node_id));
+        tracing::debug!(?node);
+    }
 }

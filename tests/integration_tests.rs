@@ -8,7 +8,7 @@ use std::{path::Path, process::Command};
 fn test_example(test_name: &str) -> TestResult {
     use std::{
         fs::{create_dir_all, File},
-        io::{stdout, Write},
+        io::Write,
         path::PathBuf,
         sync::Once,
     };
@@ -119,8 +119,20 @@ fn test_example(test_name: &str) -> TestResult {
             .unwrap();
 
         if !compiler.status.success() {
-            let _ = stdout().write_all(&compiler.stdout);
-            let _ = stdout().write_all(&compiler.stderr);
+            let clang_err = String::from_utf8_lossy(&compiler.stderr);
+            let clang_out = String::from_utf8_lossy(&compiler.stdout);
+            Err(eyre!("Clang did not compile successfully"))
+                .with_section(|| {
+                    String::from_utf8_lossy(&output.stdout)
+                        .trim()
+                        .to_string()
+                        .header("Codegen:")
+                })
+                .with_section(|| command_out.trim().to_string().header("June Stdout:"))
+                .with_section(|| command_err.trim().to_string().header("June Stderr:"))
+                .with_section(|| clang_out.trim().to_string().header("Clang Stdout:"))
+                .with_section(|| clang_err.trim().to_string().header("Clang Stderr:"))?;
+
             panic!("Clang did not compile successfully");
         }
 
@@ -281,6 +293,11 @@ fn module_simple() -> TestResult {
 #[test]
 fn module_collision() -> TestResult {
     test_example("modules/collisions")
+}
+
+#[test]
+fn module_deep() -> TestResult {
+    test_example("modules/deep")
 }
 
 #[test]
