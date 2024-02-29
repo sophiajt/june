@@ -5,7 +5,9 @@ mod lifetime_checker;
 mod parser;
 mod typechecker;
 
-mod cli;
+// cli submodules
+mod build;
+mod run;
 
 use compiler::Compiler;
 use lifetime_checker::LifetimeChecker;
@@ -13,6 +15,31 @@ use parser::Parser;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use typechecker::Typechecker;
+
+/// The June compiler
+#[derive(clap::Parser, Debug)]
+#[command(version, about)]
+pub struct Args {
+    /// Files to compile
+    pub files: Vec<String>,
+
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum Command {
+    // New(NewArgs),
+    Build(build::Args),
+    Run(run::Args),
+    // Test(TestArgs),
+}
+
+impl Args {
+    pub fn parse() -> Self {
+        clap::Parser::parse()
+    }
+}
 
 fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
     let debug_output = false;
@@ -63,7 +90,7 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
 }
 
 fn main() {
-    let args = cli::Args::parse();
+    let args = Args::parse();
     let fmt_layer = tracing_tree::HierarchicalLayer::default()
         .with_writer(std::io::stderr)
         .with_indent_lines(true)
@@ -80,12 +107,20 @@ fn main() {
 
     let mut compiler = Compiler::new();
 
-    for fname in &args.files {
-        compiler = compile(fname, compiler);
+    match args.command {
+        Some(command) => match command {
+            Command::Build(_build_args) => todo!(),
+            Command::Run(_run_args) => todo!(),
+        },
+        None => {
+            for fname in &args.files {
+                compiler = compile(fname, compiler);
+            }
+
+            let codegen = codegen::Codegen::new(compiler);
+
+            let output = codegen.codegen();
+            println!("{}", String::from_utf8_lossy(&output));
+        }
     }
-
-    let codegen = codegen::Codegen::new(compiler);
-
-    let output = codegen.codegen();
-    println!("{}", String::from_utf8_lossy(&output));
 }
