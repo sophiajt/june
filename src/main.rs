@@ -5,6 +5,8 @@ mod lifetime_checker;
 mod parser;
 mod typechecker;
 
+mod cli;
+
 use compiler::Compiler;
 use lifetime_checker::LifetimeChecker;
 use parser::Parser;
@@ -61,6 +63,7 @@ fn compile(fname: &str, mut compiler: Compiler) -> Compiler {
 }
 
 fn main() {
+    let args = cli::Args::parse();
     let fmt_layer = tracing_tree::HierarchicalLayer::default()
         .with_writer(std::io::stderr)
         .with_indent_lines(true)
@@ -77,8 +80,8 @@ fn main() {
 
     let mut compiler = Compiler::new();
 
-    for fname in std::env::args().skip(1) {
-        compiler = compile(&fname, compiler);
+    for fname in &args.files {
+        compiler = compile(fname, compiler);
     }
 
     let codegen = codegen::Codegen::new(compiler);
