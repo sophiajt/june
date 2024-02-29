@@ -3167,7 +3167,6 @@ impl Parser {
         }
     }
 
-    #[tracing::instrument(skip(self))]
     fn use_statement(&mut self) -> NodeId {
         let span_start = self.position();
         self.keyword(b"use");

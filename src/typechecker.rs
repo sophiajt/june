@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use tracing::{debug, instrument, trace};
+use tracing::{debug, trace};
 
 use crate::{
     compiler::{CallTarget, CaseOffset, Compiler},
@@ -184,7 +184,6 @@ impl Scope {
 
         None
     }
-
 }
 
 pub struct Typechecker {
@@ -859,7 +858,6 @@ impl Typechecker {
         type_id
     }
 
-    #[instrument(skip(self))]
     pub fn typecheck_block(
         &mut self,
         node_id: NodeId,
@@ -2367,7 +2365,6 @@ impl Typechecker {
         }
     }
 
-    #[instrument(skip(self))]
     pub fn typecheck_namespaced_lookup(
         &mut self,
         namespace: NodeId,
@@ -3111,7 +3108,6 @@ impl Typechecker {
     // }
 
     // find a module based on the given path segment naming it
-    #[instrument(skip(self))]
     pub fn find_module_in_scope(&self, namespace: NodeId) -> Option<ModuleId> {
         let name = self.compiler.get_source(namespace);
         debug!(
@@ -3339,7 +3335,6 @@ impl Typechecker {
         });
     }
 
-    #[instrument(skip(self))]
     fn typecheck_module(&mut self, path: NodeId, local_inferences: &mut Vec<TypeId>) -> TypeId {
         let Some(&block) = self.compiler.module_lookup_use.get(&path) else {
             unreachable!("all paths should have valid module blocks associated with them")
