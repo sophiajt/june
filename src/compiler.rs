@@ -191,6 +191,7 @@ impl Compiler {
                 type_params,
                 lifetime_annotations,
                 return_ty,
+                initial_node_id,
                 block,
             } => {
                 println!("Fun:[{}]", node_id.0);
@@ -204,6 +205,9 @@ impl Compiler {
                 }
                 if let Some(return_ty) = return_ty {
                     self.print_helper(return_ty, indent + 2);
+                }
+                if let Some(initial_node_id) = initial_node_id {
+                    self.print_helper(initial_node_id, indent + 2);
                 }
                 if let Some(block) = block {
                     self.print_helper(block, indent + 2);

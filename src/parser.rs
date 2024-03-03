@@ -127,6 +127,7 @@ pub enum AstNode {
         params: NodeId,
         lifetime_annotations: Vec<NodeId>,
         return_ty: Option<NodeId>,
+        initial_node_id: Option<NodeId>,
         block: Option<NodeId>,
     },
     Params(Vec<NodeId>),
@@ -948,6 +949,7 @@ impl Parser {
                     params,
                     lifetime_annotations: vec![],
                     return_ty,
+                    initial_node_id: None,
                     block: None,
                 },
                 span_start,
@@ -1022,6 +1024,8 @@ impl Parser {
             None
         };
 
+        let initial_node_id = Some(NodeId(self.compiler.num_ast_nodes()));
+
         let block = self.block(true);
 
         let span_end = self.get_span_end(block);
@@ -1033,6 +1037,7 @@ impl Parser {
                 params,
                 lifetime_annotations,
                 return_ty,
+                initial_node_id,
                 block: Some(block),
             },
             span_start,
