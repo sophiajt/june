@@ -2988,6 +2988,7 @@ impl Typechecker {
                                                                 let (_, param_type_id) =
                                                                     &params[idx];
                                                                 let arg = args[idx];
+
                                                                 if matches!(
                                                                     self.compiler.get_node(args[0]),
                                                                     AstNode::Name
@@ -3610,7 +3611,6 @@ impl Typechecker {
                             for param in params {
                                 if let Some(replacement) = replacements.get(&param.1) {
                                     new_params.push((param.0.clone(), *replacement));
-                                    break;
                                 }
                             }
                             new_variants.push(EnumVariant::Struct {
