@@ -1313,10 +1313,6 @@ impl Typechecker {
             &mut type_var_replacements,
         );
 
-        // if !type_var_replacements.is_empty() {
-        //     self.instantiate_generic_fun(fun_id, &type_var_replacements);
-        // }
-
         let fun_id = if !type_var_replacements.is_empty() {
             self.instantiate_generic_fun(fun_id, &type_var_replacements)
         } else {
@@ -3586,9 +3582,9 @@ impl Typechecker {
             Type::Enum {
                 variants, methods, ..
             } => {
-                // TODO instantiate generic function
                 let mut new_variants = vec![];
-                let new_methods = methods.clone();
+                let methods = methods.clone();
+                let mut new_methods = vec![];
 
                 'variant: for variant in variants {
                     match variant {
@@ -3625,6 +3621,10 @@ impl Typechecker {
                     }
                 }
 
+                for method in methods {
+                    new_methods.push(self.instantiate_generic_fun(method, replacements));
+                }
+
                 self.compiler.find_or_create_type(Type::Enum {
                     generic_params: vec![], // we're now fully instantiated
                     variants: new_variants,
@@ -3638,7 +3638,9 @@ impl Typechecker {
                 ..
             } => {
                 let mut new_fields = vec![];
-                let new_methods = methods.clone();
+                let methods = methods.clone();
+                let mut new_methods = vec![];
+                let is_allocator = *is_allocator;
 
                 for TypedField {
                     member_access,
@@ -3658,12 +3660,15 @@ impl Typechecker {
                     }
                 }
 
-                //TODO: instantiate methods
+                for method in methods {
+                    new_methods.push(self.instantiate_generic_fun(method, replacements));
+                }
+
                 self.compiler.find_or_create_type(Type::Struct {
                     generic_params: vec![], // we're now fully instantiated
                     fields: new_fields,
                     methods: new_methods,
-                    is_allocator: *is_allocator,
+                    is_allocator,
                 })
             }
             _ => {
