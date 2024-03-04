@@ -123,9 +123,11 @@ pub enum AstNode {
     // Definitions
     Fun {
         name: NodeId,
+        type_params: Option<NodeId>,
         params: NodeId,
         lifetime_annotations: Vec<NodeId>,
         return_ty: Option<NodeId>,
+        initial_node_id: Option<NodeId>,
         block: Option<NodeId>,
     },
     Params(Vec<NodeId>),
@@ -943,9 +945,11 @@ impl Parser {
             self.create_node(
                 AstNode::Fun {
                     name,
+                    type_params: None,
                     params,
                     lifetime_annotations: vec![],
                     return_ty,
+                    initial_node_id: None,
                     block: None,
                 },
                 span_start,
@@ -959,6 +963,13 @@ impl Parser {
         self.keyword(b"fun");
 
         let name = self.name();
+
+        let type_params = if self.is_less_than() {
+            Some(self.type_params())
+        } else {
+            None
+        };
+
         let params = self.params();
 
         let mut lifetime_annotations = vec![];
@@ -1013,6 +1024,8 @@ impl Parser {
             None
         };
 
+        let initial_node_id = Some(NodeId(self.compiler.num_ast_nodes()));
+
         let block = self.block(true);
 
         let span_end = self.get_span_end(block);
@@ -1020,9 +1033,11 @@ impl Parser {
         self.create_node(
             AstNode::Fun {
                 name,
+                type_params,
                 params,
                 lifetime_annotations,
                 return_ty,
+                initial_node_id,
                 block: Some(block),
             },
             span_start,
@@ -1859,12 +1874,10 @@ impl Parser {
                     break;
                 }
 
+                output.push(self.name());
                 if self.is_comma() {
                     self.next();
-                    continue;
                 }
-
-                output.push(self.name());
             }
 
             span_end = self.position() + 1;

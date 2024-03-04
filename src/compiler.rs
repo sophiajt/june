@@ -188,18 +188,26 @@ impl Compiler {
             AstNode::Fun {
                 name,
                 params,
+                type_params,
                 lifetime_annotations,
                 return_ty,
+                initial_node_id,
                 block,
             } => {
                 println!("Fun:[{}]", node_id.0);
                 self.print_helper(name, indent + 2);
+                if let Some(type_params) = type_params {
+                    self.print_helper(type_params, indent + 2);
+                }
                 self.print_helper(params, indent + 2);
                 for lifetime_annotation in lifetime_annotations {
                     self.print_helper(lifetime_annotation, indent + 2);
                 }
                 if let Some(return_ty) = return_ty {
                     self.print_helper(return_ty, indent + 2);
+                }
+                if let Some(initial_node_id) = initial_node_id {
+                    self.print_helper(initial_node_id, indent + 2);
                 }
                 if let Some(block) = block {
                     self.print_helper(block, indent + 2);
@@ -618,6 +626,10 @@ impl Compiler {
         panic!("internal error: can't find Type as a TypeId for: {:?}", ty)
     }
 
+    pub fn is_type_variable(&self, type_id: TypeId) -> bool {
+        matches!(self.get_type(type_id), Type::TypeVariable(_))
+    }
+
     pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
         match self.get_type(type_id) {
             Type::Pointer {
@@ -631,8 +643,8 @@ impl Compiler {
         &self.variables[var_id.0]
     }
 
-    pub fn fresh_type_variable(&mut self) -> TypeId {
-        self.types.push(Type::TypeVariable);
+    pub fn fresh_type_variable(&mut self, node_id: NodeId) -> TypeId {
+        self.types.push(Type::TypeVariable(node_id));
 
         TypeId(self.types.len() - 1)
     }
@@ -697,7 +709,9 @@ impl Compiler {
                 format!("({:?})struct({:?})", type_id, fields)
             }
             Type::FunLocalTypeVar { offset } => format!("<local typevar: {}>", offset),
-            Type::TypeVariable => "<typevar>".into(),
+            Type::TypeVariable(node_id) => {
+                format!("<{}>", String::from_utf8_lossy(self.get_source(*node_id)))
+            }
             Type::Unknown => "<unknown>".into(),
             Type::Void => "void".into(),
         }

@@ -1,0 +1,7 @@
+// output: 123
+
+fun id<T>(x: T) [x == return] -> T  {
+    return x
+}
+
+println(id(123))

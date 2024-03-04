@@ -469,6 +469,11 @@ fn generic_enum_struct_case() -> TestResult {
 }
 
 #[test]
+fn generic_fun() -> TestResult {
+    test_example("generics/generic_fun")
+}
+
+#[test]
 fn generic_struct() -> TestResult {
     test_example("generics/generic_struct")
 }

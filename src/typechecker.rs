@@ -65,7 +65,7 @@ pub enum Type {
         optional: bool,
         target: TypeId,
     },
-    TypeVariable,
+    TypeVariable(NodeId),
     FunLocalTypeVar {
         offset: usize,
     },
@@ -86,7 +86,7 @@ pub enum EnumVariant {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Variable {
     pub name: NodeId,
     pub ty: TypeId,
@@ -107,6 +107,18 @@ impl Param {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TypeParam {
+    pub name: Vec<u8>,
+    pub type_id: TypeId,
+}
+
+impl TypeParam {
+    pub fn new(name: Vec<u8>, type_id: TypeId) -> TypeParam {
+        TypeParam { name, type_id }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Lifetime {
     Variable(VarId),
     Return,
@@ -122,9 +134,11 @@ pub struct Function {
     pub name: NodeId,
     pub params: Vec<Param>,
     pub lifetime_annotations: Vec<LifetimeAnnotation>,
-    pub type_vars: Vec<TypeId>,
+    pub type_params: Vec<TypeParam>,
+    pub inference_vars: Vec<TypeId>,
     pub return_node: Option<NodeId>,
     pub return_type: TypeId,
+    pub initial_node_id: Option<NodeId>,
     pub body: Option<NodeId>,
 }
 
@@ -219,9 +233,11 @@ impl Typechecker {
         compiler.functions.push(Function {
             name: NodeId(0),
             params: vec![Param::new(b"input".to_vec(), VarId(0))],
+            initial_node_id: None,
             body: None,
+            type_params: vec![],
             lifetime_annotations: vec![],
-            type_vars: vec![],
+            inference_vars: vec![],
             return_node: None,
             return_type: VOID_TYPE_ID,
         });
@@ -285,7 +301,7 @@ impl Typechecker {
                     b"void" => VOID_TYPE_ID,
                     _ => {
                         if let Some(type_id) = self.find_type_in_scope(name_node_id) {
-                            if self.is_type_variable(type_id) {
+                            if self.compiler.is_type_variable(type_id) {
                                 type_id
                             } else {
                                 // Assume custom types are pointers
@@ -351,17 +367,39 @@ impl Typechecker {
     pub fn typecheck_fun_predecl(
         &mut self,
         name: NodeId,
+        type_params: Option<NodeId>,
         params: NodeId,
         lifetime_annotations: &[NodeId],
         return_ty: Option<NodeId>,
+        initial_node_id: Option<NodeId>,
         block: Option<NodeId>,
     ) -> FunId {
         let mut fun_params = vec![];
+        let mut fun_type_params = vec![];
+
         let fun_name = self.compiler.source
             [self.compiler.span_start[name.0]..self.compiler.span_end[name.0]]
             .to_vec();
 
         self.enter_scope();
+
+        if let Some(type_params) = type_params {
+            let AstNode::Params(type_params) = self.compiler.get_node(type_params) else {
+                panic!("internal error: enum generic params are not proper ast node");
+            };
+
+            let type_params = type_params.clone();
+
+            for type_param in type_params {
+                let type_id = self.compiler.fresh_type_variable(type_param);
+
+                let type_var_name = self.compiler.get_source(type_param).to_vec();
+
+                fun_type_params.push(TypeParam::new(type_var_name.clone(), type_id));
+
+                self.add_type_to_scope(type_var_name, type_id);
+            }
+        }
 
         //FIXME: remove clone?
         if let AstNode::Params(unchecked_params) = self.compiler.get_node(params).clone() {
@@ -442,10 +480,12 @@ impl Typechecker {
         self.compiler.functions.push(Function {
             name,
             params: fun_params,
+            type_params: fun_type_params,
             lifetime_annotations: checked_lifetime_annotations,
-            type_vars: vec![], // Change this once functions have type params
+            inference_vars: vec![],
             return_type,
             return_node: return_ty,
+            initial_node_id,
             body: block,
         });
 
@@ -467,11 +507,12 @@ impl Typechecker {
     pub fn typecheck_fun(&mut self, fun_id: FunId) {
         let Function {
             params,
+            type_params,
             body,
             return_type,
             return_node,
             name,
-            type_vars,
+            inference_vars: type_vars,
             ..
         } = self.compiler.functions[fun_id.0].clone();
 
@@ -480,6 +521,10 @@ impl Typechecker {
         };
 
         self.enter_scope();
+
+        for type_param in type_params {
+            self.add_type_to_scope(type_param.name.clone(), type_param.type_id)
+        }
 
         self.set_expected_return_type(return_type);
 
@@ -517,7 +562,10 @@ impl Typechecker {
 
         self.exit_scope();
 
-        let Function { type_vars, .. } = &mut self.compiler.functions[fun_id.0];
+        let Function {
+            inference_vars: type_vars,
+            ..
+        } = &mut self.compiler.functions[fun_id.0];
 
         *type_vars = local_inferences;
     }
@@ -547,7 +595,7 @@ impl Typechecker {
             let params = params.clone();
 
             for param in params {
-                let type_id = self.compiler.fresh_type_variable();
+                let type_id = self.compiler.fresh_type_variable(param);
 
                 generic_params.push(type_id);
 
@@ -647,9 +695,11 @@ impl Typechecker {
             for method in methods {
                 let AstNode::Fun {
                     name,
+                    type_params,
                     params,
                     lifetime_annotations,
                     return_ty,
+                    initial_node_id,
                     block,
                 } = self.compiler.get_node(method)
                 else {
@@ -660,16 +710,20 @@ impl Typechecker {
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
+                let type_params = *type_params;
                 let params = *params;
                 let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
+                let initial_node_id = *initial_node_id;
                 let block = *block;
 
                 fun_ids.push(self.typecheck_fun_predecl(
                     name,
+                    type_params,
                     params,
                     &lifetime_annotations,
                     return_ty,
+                    initial_node_id,
                     block,
                 ));
             }
@@ -724,7 +778,7 @@ impl Typechecker {
             let params = params.clone();
 
             for param in params {
-                let type_id = self.compiler.fresh_type_variable();
+                let type_id = self.compiler.fresh_type_variable(param);
 
                 // be conservative and assume generic parameters might be pointers
                 has_pointers = true;
@@ -810,9 +864,11 @@ impl Typechecker {
             for method in methods {
                 let AstNode::Fun {
                     name,
+                    type_params,
                     params,
                     lifetime_annotations,
                     return_ty,
+                    initial_node_id,
                     block,
                 } = self.compiler.get_node(method)
                 else {
@@ -823,16 +879,20 @@ impl Typechecker {
                     return VOID_TYPE_ID;
                 };
                 let name = *name;
+                let type_params = *type_params;
                 let params = *params;
                 let lifetime_annotations = lifetime_annotations.clone();
                 let return_ty = *return_ty;
+                let initial_node_id = *initial_node_id;
                 let block = *block;
 
                 fun_ids.push(self.typecheck_fun_predecl(
                     name,
+                    type_params,
                     params,
                     &lifetime_annotations,
                     return_ty,
+                    initial_node_id,
                     block,
                 ));
             }
@@ -877,9 +937,11 @@ impl Typechecker {
             match &node {
                 AstNode::Fun {
                     name,
+                    type_params,
                     params,
                     lifetime_annotations,
                     return_ty,
+                    initial_node_id,
                     block,
                 } => {
                     if let Some(fun_id) = self.compiler.fun_resolution.get(name) {
@@ -900,9 +962,11 @@ impl Typechecker {
                     let lifetime_annotations = lifetime_annotations.clone();
                     funs.push(self.typecheck_fun_predecl(
                         *name,
+                        *type_params,
                         *params,
                         &lifetime_annotations,
                         *return_ty,
+                        *initial_node_id,
                         *block,
                     ));
                 }
@@ -1009,10 +1073,6 @@ impl Typechecker {
                 }
             }
         }
-    }
-
-    pub fn is_type_variable(&self, type_id: TypeId) -> bool {
-        matches!(self.compiler.get_type(type_id), Type::TypeVariable)
     }
 
     pub fn unify_types(
@@ -1154,9 +1214,26 @@ impl Typechecker {
                 .call_resolution
                 .insert(name, CallTarget::NodeId(node_id));
 
-            self.typecheck_call_helper(args, params, None, local_inferences);
+            let mut type_var_replacements = HashMap::new();
 
-            ret
+            self.typecheck_call_helper(
+                args,
+                params,
+                None,
+                local_inferences,
+                &mut type_var_replacements,
+            );
+
+            if self.compiler.is_type_variable(ret) {
+                if let Some(ret) = type_var_replacements.get(&ret) {
+                    *ret
+                } else {
+                    self.error("unknown type variable in return", name);
+                    UNKNOWN_TYPE_ID
+                }
+            } else {
+                ret
+            }
         } else {
             self.error("attempt to call a non-function", name);
 
@@ -1221,6 +1298,26 @@ impl Typechecker {
             )
         }
 
+        if method_target.is_some() {
+            self.enter_scope();
+        }
+
+        let mut type_var_replacements = HashMap::new();
+
+        self.typecheck_call_helper(
+            &args,
+            params,
+            method_target,
+            local_inferences,
+            &mut type_var_replacements,
+        );
+
+        let fun_id = if !type_var_replacements.is_empty() {
+            self.instantiate_generic_fun(fun_id, &type_var_replacements)
+        } else {
+            fun_id
+        };
+
         // TODO: do we want to wait until all params are checked
         // before we mark this as resolved?
         self.compiler
@@ -1228,16 +1325,19 @@ impl Typechecker {
             .insert(name, CallTarget::Function(fun_id));
 
         if method_target.is_some() {
-            self.enter_scope();
-        }
-
-        self.typecheck_call_helper(&args, params, method_target, local_inferences);
-
-        if method_target.is_some() {
             self.exit_scope();
         }
 
-        return_type
+        if self.compiler.is_type_variable(return_type) {
+            if let Some(ret) = type_var_replacements.get(&return_type) {
+                *ret
+            } else {
+                self.error("unknown type variable in return", name);
+                UNKNOWN_TYPE_ID
+            }
+        } else {
+            return_type
+        }
     }
 
     fn typecheck_call_helper(
@@ -1246,6 +1346,7 @@ impl Typechecker {
         params: Vec<Param>,
         method_target: Option<NodeId>,
         local_inferences: &mut Vec<TypeId>,
+        type_var_replacements: &mut HashMap<TypeId, TypeId>,
     ) {
         for (idx, (arg, param)) in args.iter().zip(params).enumerate() {
             let arg = *arg;
@@ -1285,8 +1386,15 @@ impl Typechecker {
                         self.compiler.get_variable(param.var_id).ty,
                         local_inferences,
                     ) {
-                        // FIXME: make this a better error
-                        self.error("types incompatible with function", value);
+                        self.error(
+                            format!(
+                                "type mismatch for arg. expected {}, found {}",
+                                self.compiler.pretty_type(arg_ty),
+                                self.compiler
+                                    .pretty_type(self.compiler.get_variable(param.var_id).ty)
+                            ),
+                            arg,
+                        );
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
@@ -1317,9 +1425,36 @@ impl Typechecker {
 
                     let variable = &self.compiler.get_variable(param.var_id);
 
-                    if !self.unify_types(variable.ty, arg_type, local_inferences) {
-                        // FIXME: make this a better type error
-                        self.error("type mismatch for arg", arg);
+                    let variable_ty = variable.ty;
+
+                    if self.compiler.is_type_variable(variable_ty) {
+                        if let Some(replacement) = type_var_replacements.get(&variable_ty) {
+                            if !self.unify_types(*replacement, arg_type, local_inferences) {
+                                self.error(
+                                    format!(
+                                        "type mismatch for arg. expected {}, found {}",
+                                        self.compiler.pretty_type(*replacement),
+                                        self.compiler.pretty_type(arg_type)
+                                    ),
+                                    arg,
+                                );
+                                self.note(
+                                    "parameter defined here",
+                                    self.compiler.get_variable(param.var_id).where_defined,
+                                );
+                            }
+                        } else {
+                            type_var_replacements.insert(variable_ty, arg_type);
+                        }
+                    } else if !self.unify_types(variable_ty, arg_type, local_inferences) {
+                        self.error(
+                            format!(
+                                "type mismatch for arg. expected {}, found {}",
+                                self.compiler.pretty_type(variable_ty),
+                                self.compiler.pretty_type(arg_type)
+                            ),
+                            arg,
+                        );
                         self.note(
                             "parameter defined here",
                             self.compiler.get_variable(param.var_id).where_defined,
@@ -2254,7 +2389,7 @@ impl Typechecker {
 
             let type_id = self.compiler.get_underlying_type_id(type_id);
 
-            let mut replacements = vec![];
+            let mut replacements = HashMap::new();
 
             match &self.compiler.get_type(type_id) {
                 Type::Struct { fields, .. } => {
@@ -2307,10 +2442,10 @@ impl Typechecker {
                                 }
                                 let known_field_type = *ty;
 
-                                if self.is_type_variable(known_field_type) {
+                                if self.compiler.is_type_variable(known_field_type) {
                                     let value_type = self.typecheck_node(value, local_inferences);
 
-                                    replacements.push((known_field_type, value_type));
+                                    replacements.insert(known_field_type, value_type);
 
                                     self.compiler.set_node_type(arg, value_type);
 
@@ -2349,7 +2484,7 @@ impl Typechecker {
             }
 
             if !replacements.is_empty() {
-                let type_id = self.instantiate_generic(type_id, &replacements);
+                let type_id = self.instantiate_generic_type(type_id, &replacements);
 
                 self.compiler.find_or_create_type(Type::Pointer {
                     pointer_type,
@@ -2478,10 +2613,13 @@ impl Typechecker {
                                             let arg_type_id =
                                                 self.typecheck_node(args[0], local_inferences);
 
-                                            if self.is_type_variable(param) {
-                                                type_id = self.instantiate_generic(
+                                            if self.compiler.is_type_variable(param) {
+                                                let mut replacements = HashMap::new();
+                                                replacements.insert(param, arg_type_id);
+
+                                                type_id = self.instantiate_generic_type(
                                                     type_id,
-                                                    &[(param, arg_type_id)],
+                                                    &replacements,
                                                 );
                                             } else if !self.unify_types(
                                                 param,
@@ -2525,7 +2663,7 @@ impl Typechecker {
                                 EnumVariant::Struct { name, params } => {
                                     if name == case_name {
                                         if args.len() == params.len() {
-                                            let mut replacements = vec![];
+                                            let mut replacements = HashMap::new();
 
                                             for (arg, (param_name, param_type_id)) in
                                                 args.into_iter().zip(params)
@@ -2550,9 +2688,12 @@ impl Typechecker {
                                                     let arg_type_id = self
                                                         .typecheck_node(value, local_inferences);
 
-                                                    if self.is_type_variable(*param_type_id) {
+                                                    if self
+                                                        .compiler
+                                                        .is_type_variable(*param_type_id)
+                                                    {
                                                         replacements
-                                                            .push((*param_type_id, arg_type_id));
+                                                            .insert(*param_type_id, arg_type_id);
                                                     } else if !self.unify_types(
                                                         *param_type_id,
                                                         arg_type_id,
@@ -2569,7 +2710,10 @@ impl Typechecker {
 
                                             // instantiate, if we have replacements available
                                             type_id = if !replacements.is_empty() {
-                                                self.instantiate_generic(type_id, &replacements)
+                                                self.instantiate_generic_type(
+                                                    type_id,
+                                                    &replacements,
+                                                )
                                             } else {
                                                 type_id
                                             };
@@ -2842,6 +2986,7 @@ impl Typechecker {
                                                                 let (_, param_type_id) =
                                                                     &params[idx];
                                                                 let arg = args[idx];
+
                                                                 if matches!(
                                                                     self.compiler.get_node(args[0]),
                                                                     AstNode::Name
@@ -3007,10 +3152,12 @@ impl Typechecker {
             self.compiler.functions.push(Function {
                 name: main_node,
                 params: vec![],
+                type_params: vec![],
                 lifetime_annotations: vec![],
-                type_vars: local_inferences,
+                inference_vars: local_inferences,
                 return_type: top_level_type,
                 return_node: None,
+                initial_node_id: Some(NodeId(num_nodes)),
                 body: Some(top_level),
             })
         }
@@ -3167,18 +3314,275 @@ impl Typechecker {
         None
     }
 
-    pub fn instantiate_generic(
+    pub fn instantiate_generic_fun(
+        &mut self,
+        fun_id: FunId,
+        replacements: &HashMap<TypeId, TypeId>,
+    ) -> FunId {
+        let Function {
+            name,
+            params,
+            lifetime_annotations,
+            return_node,
+            return_type,
+            initial_node_id,
+            body,
+            ..
+        } = &self.compiler.functions[fun_id.0];
+
+        let name = *name;
+        let params = params.clone();
+        let mut new_params = params.clone();
+        let mut lifetime_annotations = lifetime_annotations.clone();
+        let type_params = vec![];
+        let inference_vars = vec![];
+        let return_node = *return_node;
+        let mut return_type = *return_type;
+        let mut initial_node_id = *initial_node_id;
+        let mut body = *body;
+
+        for new_param in new_params.iter_mut() {
+            let mut new_var = self.compiler.get_variable(new_param.var_id).clone();
+            new_var.ty = self.instantiate_generic_type(new_var.ty, replacements);
+            self.compiler.variables.push(new_var);
+            new_param.var_id = VarId(self.compiler.variables.len() - 1);
+        }
+
+        for lifetime_annotation in lifetime_annotations.iter_mut() {
+            match lifetime_annotation {
+                LifetimeAnnotation::Equality(lhs, rhs) => {
+                    if let Lifetime::Variable(var_id) = lhs {
+                        for (param, new_param) in params.iter().zip(new_params.iter()) {
+                            if *var_id == param.var_id {
+                                *var_id = new_param.var_id;
+                            }
+                        }
+                    }
+
+                    if let Lifetime::Variable(var_id) = rhs {
+                        for (param, new_param) in params.iter().zip(new_params.iter()) {
+                            if *var_id == param.var_id {
+                                *var_id = new_param.var_id;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return_type = self.instantiate_generic_type(return_type, replacements);
+
+        if let (Some(inner_initial_node_id), Some(inner_body)) = (initial_node_id, body) {
+            let offset = self.compiler.num_ast_nodes() - inner_initial_node_id.0;
+
+            self.compiler.resize_node_types(
+                self.compiler.num_ast_nodes() + (inner_body.0 - inner_initial_node_id.0 + 1),
+                UNKNOWN_TYPE_ID,
+            );
+
+            for raw_node_id in inner_initial_node_id.0..=inner_body.0 {
+                let mut ast_node = self.compiler.get_node(NodeId(raw_node_id)).clone();
+
+                match &mut ast_node {
+                    AstNode::BinaryOp { lhs, op, rhs } => {
+                        *lhs = NodeId(lhs.0 + offset);
+                        *op = NodeId(op.0 + offset);
+                        *rhs = NodeId(rhs.0 + offset);
+                    }
+                    AstNode::Block(block_id) => {
+                        let mut block = self.compiler.blocks[block_id.0].clone();
+                        for node in block.nodes.iter_mut() {
+                            *node = NodeId(node.0 + offset)
+                        }
+                        self.compiler.blocks.push(block);
+
+                        *block_id = BlockId(self.compiler.blocks.len() - 1);
+                    }
+                    AstNode::Call { head, args } => {
+                        *head = NodeId(head.0 + offset);
+
+                        for arg in args {
+                            *arg = NodeId(arg.0 + offset);
+                        }
+                    }
+                    AstNode::Defer { pointer, callback } => {
+                        *pointer = NodeId(pointer.0 + offset);
+                        *callback = NodeId(callback.0 + offset);
+                    }
+                    AstNode::Enum {
+                        typename,
+                        cases,
+                        methods,
+                    } => {
+                        *typename = NodeId(typename.0 + offset);
+
+                        for c in cases {
+                            *c = NodeId(c.0 + offset)
+                        }
+
+                        for method in methods {
+                            *method = NodeId(method.0 + offset)
+                        }
+                    }
+                    AstNode::EnumCase { name, payload } => {
+                        *name = NodeId(name.0 + offset);
+                        if let Some(payload) = payload {
+                            for pay in payload {
+                                *pay = NodeId(pay.0 + offset)
+                            }
+                        }
+                    }
+                    AstNode::ExternType { name } => {
+                        *name = NodeId(name.0 + offset);
+                    }
+                    AstNode::Field { name, typename, .. } => {
+                        *name = NodeId(name.0 + offset);
+                        *typename = NodeId(typename.0 + offset);
+                    }
+                    AstNode::For {
+                        variable,
+                        range,
+                        block,
+                    } => {
+                        *variable = NodeId(variable.0 + offset);
+                        *range = NodeId(range.0 + offset);
+                        *block = NodeId(block.0 + offset);
+                    }
+                    AstNode::FunType { params, ret } => {
+                        for param in params {
+                            *param = NodeId(param.0 + offset)
+                        }
+                        *ret = NodeId(ret.0 + offset)
+                    }
+                    AstNode::If {
+                        condition,
+                        then_block,
+                        else_expression,
+                    } => {
+                        *condition = NodeId(condition.0 + offset);
+                        *then_block = NodeId(then_block.0 + offset);
+                        if let Some(else_expression) = else_expression {
+                            *else_expression = NodeId(else_expression.0 + offset);
+                        }
+                    }
+                    AstNode::Index { target, index } => {
+                        *target = NodeId(target.0 + offset);
+                        *index = NodeId(index.0 + offset);
+                    }
+                    AstNode::Let {
+                        variable_name,
+                        ty,
+                        initializer,
+                        ..
+                    } => {
+                        *variable_name = NodeId(variable_name.0 + offset);
+                        if let Some(ty) = ty {
+                            *ty = NodeId(ty.0 + offset);
+                        }
+                        *initializer = NodeId(initializer.0 + offset);
+                    }
+                    AstNode::Match { target, match_arms } => {
+                        *target = NodeId(target.0 + offset);
+                        for match_arm in match_arms {
+                            let lhs = &mut match_arm.0;
+                            let rhs = &mut match_arm.1;
+
+                            *lhs = NodeId(lhs.0 + offset);
+                            *rhs = NodeId(rhs.0 + offset);
+                        }
+                    }
+                    AstNode::MemberAccess { target, field } => {
+                        *target = NodeId(target.0 + offset);
+                        *field = NodeId(field.0 + offset);
+                    }
+                    AstNode::NamedValue { name, value } => {
+                        *name = NodeId(name.0 + offset);
+                        *value = NodeId(value.0 + offset);
+                    }
+                    AstNode::NamespacedLookup { namespace, item } => {
+                        *namespace = NodeId(namespace.0 + offset);
+                        *item = NodeId(item.0 + offset);
+                    }
+                    AstNode::New(_, _, node_id) => *node_id = NodeId(node_id.0 + offset),
+                    AstNode::Param { name, ty, .. } => {
+                        *name = NodeId(name.0 + offset);
+                        *ty = NodeId(name.0 + offset)
+                    }
+                    AstNode::Range { lhs, rhs } => {
+                        *lhs = NodeId(lhs.0 + offset);
+                        *rhs = NodeId(rhs.0 + offset)
+                    }
+                    AstNode::RawBuffer(items) => {
+                        for item in items {
+                            *item = NodeId(item.0 + offset)
+                        }
+                    }
+                    AstNode::RawBufferType { inner } => *inner = NodeId(inner.0 + offset),
+                    AstNode::ResizeRawBuffer { pointer, new_size } => {
+                        *pointer = NodeId(pointer.0 + offset);
+                        *new_size = NodeId(new_size.0 + offset)
+                    }
+                    AstNode::Return(Some(val)) => *val = NodeId(val.0 + offset),
+                    AstNode::Statement(stmt) => *stmt = NodeId(stmt.0 + offset),
+                    AstNode::Type { name, params, .. } => {
+                        *name = NodeId(name.0 + offset);
+                        if let Some(params) = params {
+                            *params = NodeId(params.0 + offset)
+                        }
+                    }
+                    AstNode::UnsafeBlock(block) => *block = NodeId(block.0 + offset),
+                    AstNode::Use { path } => *path = NodeId(path.0 + offset),
+                    AstNode::While { condition, block } => {
+                        *condition = NodeId(condition.0 + offset);
+                        *block = NodeId(block.0 + offset);
+                    }
+                    _ => {}
+                }
+
+                self.compiler.push_node(ast_node);
+                self.compiler
+                    .span_start
+                    .push(self.compiler.span_start[raw_node_id]);
+                self.compiler
+                    .span_end
+                    .push(self.compiler.span_end[raw_node_id]);
+            }
+
+            initial_node_id = Some(NodeId(inner_initial_node_id.0 + offset));
+            body = Some(NodeId(inner_body.0 + offset));
+        }
+
+        self.compiler.functions.push(Function {
+            name,
+            params: new_params,
+            lifetime_annotations,
+            type_params,
+            inference_vars,
+            return_node,
+            return_type,
+            initial_node_id,
+            body,
+        });
+
+        let fun_id = FunId(self.compiler.functions.len() - 1);
+
+        self.typecheck_fun(fun_id);
+
+        fun_id
+    }
+
+    pub fn instantiate_generic_type(
         &mut self,
         type_id: TypeId,
-        replacements: &[(TypeId, TypeId)],
+        replacements: &HashMap<TypeId, TypeId>,
     ) -> TypeId {
         match self.compiler.get_type(type_id) {
             Type::Enum {
                 variants, methods, ..
             } => {
-                // TODO instantiate generic function
                 let mut new_variants = vec![];
-                let new_methods = methods.clone();
+                let methods = methods.clone();
+                let mut new_methods = vec![];
 
                 'variant: for variant in variants {
                     match variant {
@@ -3186,14 +3590,12 @@ impl Typechecker {
                             new_variants.push(variant.clone());
                         }
                         EnumVariant::Single { name, param } => {
-                            for replacement in replacements {
-                                if param == &replacement.0 {
-                                    new_variants.push(EnumVariant::Single {
-                                        name: name.clone(),
-                                        param: replacement.1,
-                                    });
-                                    continue 'variant;
-                                }
+                            if let Some(replacement) = replacements.get(param) {
+                                new_variants.push(EnumVariant::Single {
+                                    name: name.clone(),
+                                    param: *replacement,
+                                });
+                                continue 'variant;
                             }
                             new_variants.push(EnumVariant::Single {
                                 name: name.clone(),
@@ -3204,11 +3606,8 @@ impl Typechecker {
                             let mut new_params = vec![];
 
                             for param in params {
-                                for replacement in replacements {
-                                    if param.1 == replacement.0 {
-                                        new_params.push((param.0.clone(), replacement.1));
-                                        break;
-                                    }
+                                if let Some(replacement) = replacements.get(&param.1) {
+                                    new_params.push((param.0.clone(), *replacement));
                                 }
                             }
                             new_variants.push(EnumVariant::Struct {
@@ -3217,6 +3616,10 @@ impl Typechecker {
                             })
                         }
                     }
+                }
+
+                for method in methods {
+                    new_methods.push(self.instantiate_generic_fun(method, replacements));
                 }
 
                 self.compiler.find_or_create_type(Type::Enum {
@@ -3232,7 +3635,9 @@ impl Typechecker {
                 ..
             } => {
                 let mut new_fields = vec![];
-                let new_methods = methods.clone();
+                let methods = methods.clone();
+                let mut new_methods = vec![];
+                let is_allocator = *is_allocator;
 
                 for TypedField {
                     member_access,
@@ -3241,29 +3646,37 @@ impl Typechecker {
                     where_defined,
                 } in fields
                 {
-                    for replacement in replacements {
-                        if ty == &replacement.0 {
-                            new_fields.push(TypedField {
-                                member_access: *member_access,
-                                name: name.clone(),
-                                ty: replacement.1,
-                                where_defined: *where_defined,
-                            });
-                            break;
-                        }
+                    if let Some(replacement) = replacements.get(ty) {
+                        new_fields.push(TypedField {
+                            member_access: *member_access,
+                            name: name.clone(),
+                            ty: *replacement,
+                            where_defined: *where_defined,
+                        });
+                        break;
                     }
                 }
 
-                //TODO: instantiate methods
+                for method in methods {
+                    new_methods.push(self.instantiate_generic_fun(method, replacements));
+                }
+
                 self.compiler.find_or_create_type(Type::Struct {
                     generic_params: vec![], // we're now fully instantiated
                     fields: new_fields,
                     methods: new_methods,
-                    is_allocator: *is_allocator,
+                    is_allocator,
                 })
             }
             _ => {
-                panic!("not yet supported variant for generic instantiation")
+                // Check to see if we have a replacement for this exact TypeId. If so, return the replacement.
+                // Otherwise return the original type_id
+
+                if let Some(replacement) = replacements.get(&type_id) {
+                    return *replacement;
+                }
+
+                type_id
             }
         }
     }
