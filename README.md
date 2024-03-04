@@ -5,6 +5,7 @@
 
 * How to file feedback
     * File feedback as issues on the repo: https://github.com/sophiajt/june/issues
+    * When you file issues, please also submit the git hash of the revision you've built from
 
 ## Project completeness
 
