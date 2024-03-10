@@ -1,0 +1,172 @@
+mut blob = raw[true, false]
+
+struct Array {
+  width: i64
+  height: i64
+  contents: raw[bool] 
+
+  fun create_array(width_: i64, height_: i64) -> Array {
+    mut array = new Array(width: width_, height: height_, contents: raw[false])
+    let size = width_ * height_
+    unsafe { 
+      resize array.contents size
+      for i in 0..size {
+        array.contents[i] = false
+      }
+
+    }
+    return array
+  }
+
+  fun wrap(val:i64, range:i64) -> i64 {
+    if val < 0 {
+      return range - val
+    }
+
+    if val >= range {
+      return range - val
+    }
+
+    return val
+  }
+
+  fun calculate_index(self, x:i64, y:i64) -> i64 {
+    return wrap(y, self.height) * self.width + wrap(x, self.width)
+  }
+
+  fun wrapped_set(mut self, x:i64, y:i64, value:bool) {
+    unsafe {
+      // note that I must call this function outside of
+      // the contents[] expression, and I must
+      // explicitly type it, or the code will fail to compile
+      let index:i64 = self.calculate_index(x, y)
+
+      self.contents[index] = value
+    }
+  }
+
+  fun wrapped_get(self, x:i64, y:i64) -> bool {
+    unsafe {
+      // note that I must call this function outside of
+      // the contents[] expression, and I must
+      // explicitly type it, or the code will fail to compile
+      let index:i64 = self.calculate_index(x, y)
+
+      return self.contents[index]
+    }
+  }
+}
+
+struct GameOfLife {
+  array: Array
+
+  fun create_game(width:i64, height:i64) -> GameOfLife {
+    return new GameOfLife(array: Array::create_array(width, height))
+  }
+
+  fun count_neighbors(self, x:i64, y:i64) -> i64 {
+    mut count:i64 = 0
+
+    for x_offset in -1..1 {
+      for y_offset in -1..1 {
+        if x_offset == 0 && y_offset == 0 {
+          // skip
+        } else {
+          if self.array.wrapped_get(x + x_offset, y + y_offset) {
+            count += 1
+          }
+        }
+      }
+    }
+
+    return count
+  }
+
+  fun next_iteration(self) -> GameOfLife {
+    mut result = create_game(self.array.width, self.array.height)
+
+    for y in 0..(self.array.height-1) {
+      for x in 0..(self.array.width-1) {
+        let count = self.count_neighbors(x, y)
+
+        // have to be explicit that alive is a bool
+        let alive:bool = self.array.wrapped_get(x, y)
+
+        // otherwise this thinks alive is not a boolean expression
+        if alive {
+          if count == 2 || count == 3 {
+            result.array.wrapped_set(x,y, true)
+          } 
+        } else {
+          if count == 3 {
+            result.array.wrapped_set(x,y, true)
+          }
+        }
+      }
+    }
+
+    return result
+  }
+
+  fun place_blinker(mut self, x:i64, y:i64) {
+    self.array.wrapped_set(x, y+1, true)
+    self.array.wrapped_set(x+1, y+1, true)
+    self.array.wrapped_set(x+2, y+1, true)
+  }
+
+  fun print_board(self) {
+    // no way to print a single character, so we have to decode each line!
+    // so I'm going to print only the left most 3 pips
+
+    for c in 0..80 {
+      println(c"")
+    }
+
+    for y in 0..(self.array.height-1) {
+      mut pattern:i64 = 0
+      for x in 0..(self.array.width-1) {
+        if self.array.wrapped_get(x, y) {
+          if x == 0 {
+            pattern += 1
+          } else if x == 1 {
+            pattern += 2 
+          } else if x == 2 {
+            pattern += 4
+          }
+        }
+      }
+
+      if pattern == 0 {
+        println(c"ooo")
+      } else if pattern == 1 {
+        println(c"+oo")
+      } else if pattern == 2 {
+        println(c"o+o")
+      } else if pattern == 3 {
+        println(c"++o")
+      } else if pattern == 4 {
+        println(c"oo+")
+      } else if pattern == 5 {
+        println(c"+o+")
+      } else if pattern == 6 {
+        println(c"o++")
+      } else if pattern == 7 {
+        println(c"+++")
+      }
+    }
+  }
+}
+
+mut game = GameOfLife::create_game(3, 10)
+game.place_blinker(0, 0)
+game.place_blinker(1, 5)
+
+
+while true {
+  game.print_board()
+  game = game.next_iteration()
+}
+
+
+
+
