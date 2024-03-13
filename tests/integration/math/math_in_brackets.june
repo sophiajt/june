@@ -1,0 +1,7 @@
+// output: 23
+mut data = raw[1,2,3]
+unsafe {
+    println(data[1])
+    data[0 + 1] = 3
+    println(data[1])
+}
