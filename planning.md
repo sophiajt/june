@@ -6,3 +6,6 @@
 ### Shared mutable pointers
 ### Owned pointers
 
+## Pedagogy
+
+June uses a semi-automatic memory management system.
