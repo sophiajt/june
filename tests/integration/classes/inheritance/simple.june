@@ -1,0 +1,27 @@
+// output: foo
+
+class Button: Widget {
+    button_down: bool
+
+    fun draw_button_down(self)
+    fun draw_button_up(self)
+
+    fun draw(self) {
+        if self.button_down {
+            self.draw_button_down()
+        } else {
+            self.draw_button_up()
+        }
+    }
+}
+
+class FancyButton: Button {    
+    fun draw_button_down(self) {
+        // impl here
+        self.draw_border()
+    }
+
+    fun draw_button_up(self) {
+        // impl here
+    }
+}
