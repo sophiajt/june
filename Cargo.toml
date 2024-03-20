@@ -13,3 +13,9 @@ tracing-tree = "0.3.0"
 
 [dev-dependencies]
 color-eyre = "0.6.2"
+libtest-mimic = "0.6.1"
+
+[[test]]
+name = "integration_tests"
+path = "tests/integration_tests.rs"
+harness = false

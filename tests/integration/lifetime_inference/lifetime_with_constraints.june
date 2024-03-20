@@ -1,4 +1,4 @@
-// output: whatever
+// output: 33
 
 struct Stats {
     age: i64
