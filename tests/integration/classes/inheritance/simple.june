@@ -1,7 +1,7 @@
-// output: foo
+// output: button up
 
-class Button: Widget {
-    button_down: bool
+class Button {
+    public button_down: bool
 
     fun draw_button_down(self)
     fun draw_button_up(self)
@@ -15,13 +15,20 @@ class Button: Widget {
     }
 }
 
-class FancyButton: Button {    
+class FancyButton: Button {
     fun draw_button_down(self) {
         // impl here
-        self.draw_border()
+        println(c"button down")
     }
 
     fun draw_button_up(self) {
         // impl here
+        println(c"button up")
     }
 }
+
+fun main() {
+    let button = new FancyButton(button_down: false);
+    button.draw()
+}
+

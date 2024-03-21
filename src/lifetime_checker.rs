@@ -753,6 +753,9 @@ impl LifetimeChecker {
             AstNode::Type { .. } => {
                 // ignore types (eg "foo as bar")
             }
+            AstNode::TypeCoercion { .. } => {
+                // ignore
+            }
             x => {
                 panic!("unsupported node: {:?}", x)
             }

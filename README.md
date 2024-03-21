@@ -1,5 +1,10 @@
 # June, a gradual, safe systems language
 
+## Goals
+
+Teachability | Learnability | Readability
+Efficiency | Productivity
+Systems and application programming
 
 ## Participating in the closed alpha/beta
 
@@ -41,7 +46,7 @@ Alternatively, the current version of June can be used compile June code to C by
 ###  Data types
 
 #### Basic data types
-    
+
 * `i64`: `123`, `0`
 * `f64`: `3.5`, `1.0`
 * `bool`: `true`, `false`
