@@ -1449,7 +1449,7 @@ impl Parser {
                 // Indexing operation
                 self.next();
 
-                let item = self.simple_expression();
+                let item = self.expression();
                 let span_end = self.position() + 1;
                 self.rsquare();
 
