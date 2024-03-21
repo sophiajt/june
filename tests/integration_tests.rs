@@ -1,8 +1,7 @@
 type TestResult = Result<(), Report>;
 
 use color_eyre::{
-    eyre::Report,
-    eyre::{self, eyre},
+    eyre::{self, eyre, Report, WrapErr},
     Section, SectionExt,
 };
 use libtest_mimic::{Arguments, Failed, Trial};
@@ -180,7 +179,7 @@ fn test_example(test_name: &Path) -> TestResult {
             .arg("-o")
             .arg(&app_filepath)
             .output()
-            .unwrap();
+            .wrap_err("Cannot execute clang")?;
 
         if !compiler.status.success() {
             let _ = io::stdout().write_all(&compiler.stdout);
