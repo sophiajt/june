@@ -1740,7 +1740,14 @@ impl Typechecker {
                 let op = *op;
 
                 match self.compiler.get_node(op) {
-                    AstNode::Plus | AstNode::Minus | AstNode::Multiply | AstNode::Divide => {
+                    AstNode::Plus
+                    | AstNode::Minus
+                    | AstNode::Multiply
+                    | AstNode::Divide
+                    | AstNode::ShiftLeft
+                    | AstNode::ShiftRight
+                    | AstNode::BitwiseAnd
+                    | AstNode::BitwiseOr => {
                         let lhs_ty = self.typecheck_node(lhs, local_inferences);
                         let rhs_ty = self.typecheck_node(rhs, local_inferences);
                         if !self.unify_types(lhs_ty, rhs_ty, local_inferences) {
