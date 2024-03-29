@@ -83,6 +83,12 @@ pub enum AstNode {
     Or,
     Pow,
 
+    // Bitwise operators
+    BitwiseAnd,
+    BitwiseOr,
+    ShiftLeft,
+    ShiftRight,
+
     // Special operators
     As,
 
@@ -228,6 +234,9 @@ impl AstNode {
             AstNode::Multiply | AstNode::Divide => 95,
             //AstNode::Modulo => 95,
             AstNode::Plus | AstNode::Minus => 90,
+            AstNode::ShiftLeft | AstNode::ShiftRight => 88,
+            AstNode::BitwiseAnd => 85,
+            AstNode::BitwiseOr => 83,
             AstNode::LessThan
             | AstNode::LessThanOrEqual
             | AstNode::GreaterThan
@@ -290,11 +299,13 @@ pub enum TokenType {
     LCurly,
     LessThan,
     LessThanEqual,
+    LessThanLessThan,
     RParen,
     RSquare,
     RCurly,
     GreaterThan,
     GreaterThanEqual,
+    GreaterThanGreaterThan,
     Ampersand,
     AmpersandAmpersand,
     QuestionMark,
@@ -394,7 +405,11 @@ impl Parser {
                         | TokenType::GreaterThan
                         | TokenType::GreaterThanEqual
                         | TokenType::AmpersandAmpersand
+                        | TokenType::Ampersand
                         | TokenType::PipePipe
+                        | TokenType::Pipe
+                        | TokenType::LessThanLessThan
+                        | TokenType::GreaterThanGreaterThan
                         | TokenType::Equals
                         | TokenType::PlusEquals
                         | TokenType::DashEquals
@@ -1618,9 +1633,25 @@ impl Parser {
                     self.next();
                     self.create_node(AstNode::And, span_start, span_end)
                 }
+                TokenType::Ampersand => {
+                    self.next();
+                    self.create_node(AstNode::BitwiseAnd, span_start, span_end)
+                }
                 TokenType::PipePipe => {
                     self.next();
                     self.create_node(AstNode::Or, span_start, span_end)
+                }
+                TokenType::Pipe => {
+                    self.next();
+                    self.create_node(AstNode::BitwiseOr, span_start, span_end)
+                }
+                TokenType::LessThanLessThan => {
+                    self.next();
+                    self.create_node(AstNode::ShiftLeft, span_start, span_end)
+                }
+                TokenType::GreaterThanGreaterThan => {
+                    self.next();
+                    self.create_node(AstNode::ShiftRight, span_start, span_end)
                 }
                 TokenType::Equals => {
                     self.next();
@@ -2830,6 +2861,14 @@ impl Parser {
                         span_start,
                         span_end: span_start + 2,
                     }
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'<'
+                {
+                    Token {
+                        token_type: TokenType::LessThanLessThan,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
                 } else {
                     Token {
                         token_type: TokenType::LessThan,
@@ -2859,6 +2898,14 @@ impl Parser {
                 {
                     Token {
                         token_type: TokenType::GreaterThanEqual,
+                        span_start,
+                        span_end: span_start + 2,
+                    }
+                } else if self.current_file.span_offset < (self.current_file_end() - 1)
+                    && self.compiler.source[self.current_file.span_offset + 1] == b'>'
+                {
+                    Token {
+                        token_type: TokenType::GreaterThanGreaterThan,
                         span_start,
                         span_end: span_start + 2,
                     }

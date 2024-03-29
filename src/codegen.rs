@@ -648,6 +648,18 @@ impl Codegen {
             AstNode::Or => {
                 output.extend_from_slice(b"||");
             }
+            AstNode::BitwiseAnd => {
+                output.extend_from_slice(b"&");
+            }
+            AstNode::BitwiseOr => {
+                output.extend_from_slice(b"|");
+            }
+            AstNode::ShiftLeft => {
+                output.extend_from_slice(b"<<");
+            }
+            AstNode::ShiftRight => {
+                output.extend_from_slice(b">>");
+            }
             AstNode::GreaterThanOrEqual => {
                 output.extend_from_slice(b">=");
             }

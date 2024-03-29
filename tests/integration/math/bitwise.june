@@ -1,0 +1,6 @@
+// output: 1613
+
+println(3 >> 1)
+println(3 << 1)
+println(3 & 1)
+println(3 | 2)
