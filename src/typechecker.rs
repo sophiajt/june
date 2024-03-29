@@ -45,6 +45,7 @@ pub enum Type {
         ret: TypeId,
     },
     CInt,
+    CSizeT,
     CVoidPtr,
     CChar,
     CString,
@@ -217,9 +218,10 @@ pub const F64_TYPE_ID: TypeId = TypeId(3);
 pub const BOOL_TYPE_ID: TypeId = TypeId(4);
 pub const RANGE_I64_TYPE_ID: TypeId = TypeId(5);
 pub const C_INT_TYPE_ID: TypeId = TypeId(6);
-pub const C_VOID_PTR_TYPE_ID: TypeId = TypeId(7);
-pub const C_CHAR_TYPE_ID: TypeId = TypeId(8);
-pub const C_STRING_TYPE_ID: TypeId = TypeId(9);
+pub const C_SIZE_T_TYPE_ID: TypeId = TypeId(7);
+pub const C_VOID_PTR_TYPE_ID: TypeId = TypeId(8);
+pub const C_CHAR_TYPE_ID: TypeId = TypeId(9);
+pub const C_STRING_TYPE_ID: TypeId = TypeId(10);
 
 impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
@@ -250,6 +252,7 @@ impl Typechecker {
         compiler.push_type(Type::Bool);
         compiler.push_type(Type::Range(I64_TYPE_ID));
         compiler.push_type(Type::CInt);
+        compiler.push_type(Type::CSizeT);
         compiler.push_type(Type::CVoidPtr);
         compiler.push_type(Type::CChar);
         compiler.push_type(Type::CString);
@@ -297,6 +300,7 @@ impl Typechecker {
                     b"c_voidptr" => C_VOID_PTR_TYPE_ID,
                     b"c_char" => C_CHAR_TYPE_ID,
                     b"c_int" => C_INT_TYPE_ID,
+                    b"c_size_t" => C_SIZE_T_TYPE_ID,
                     b"bool" => BOOL_TYPE_ID,
                     b"void" => VOID_TYPE_ID,
                     _ => {
@@ -1178,6 +1182,8 @@ impl Typechecker {
             }
             (Type::CInt, Type::I64) => true, // FIXME: do we want these?
             (Type::I64, Type::CInt) => true,
+            (Type::I64, Type::CSizeT) => true,
+            (Type::CSizeT, Type::I64) => true,
             _ => lhs == rhs,
         }
     }

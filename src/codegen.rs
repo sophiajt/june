@@ -4,8 +4,8 @@ use crate::{
     parser::{AstNode, NodeId},
     typechecker::{
         EnumVariant, FunId, Function, Param, Type, TypeId, TypedField, BOOL_TYPE_ID,
-        C_CHAR_TYPE_ID, C_INT_TYPE_ID, C_STRING_TYPE_ID, C_VOID_PTR_TYPE_ID, F64_TYPE_ID,
-        I64_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
+        C_CHAR_TYPE_ID, C_INT_TYPE_ID, C_SIZE_T_TYPE_ID, C_STRING_TYPE_ID, C_VOID_PTR_TYPE_ID,
+        F64_TYPE_ID, I64_TYPE_ID, UNKNOWN_TYPE_ID, VOID_TYPE_ID,
     },
 };
 
@@ -67,6 +67,8 @@ impl Codegen {
                     output.extend_from_slice(b"void*");
                 } else if type_id == C_INT_TYPE_ID {
                     output.extend_from_slice(b"int");
+                } else if type_id == C_SIZE_T_TYPE_ID {
+                    output.extend_from_slice(b"size_t");
                 } else if type_id == C_CHAR_TYPE_ID {
                     output.extend_from_slice(b"char")
                 } else if type_id == BOOL_TYPE_ID {
@@ -730,6 +732,10 @@ impl Codegen {
                                 }
                                 C_INT_TYPE_ID => {
                                     output.extend_from_slice(b"printf(\"%i\\n\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                C_SIZE_T_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%li\\n\", ");
                                     self.codegen_node(args[0], local_inferences, output);
                                 }
                                 C_CHAR_TYPE_ID => {

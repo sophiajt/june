@@ -660,6 +660,7 @@ impl Compiler {
                 )
             }
             Type::CInt => "c_int".into(),
+            Type::CSizeT => "c_size_t".into(),
             Type::CString => "c_string".into(),
             Type::CVoidPtr => "c_voidptr".into(),
             Type::Enum { .. } => {
