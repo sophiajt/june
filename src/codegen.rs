@@ -978,6 +978,21 @@ impl Codegen {
                 self.codegen_node(*value, local_inferences, output)
             }
             AstNode::Break => {
+                if let Some(exiting_blocks) = self.compiler.exiting_blocks.get(&node_id) {
+                    for exiting_block in exiting_blocks {
+                        if let Some(scope_level) =
+                            self.compiler.blocks[exiting_block.0].may_locally_allocate
+                        {
+                            output.extend_from_slice(
+                                format!(
+                                    "free_allocator_level(allocator, allocation_id + {});\n",
+                                    scope_level
+                                )
+                                .as_bytes(),
+                            );
+                        }
+                    }
+                }
                 output.extend_from_slice(b"break;\n");
             }
             AstNode::MemberAccess { target, field } => {
@@ -1371,15 +1386,21 @@ impl Codegen {
                         self.codegen_node(*return_expr, local_inferences, output);
                         output.extend_from_slice(b";\n");
                     }
-                    if let Some(scope_level) = self.compiler.blocks[block_id.0].may_locally_allocate
-                    {
-                        output.extend_from_slice(
-                            format!(
-                                "free_allocator_level(allocator, allocation_id + {});\n",
-                                scope_level
-                            )
-                            .as_bytes(),
-                        );
+
+                    if let Some(exiting_blocks) = self.compiler.exiting_blocks.get(node_id) {
+                        for exiting_block in exiting_blocks {
+                            if let Some(scope_level) =
+                                self.compiler.blocks[exiting_block.0].may_locally_allocate
+                            {
+                                output.extend_from_slice(
+                                    format!(
+                                        "free_allocator_level(allocator, allocation_id + {});\n",
+                                        scope_level
+                                    )
+                                    .as_bytes(),
+                                );
+                            }
+                        }
                     }
                     if return_expr.is_some() {
                         output.extend_from_slice(b"return return_expr;\n");

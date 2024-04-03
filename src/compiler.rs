@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
-use crate::parser::{AstNode, Block, NodeId, PointerType};
+use crate::parser::{AstNode, Block, BlockId, NodeId, PointerType};
 use crate::typechecker::{
     FunId, Function, Module, ModuleId, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID,
 };
@@ -55,6 +55,9 @@ pub struct Compiler {
     // lookup the id of the block (eg the entire module's loaded source) from the node_id of the path in the use statement
     pub module_lookup_use: HashMap<NodeId, NodeId>,
 
+    // Memory reclamation
+    pub exiting_blocks: HashMap<NodeId, Vec<BlockId>>,
+
     // Use/def
     pub call_resolution: HashMap<NodeId, CallTarget>,
     pub var_resolution: HashMap<NodeId, VarId>,
@@ -88,6 +91,8 @@ impl Compiler {
 
             module_lookup: HashMap::new(),
             module_lookup_use: HashMap::new(),
+
+            exiting_blocks: HashMap::new(),
 
             call_resolution: HashMap::new(),
             var_resolution: HashMap::new(),
