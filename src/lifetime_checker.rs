@@ -673,9 +673,12 @@ impl LifetimeChecker {
                 self.check_node_lifetime(target, scope_level);
             }
             AstNode::Return(return_expr) => {
-                if let Some(return_expr) = return_expr {
-                    let return_expr = *return_expr;
+                let current_blocks = self.current_blocks.clone();
+                let return_expr = *return_expr;
 
+                self.compiler.exiting_blocks.insert(node_id, current_blocks);
+
+                if let Some(return_expr) = return_expr {
                     self.expand_lifetime(return_expr, return_expr, AllocationLifetime::Return);
                     self.check_node_lifetime(return_expr, scope_level);
                 }
@@ -733,9 +736,16 @@ impl LifetimeChecker {
             AstNode::Fun { .. }
             | AstNode::Struct { .. }
             | AstNode::Enum { .. }
-            | AstNode::ExternType { .. }
-            | AstNode::Break => {
-                // ignore
+            | AstNode::ExternType { .. } => {}
+
+            AstNode::Break => {
+                self.compiler.exiting_blocks.insert(
+                    node_id,
+                    vec![*self
+                        .current_blocks
+                        .last()
+                        .expect("internal error: missing current block")],
+                );
             }
             AstNode::Statement(node_id) => {
                 self.check_node_lifetime(*node_id, scope_level);

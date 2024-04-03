@@ -1,0 +1,20 @@
+// output: done
+
+struct Foo {}
+
+fun echo() {
+  println(c"done")
+}
+
+fun bar() -> i64 {
+  let x = new Foo()
+  defer x echo
+
+  if true {
+    return 10
+  }
+
+  return 3
+}
+
+bar()

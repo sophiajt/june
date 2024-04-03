@@ -1,0 +1,28 @@
+// output: goodbyeecho
+
+struct Foo {}
+
+fun echo() {
+  println(c"echo")
+}
+
+fun goodbye() {
+  println(c"goodbye")
+}
+
+fun bar() -> i64 {
+  let x = new Foo()
+  defer x echo
+
+  if true {
+    defer x goodbye
+
+    if true {
+      return 10
+    }
+  }
+
+  return 3
+}
+
+bar()
