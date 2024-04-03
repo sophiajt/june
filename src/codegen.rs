@@ -979,7 +979,7 @@ impl Codegen {
             }
             AstNode::Break => {
                 if let Some(exiting_blocks) = self.compiler.exiting_blocks.get(&node_id) {
-                    for exiting_block in exiting_blocks {
+                    for exiting_block in exiting_blocks.iter().rev() {
                         if let Some(scope_level) =
                             self.compiler.blocks[exiting_block.0].may_locally_allocate
                         {
@@ -1388,7 +1388,7 @@ impl Codegen {
                     }
 
                     if let Some(exiting_blocks) = self.compiler.exiting_blocks.get(node_id) {
-                        for exiting_block in exiting_blocks {
+                        for exiting_block in exiting_blocks.iter().rev() {
                             if let Some(scope_level) =
                                 self.compiler.blocks[exiting_block.0].may_locally_allocate
                             {
