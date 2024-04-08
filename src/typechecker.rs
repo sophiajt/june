@@ -53,13 +53,11 @@ pub enum Type {
     Struct {
         generic_params: Vec<TypeId>,
         fields: Vec<TypedField>,
-        methods: Vec<FunId>,
         is_allocator: bool,
     },
     Enum {
         generic_params: Vec<TypeId>,
         variants: Vec<EnumVariant>,
-        methods: Vec<FunId>,
     },
     Pointer {
         pointer_type: PointerType,
@@ -678,7 +676,6 @@ impl Typechecker {
         let type_id = self.compiler.push_type(Type::Enum {
             generic_params,
             variants: output_cases,
-            methods: vec![],
         });
 
         self.compiler.push_type(Type::Pointer {
@@ -732,11 +729,9 @@ impl Typechecker {
                 ));
             }
 
-            let Type::Enum { methods, .. } = self.compiler.get_type_mut(type_id) else {
-                panic!("internal error: previously inserted struct can't be found");
-            };
-
-            *methods = fun_ids.clone();
+            self.compiler
+                .methods_on_type
+                .insert(type_id, fun_ids.clone());
 
             for fun_id in &fun_ids {
                 self.typecheck_fun(*fun_id);
@@ -800,7 +795,6 @@ impl Typechecker {
         let type_id = self.compiler.push_type(Type::Struct {
             generic_params,
             fields: vec![],
-            methods: vec![],
             is_allocator: false, // will be replaced later
         });
 
@@ -901,11 +895,9 @@ impl Typechecker {
                 ));
             }
 
-            let Type::Struct { methods, .. } = self.compiler.get_type_mut(type_id) else {
-                panic!("internal error: previously inserted struct can't be found");
-            };
-
-            *methods = fun_ids.clone();
+            self.compiler
+                .methods_on_type
+                .insert(type_id, fun_ids.clone());
 
             for fun_id in &fun_ids {
                 self.typecheck_fun(*fun_id);
@@ -1672,9 +1664,7 @@ impl Typechecker {
 
                 let field_name = self.compiler.get_source(field);
                 match self.compiler.get_type(type_id) {
-                    Type::Struct {
-                        fields, methods, ..
-                    } => {
+                    Type::Struct { fields, .. } => {
                         for TypedField {
                             member_access,
                             name,
@@ -1698,34 +1688,38 @@ impl Typechecker {
                                 return type_id;
                             }
                         }
-                        for method in methods {
-                            let method = *method;
-                            let fun = &self.compiler.functions[method.0];
-                            let method_name = self.compiler.get_source(fun.name);
-                            if field_name == method_name {
-                                self.compiler.fun_resolution.insert(field, method);
-                                self.compiler.fun_resolution.insert(node_id, method);
-                                return self.compiler.find_or_create_type(Type::Fun {
-                                    params: fun.params.clone(),
-                                    ret: fun.return_type,
-                                });
+                        if let Some(methods) = self.compiler.methods_on_type.get(&type_id) {
+                            for method in methods {
+                                let method = *method;
+                                let fun = &self.compiler.functions[method.0];
+                                let method_name = self.compiler.get_source(fun.name);
+                                if field_name == method_name {
+                                    self.compiler.fun_resolution.insert(field, method);
+                                    self.compiler.fun_resolution.insert(node_id, method);
+                                    return self.compiler.find_or_create_type(Type::Fun {
+                                        params: fun.params.clone(),
+                                        ret: fun.return_type,
+                                    });
+                                }
                             }
                         }
                         self.error("unknown field or method", field);
                         UNKNOWN_TYPE_ID
                     }
-                    Type::Enum { methods, .. } => {
-                        for method in methods {
-                            let method = *method;
-                            let fun = &self.compiler.functions[method.0];
-                            let method_name = self.compiler.get_source(fun.name);
-                            if field_name == method_name {
-                                self.compiler.fun_resolution.insert(field, method);
-                                self.compiler.fun_resolution.insert(node_id, method);
-                                return self.compiler.find_or_create_type(Type::Fun {
-                                    params: fun.params.clone(),
-                                    ret: fun.return_type,
-                                });
+                    Type::Enum { .. } => {
+                        if let Some(methods) = self.compiler.methods_on_type.get(&type_id) {
+                            for method in methods {
+                                let method = *method;
+                                let fun = &self.compiler.functions[method.0];
+                                let method_name = self.compiler.get_source(fun.name);
+                                if field_name == method_name {
+                                    self.compiler.fun_resolution.insert(field, method);
+                                    self.compiler.fun_resolution.insert(node_id, method);
+                                    return self.compiler.find_or_create_type(Type::Fun {
+                                        params: fun.params.clone(),
+                                        ret: fun.return_type,
+                                    });
+                                }
                             }
                         }
                         self.error("unknown method", field);
@@ -2286,13 +2280,11 @@ impl Typechecker {
             Type::Struct {
                 generic_params,
                 fields,
-                methods,
                 ..
             } => {
                 // FIXME: clone
                 let generic_params = generic_params.clone();
                 let fields = fields.clone();
-                let methods = methods.clone();
 
                 for generic_param in generic_params {
                     if !self.type_is_owned(generic_param) {
@@ -2313,52 +2305,55 @@ impl Typechecker {
                     }
                 }
 
-                for method in methods {
-                    let fun = &self.compiler.functions[method.0];
+                if let Some(methods) = self.compiler.methods_on_type.get(&type_id) {
+                    let methods = methods.clone();
+                    for method in methods {
+                        let fun = &self.compiler.functions[method.0];
 
-                    let return_node = fun.return_node;
+                        let return_node = fun.return_node;
 
-                    let mut self_is_mutable = false;
+                        let mut self_is_mutable = false;
 
-                    // FIXME: clone
-                    let params = fun.params.clone();
+                        // FIXME: clone
+                        let params = fun.params.clone();
 
-                    for param in &params {
-                        if param.name == b"self" {
-                            let var_id = param.var_id;
-
-                            if self.compiler.get_variable(var_id).is_mutable {
-                                self_is_mutable = true;
-                            }
-                        }
-                    }
-
-                    let return_type = fun.return_type;
-                    if self_is_mutable {
                         for param in &params {
-                            let var_id = param.var_id;
+                            if param.name == b"self" {
+                                let var_id = param.var_id;
 
-                            let var = &self.compiler.get_variable(var_id);
-
-                            let var_type_id = var.ty;
-                            let where_defined = var.where_defined;
-
-                            if !self.type_is_owned(var_type_id) && param.name != b"self" {
-                                self.note(
-                                    "param is a shared pointer, and self is mutable",
-                                    where_defined,
-                                );
-                                return false;
+                                if self.compiler.get_variable(var_id).is_mutable {
+                                    self_is_mutable = true;
+                                }
                             }
                         }
-                    }
 
-                    if !self.type_is_owned(return_type) {
-                        if let Some(return_node) = return_node {
-                            self.note("return type is a shared pointer", return_node);
+                        let return_type = fun.return_type;
+                        if self_is_mutable {
+                            for param in &params {
+                                let var_id = param.var_id;
+
+                                let var = &self.compiler.get_variable(var_id);
+
+                                let var_type_id = var.ty;
+                                let where_defined = var.where_defined;
+
+                                if !self.type_is_owned(var_type_id) && param.name != b"self" {
+                                    self.note(
+                                        "param is a shared pointer, and self is mutable",
+                                        where_defined,
+                                    );
+                                    return false;
+                                }
+                            }
                         }
 
-                        return false;
+                        if !self.type_is_owned(return_type) {
+                            if let Some(return_node) = return_node {
+                                self.note("return type is a shared pointer", return_node);
+                            }
+
+                            return false;
+                        }
                     }
                 }
 
@@ -2576,7 +2571,7 @@ impl Typechecker {
         local_inferences: &mut Vec<TypeId>,
     ) -> TypeId {
         match self.compiler.get_type(type_id) {
-            Type::Struct { methods, .. } => {
+            Type::Struct { .. } => {
                 let AstNode::Call { head, args } = self.compiler.get_node(item) else {
                     self.error("expected static method call on struct", item);
                     return VOID_TYPE_ID;
@@ -2587,25 +2582,25 @@ impl Typechecker {
 
                 let call_name = self.compiler.get_source(head);
 
-                for method in methods {
-                    let method_name = self
-                        .compiler
-                        .get_source(self.compiler.functions[method.0].name);
-                    if method_name == call_name {
-                        return self.typecheck_call_with_fun_id(
-                            head,
-                            *method,
-                            &args,
-                            None,
-                            local_inferences,
-                        );
+                if let Some(methods) = self.compiler.methods_on_type.get(&type_id) {
+                    for method in methods {
+                        let method_name = self
+                            .compiler
+                            .get_source(self.compiler.functions[method.0].name);
+                        if method_name == call_name {
+                            return self.typecheck_call_with_fun_id(
+                                head,
+                                *method,
+                                &args,
+                                None,
+                                local_inferences,
+                            );
+                        }
                     }
                 }
             }
             Type::Enum {
-                variants: cases,
-                methods,
-                ..
+                variants: cases, ..
             } => {
                 // FIXME: remove clone
                 let cases = cases.clone();
@@ -2763,18 +2758,20 @@ impl Typechecker {
                         }
                         let call_name = self.compiler.get_source(head);
 
-                        for method in methods {
-                            let method_name = self
-                                .compiler
-                                .get_source(self.compiler.functions[method.0].name);
-                            if method_name == call_name {
-                                return self.typecheck_call_with_fun_id(
-                                    head,
-                                    *method,
-                                    &args,
-                                    None,
-                                    local_inferences,
-                                );
+                        if let Some(methods) = self.compiler.methods_on_type.get(&type_id) {
+                            for method in methods {
+                                let method_name = self
+                                    .compiler
+                                    .get_source(self.compiler.functions[method.0].name);
+                                if method_name == call_name {
+                                    return self.typecheck_call_with_fun_id(
+                                        head,
+                                        *method,
+                                        &args,
+                                        None,
+                                        local_inferences,
+                                    );
+                                }
                             }
                         }
 
@@ -3590,11 +3587,13 @@ impl Typechecker {
         replacements: &HashMap<TypeId, TypeId>,
     ) -> TypeId {
         match self.compiler.get_type(type_id) {
-            Type::Enum {
-                variants, methods, ..
-            } => {
+            Type::Enum { variants, .. } => {
                 let mut new_variants = vec![];
-                let methods = methods.clone();
+                let methods = if let Some(v) = self.compiler.methods_on_type.get(&type_id) {
+                    v.clone()
+                } else {
+                    vec![]
+                };
                 let mut new_methods = vec![];
 
                 'variant: for variant in variants {
@@ -3635,21 +3634,27 @@ impl Typechecker {
                     new_methods.push(self.instantiate_generic_fun(method, replacements));
                 }
 
-                self.compiler.find_or_create_type(Type::Enum {
+                let type_id = self.compiler.find_or_create_type(Type::Enum {
                     generic_params: vec![], // we're now fully instantiated
                     variants: new_variants,
-                    methods: new_methods,
-                })
+                });
+
+                self.compiler.methods_on_type.insert(type_id, new_methods);
+
+                type_id
             }
             Type::Struct {
                 fields,
-                methods,
                 is_allocator,
                 ..
             } => {
                 let mut new_fields = vec![];
-                let methods = methods.clone();
                 let mut new_methods = vec![];
+                let methods = if let Some(v) = self.compiler.methods_on_type.get(&type_id) {
+                    v.clone()
+                } else {
+                    vec![]
+                };
                 let is_allocator = *is_allocator;
 
                 for TypedField {
@@ -3674,12 +3679,15 @@ impl Typechecker {
                     new_methods.push(self.instantiate_generic_fun(method, replacements));
                 }
 
-                self.compiler.find_or_create_type(Type::Struct {
+                let type_id = self.compiler.find_or_create_type(Type::Struct {
                     generic_params: vec![], // we're now fully instantiated
                     fields: new_fields,
-                    methods: new_methods,
                     is_allocator,
-                })
+                });
+
+                self.compiler.methods_on_type.insert(type_id, new_methods);
+
+                type_id
             }
             _ => {
                 // Check to see if we have a replacement for this exact TypeId. If so, return the replacement.
