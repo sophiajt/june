@@ -58,6 +58,9 @@ pub struct Compiler {
     // Memory reclamation
     pub exiting_blocks: HashMap<NodeId, Vec<BlockId>>,
 
+    // Methods on types
+    pub methods_on_type: HashMap<TypeId, Vec<FunId>>,
+
     // Use/def
     pub call_resolution: HashMap<NodeId, CallTarget>,
     pub var_resolution: HashMap<NodeId, VarId>,
@@ -93,6 +96,8 @@ impl Compiler {
             module_lookup_use: HashMap::new(),
 
             exiting_blocks: HashMap::new(),
+
+            methods_on_type: HashMap::new(),
 
             call_resolution: HashMap::new(),
             var_resolution: HashMap::new(),
