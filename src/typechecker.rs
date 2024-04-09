@@ -3589,11 +3589,12 @@ impl Typechecker {
         match self.compiler.get_type(type_id) {
             Type::Enum { variants, .. } => {
                 let mut new_variants = vec![];
-                let methods = if let Some(v) = self.compiler.methods_on_type.get(&type_id) {
-                    v.clone()
-                } else {
-                    vec![]
-                };
+                let methods = self
+                    .compiler
+                    .methods_on_type
+                    .get(&type_id)
+                    .cloned()
+                    .unwrap_or_default();
                 let mut new_methods = vec![];
 
                 'variant: for variant in variants {
