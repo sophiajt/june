@@ -3651,11 +3651,12 @@ impl Typechecker {
             } => {
                 let mut new_fields = vec![];
                 let mut new_methods = vec![];
-                let methods = if let Some(v) = self.compiler.methods_on_type.get(&type_id) {
-                    v.clone()
-                } else {
-                    vec![]
-                };
+                let methods = self
+                    .compiler
+                    .methods_on_type
+                    .get(&type_id)
+                    .cloned()
+                    .unwrap_or_default();
                 let is_allocator = *is_allocator;
 
                 for TypedField {
