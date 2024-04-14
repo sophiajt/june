@@ -3586,6 +3586,8 @@ impl Typechecker {
         type_id: TypeId,
         replacements: &HashMap<TypeId, TypeId>,
     ) -> TypeId {
+        let mut replacements = replacements.clone();
+
         match self.compiler.get_type(type_id) {
             Type::Enum { variants, .. } => {
                 let mut new_variants = vec![];
@@ -3631,18 +3633,22 @@ impl Typechecker {
                     }
                 }
 
-                for method in methods {
-                    new_methods.push(self.instantiate_generic_fun(method, replacements));
-                }
-
-                let type_id = self.compiler.find_or_create_type(Type::Enum {
+                let new_type_id = self.compiler.find_or_create_type(Type::Enum {
                     generic_params: vec![], // we're now fully instantiated
                     variants: new_variants,
                 });
 
-                self.compiler.methods_on_type.insert(type_id, new_methods);
+                replacements.insert(type_id, new_type_id);
 
-                type_id
+                for method in methods {
+                    new_methods.push(self.instantiate_generic_fun(method, &replacements));
+                }
+
+                self.compiler
+                    .methods_on_type
+                    .insert(new_type_id, new_methods);
+
+                new_type_id
             }
             Type::Struct {
                 fields,
@@ -3677,19 +3683,23 @@ impl Typechecker {
                     }
                 }
 
-                for method in methods {
-                    new_methods.push(self.instantiate_generic_fun(method, replacements));
-                }
-
-                let type_id = self.compiler.find_or_create_type(Type::Struct {
+                let new_type_id = self.compiler.find_or_create_type(Type::Struct {
                     generic_params: vec![], // we're now fully instantiated
                     fields: new_fields,
                     is_allocator,
                 });
 
-                self.compiler.methods_on_type.insert(type_id, new_methods);
+                replacements.insert(type_id, new_type_id);
 
-                type_id
+                for method in methods {
+                    new_methods.push(self.instantiate_generic_fun(method, &replacements));
+                }
+
+                self.compiler
+                    .methods_on_type
+                    .insert(new_type_id, new_methods);
+
+                new_type_id
             }
             _ => {
                 // Check to see if we have a replacement for this exact TypeId. If so, return the replacement.
