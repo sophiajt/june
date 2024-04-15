@@ -3353,7 +3353,23 @@ impl Typechecker {
 
         for new_param in new_params.iter_mut() {
             let mut new_var = self.compiler.get_variable(new_param.var_id).clone();
+
+            println!(
+                "before param type: {}",
+                self.compiler.pretty_type(new_var.ty)
+            );
+
+            println!("type id: {:?}", new_var.ty);
+
+            println!("replacements: {:?}", replacements);
+
             new_var.ty = self.instantiate_generic_type(new_var.ty, replacements);
+
+            println!(
+                "after param type: {}",
+                self.compiler.pretty_type(new_var.ty)
+            );
+
             self.compiler.variables.push(new_var);
             new_param.var_id = VarId(self.compiler.variables.len() - 1);
         }
@@ -3380,7 +3396,18 @@ impl Typechecker {
             }
         }
 
+        println!("replacements: {:?}", replacements);
+        for replacement in replacements {
+            println!(
+                "replace: {} with {}",
+                self.compiler.pretty_type(*replacement.0),
+                self.compiler.pretty_type(*replacement.1)
+            );
+        }
+
         return_type = self.instantiate_generic_type(return_type, replacements);
+
+        println!("return type: {}", self.compiler.pretty_type(return_type));
 
         if let (Some(inner_initial_node_id), Some(inner_body)) = (initial_node_id, body) {
             let offset = self.compiler.num_ast_nodes() - inner_initial_node_id.0;
@@ -3700,6 +3727,21 @@ impl Typechecker {
                     .insert(new_type_id, new_methods);
 
                 new_type_id
+            }
+            &Type::Pointer {
+                pointer_type,
+                optional,
+                ..
+            } => {
+                if let Some(replacement) = replacements.get(&type_id) {
+                    return self.compiler.find_or_create_type(Type::Pointer {
+                        pointer_type,
+                        optional,
+                        target: *replacement,
+                    });
+                }
+
+                type_id
             }
             _ => {
                 // Check to see if we have a replacement for this exact TypeId. If so, return the replacement.
