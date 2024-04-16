@@ -60,8 +60,8 @@ pub struct Compiler {
     pub exiting_blocks: HashMap<NodeId, Vec<BlockId>>,
 
     // Methods on types
-    pub methods_on_type: HashMap<TypeId, Vec<FunId>>,
-    pub virtual_methods_on_type: HashMap<TypeId, Vec<FunId>>,
+    methods_on_type: HashMap<TypeId, Vec<FunId>>,
+    virtual_methods_on_type: HashMap<TypeId, Vec<FunId>>,
 
     // Use/def
     pub call_resolution: HashMap<NodeId, CallTarget>,
@@ -882,5 +882,79 @@ impl Compiler {
         self.modules.push(module);
         self.module_resolution.insert(module_block, module_id);
         module_id
+    }
+
+    pub(crate) fn fully_satisfies_virtual_methods(
+        &self,
+        type_id: TypeId,
+        base_class: TypeId,
+    ) -> Option<bool> {
+        let type_id = self.get_underlying_type_id(type_id);
+        let base_class = self.get_underlying_type_id(base_class);
+
+        let virtual_methods = self.virtual_methods_on_type.get(&base_class)?;
+        let methods = self.methods_on_type(type_id);
+
+        let virtual_methods = virtual_methods
+            .iter()
+            .map(|id| {
+                let node_id = self.functions[id.0].name;
+                (self.get_source_str(node_id), id)
+            })
+            .collect::<HashMap<_, _>>();
+
+        let method_names = methods
+            .iter()
+            .map(|id| {
+                let node_id = self.functions[id.0].name;
+                self.get_source_str(node_id)
+            })
+            .collect::<std::collections::HashSet<_>>();
+
+        for name in virtual_methods.keys() {
+            if !method_names.contains(*name) {
+                return Some(false);
+            }
+        }
+
+        Some(true)
+    }
+
+    pub(crate) fn methods_on_type(&self, idx: TypeId) -> &[FunId] {
+        self.methods_on_type
+            .get(&idx)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub(crate) fn virtual_methods_on_type(&self, idx: TypeId) -> &[FunId] {
+        self.virtual_methods_on_type
+            .get(&idx)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub(crate) fn insert_methods_on_type(&mut self, type_id: TypeId, methods: Vec<FunId>) {
+        self.methods_on_type.insert(type_id, methods);
+    }
+
+    pub(crate) fn insert_virtual_methods_on_type(&mut self, type_id: TypeId, methods: Vec<FunId>) {
+        if !methods.is_empty() {
+            self.virtual_methods_on_type.insert(type_id, methods);
+        }
+    }
+
+    pub(crate) fn has_unsatisfied_virtual_methods(&self, idx: TypeId) -> bool {
+        if !self.virtual_methods_on_type(idx).is_empty() {
+            return true;
+        }
+
+        for base_class in self.base_classes.get(&idx).into_iter().flatten() {
+            if let Some(false) = self.fully_satisfies_virtual_methods(idx, *base_class) {
+                return true;
+            }
+        }
+
+        false
     }
 }

@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::io::Write;
 
 use crate::{
     compiler::{CallTarget, Compiler},
@@ -89,9 +90,10 @@ impl Codegen {
         type_id: TypeId,
         fields: &[TypedField],
         is_allocator: bool,
-        base_class: Option<TypeId>,
+        base_classes: Option<&Vec<TypeId>>,
         output: &mut Vec<u8>,
     ) {
+        let base_classes = base_classes.map(|v| v.as_slice()).unwrap_or(&[]);
         let Type::Pointer {
             target: inner_type_id,
             ..
@@ -116,15 +118,15 @@ impl Codegen {
             output.extend_from_slice(name);
             output.extend_from_slice(b" */ ");
         }
-        if let Some(base_class) = base_class {
-            let Type::Struct { fields, .. } = self.compiler.get_type(base_class) else {
+        for (depth, base_class) in base_classes.iter().enumerate() {
+            let Type::Struct { fields, .. } = self.compiler.get_type(*base_class) else {
                 todo!()
             };
             for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
                 output.extend_from_slice(b", ");
                 self.codegen_typename(*ty, &[], output);
                 output.push(b' ');
-                output.extend_from_slice(format!("base_field_{}", idx).as_bytes());
+                write!(output, "base_{}_field_{}", depth, idx).unwrap();
                 output.extend_from_slice(b" /* ");
                 output.extend_from_slice(name);
                 output.extend_from_slice(b" */ ");
@@ -154,18 +156,17 @@ impl Codegen {
             output.extend_from_slice(name);
             output.extend_from_slice(b" */");
         }
-        if let Some(base_class) = base_class {
+        for (depth, base_class) in base_classes.iter().enumerate() {
             let Type::Struct {
                 fields,
                 is_allocator: _,
                 generic_params: _,
-            } = self.compiler.get_type(base_class)
+            } = self.compiler.get_type(*base_class)
             else {
                 todo!()
             };
             for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
-                output.extend_from_slice(b", base_field_");
-                output.extend_from_slice(idx.to_string().as_bytes());
+                write!(output, ", base_{}_field_{}", depth, idx).unwrap();
                 output.extend_from_slice(b" /* ");
                 output.extend_from_slice(name);
                 output.extend_from_slice(b" */");
@@ -180,11 +181,9 @@ impl Codegen {
         &self,
         type_id: TypeId,
         fields: &[TypedField],
-        base_class: Option<TypeId>,
+        base_classes: Option<&Vec<TypeId>>,
         output: &mut Vec<u8>,
     ) {
-        use std::io::Write;
-
         let Type::Pointer {
             target: inner_type_id,
             ..
@@ -206,46 +205,58 @@ impl Codegen {
             output.extend_from_slice(name);
             write!(output, " */ ").unwrap();
         }
-        if let Some(base_class) = base_class {
-            let Type::Struct { fields, .. } = self.compiler.get_type(base_class) else {
-                todo!()
-            };
-            for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
-                output.extend_from_slice(b", ");
-                self.codegen_typename(*ty, &[], output);
-                output.push(b' ');
-                output.extend_from_slice(format!("base_field_{}", idx).as_bytes());
-                output.extend_from_slice(b" /* ");
-                output.extend_from_slice(name);
-                output.extend_from_slice(b" */ ");
+        if let Some(base_classes) = base_classes {
+            for base_class in base_classes {
+                let Type::Struct { fields, .. } = self.compiler.get_type(*base_class) else {
+                    todo!()
+                };
+                for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
+                    output.extend_from_slice(b", ");
+                    self.codegen_typename(*ty, &[], output);
+                    output.push(b' ');
+                    output.extend_from_slice(format!("base_field_{}", idx).as_bytes());
+                    output.extend_from_slice(b" /* ");
+                    output.extend_from_slice(name);
+                    output.extend_from_slice(b" */ ");
+                }
             }
         }
         output.extend_from_slice(b") {\n");
 
-        if let Some(base_class) = base_class {
-            let Type::Struct {
-                fields,
-                is_allocator: _,
-                generic_params: _,
-            } = self.compiler.get_type(base_class)
-            else {
-                todo!()
-            };
+        if let Some(base_classes) = base_classes {
+            let base_class = base_classes[0];
             output.extend_from_slice(b"initializer_");
             output.extend_from_slice(base_class.0.to_string().as_bytes());
             output.extend_from_slice(b"(&tmp->baseclass");
-            for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
-                output.extend_from_slice(b", base_field_");
-                output.extend_from_slice(idx.to_string().as_bytes());
-                output.extend_from_slice(b" /* ");
-                output.extend_from_slice(name);
-                output.extend_from_slice(b" */");
+            for base_class in base_classes {
+                let Type::Struct {
+                    fields,
+                    is_allocator: _,
+                    generic_params: _,
+                } = self.compiler.get_type(*base_class)
+                else {
+                    todo!()
+                };
+                for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
+                    write!(output, ", base_field_{} /* ", idx).unwrap();
+                    output.extend_from_slice(name);
+                    output.extend_from_slice(b" */");
+                }
             }
             output.extend_from_slice(b");\n");
 
-            output.extend_from_slice(b"tmp->baseclass.vtable = &vtable_struct_");
-            output.extend_from_slice(inner_type_id.0.to_string().as_bytes());
-            output.extend_from_slice(b";\n");
+            for (depth, base_class) in base_classes.iter().enumerate() {
+                if let Some(true) = self
+                    .compiler
+                    .fully_satisfies_virtual_methods(type_id, *base_class)
+                {
+                    output.extend_from_slice(b"tmp->");
+                    for _ in 0..=depth {
+                        output.extend_from_slice(b"baseclass.");
+                    }
+                    writeln!(output, "vtable = &vtable_struct_{};", inner_type_id.0).unwrap();
+                }
+            }
         }
 
         for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
@@ -320,17 +331,8 @@ impl Codegen {
                         continue;
                     }
 
-                    let empty_methods = vec![];
-                    let methods = self
-                        .compiler
-                        .methods_on_type
-                        .get(&TypeId(idx))
-                        .unwrap_or(&empty_methods);
-                    let virtual_methods = self
-                        .compiler
-                        .virtual_methods_on_type
-                        .get(&TypeId(idx))
-                        .unwrap_or(&empty_methods);
+                    let methods = self.compiler.methods_on_type(TypeId(idx));
+                    let virtual_methods = self.compiler.virtual_methods_on_type(TypeId(idx));
 
                     if !virtual_methods.is_empty() {
                         self.codegen_vtable_decl(idx, virtual_methods, output);
@@ -374,14 +376,13 @@ impl Codegen {
                     }
 
                     if let Some(ptr) = self.compiler.find_pointer_to(TypeId(idx)) {
-                        let base_class = base_classes.as_ref().map(|classes| classes[0]);
-                        self.codegen_initializer_function(ptr, fields, base_class, output);
-                        if virtual_methods.is_empty() {
+                        self.codegen_initializer_function(ptr, fields, base_classes, output);
+                        if !dbg!(self.compiler.has_unsatisfied_virtual_methods(TypeId(idx))) {
                             self.codegen_allocator_function(
                                 ptr,
                                 fields,
                                 *is_allocator,
-                                base_class,
+                                base_classes,
                                 output,
                             );
                         }
@@ -635,38 +636,53 @@ impl Codegen {
         methods: &[FunId],
         output: &mut Vec<u8>,
     ) {
-        let ty = base_classes[0];
-        let base_virtual_methods = self.compiler.virtual_methods_on_type.get(&ty);
-        let base_virtual_method_names = base_virtual_methods
-            .iter()
-            .flat_map(|f| f.iter())
-            .map(|id| {
-                let node_id = self.compiler.functions[id.0].name;
-                (self.compiler.get_source(node_id), id)
-            })
-            .collect::<std::collections::HashMap<_, _>>();
-        output.extend_from_slice(b"static const vtable_");
-        output.extend_from_slice(ty.0.to_string().as_bytes());
-        output.extend_from_slice(b" vtable_struct_");
-        output.extend_from_slice(type_id.to_string().as_bytes());
-        output.extend_from_slice(b" = {\n");
+        'bases: for base_class in base_classes.iter().rev() {
+            let Some(vtable_fully_satisfied) = dbg!(self
+                .compiler
+                .fully_satisfies_virtual_methods(TypeId(type_id), *base_class))
+            else {
+                continue 'bases;
+            };
 
-        for method in methods {
-            let fun = &self.compiler.functions[method.0];
-            let method_name = self.compiler.get_source(fun.name);
+            if !vtable_fully_satisfied {
+                continue 'bases;
+            }
 
-            if let Some(virt_fun_id) = base_virtual_method_names.get(method_name) {
+            let virtual_methods = self.compiler.virtual_methods_on_type(*base_class);
+            let virtual_methods = virtual_methods
+                .iter()
+                .map(|id| {
+                    let node_id = self.compiler.functions[id.0].name;
+                    (self.compiler.get_source_str(node_id), id)
+                })
+                .collect::<HashMap<_, _>>();
+
+            dbg!(&virtual_methods);
+
+            output.extend_from_slice(b"static const vtable_");
+            output.extend_from_slice(base_class.0.to_string().as_bytes());
+            output.extend_from_slice(b" vtable_struct_");
+            output.extend_from_slice(type_id.to_string().as_bytes());
+            output.extend_from_slice(b" = {\n");
+
+            for method in methods {
+                let fun = &self.compiler.functions[method.0];
+                let method_name = self.compiler.get_source_str(fun.name);
+
+                let Some(virt_fun_id) = virtual_methods.get(method_name) else {
+                    continue;
+                };
                 output.extend_from_slice(b"    .");
-                output.extend_from_slice(method_name);
+                output.extend_from_slice(method_name.as_bytes());
                 output.extend_from_slice(b" = (virt_fun_ty_");
                 output.extend_from_slice(virt_fun_id.0.to_string().as_bytes());
                 output.extend_from_slice(b")function_");
                 output.extend_from_slice(method.0.to_string().as_bytes());
                 output.extend_from_slice(b",\n");
             }
-        }
 
-        output.extend_from_slice(b"};");
+            output.extend_from_slice(b"};");
+        }
     }
 
     fn codegen_vtable_method_predecls(
@@ -676,21 +692,14 @@ impl Codegen {
         methods: &[FunId],
         output: &mut Vec<u8>,
     ) {
-        let ty = base_classes[0];
-        let base_virtual_methods = self.compiler.virtual_methods_on_type.get(&ty);
-        let base_virtual_method_names = base_virtual_methods
-            .iter()
-            .flat_map(|f| f.iter())
-            .map(|id| {
+        let mut base_virtual_method_names = HashSet::new();
+        for ty in base_classes {
+            let base_virtual_methods = self.compiler.virtual_methods_on_type(*ty);
+            base_virtual_method_names.extend(base_virtual_methods.iter().map(|id| {
                 let node_id = self.compiler.functions[id.0].name;
                 self.compiler.get_source(node_id)
-            })
-            .collect::<HashSet<_>>();
-        // output.extend_from_slice(b"static const vtable_");
-        // output.extend_from_slice(ty.0.to_string().as_bytes());
-        // output.extend_from_slice(b" vtable_struct_");
-        // output.extend_from_slice(type_id.to_string().as_bytes());
-        // output.extend_from_slice(b" = {\n");
+            }));
+        }
 
         for method in methods {
             let Function {
