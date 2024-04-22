@@ -640,7 +640,12 @@ impl Compiler {
         matches!(self.get_type(type_id), Type::TypeVariable(_))
     }
 
-    pub fn is_generic_type(&self, type_id: TypeId) -> bool {
+    pub fn is_generic_type(&self, type_id: TypeId, mut seen: Vec<TypeId>) -> bool {
+        if seen.contains(&type_id) {
+            return false;
+        }
+        seen.push(type_id);
+
         match self.get_type(type_id) {
             Type::Bool
             | Type::CChar
@@ -655,19 +660,24 @@ impl Compiler {
             Type::TypeVariable(..) => true,
             Type::FunLocalTypeVar { .. } => true,
             Type::Unknown => true,
-            Type::Range(x) => self.is_generic_type(*x),
-            Type::RawBuffer(x) => self.is_generic_type(*x),
+            Type::Range(x) => self.is_generic_type(*x, seen),
+            Type::RawBuffer(x) => self.is_generic_type(*x, seen),
             Type::Fun { params, ret } => {
                 params.iter().any(|x| {
                     let var = self.get_variable(x.var_id);
-                    self.is_generic_type(var.ty)
-                }) || self.is_generic_type(*ret)
+                    self.is_generic_type(var.ty, seen.clone())
+                }) || self.is_generic_type(*ret, seen)
             }
             Type::Struct {
                 generic_params,
                 fields,
                 ..
-            } => !generic_params.is_empty() || fields.iter().any(|x| self.is_generic_type(x.ty)),
+            } => {
+                !generic_params.is_empty()
+                    || fields
+                        .iter()
+                        .any(|x| self.is_generic_type(x.ty, seen.clone()))
+            }
             Type::Enum {
                 generic_params,
                 variants,
@@ -675,13 +685,15 @@ impl Compiler {
                 !generic_params.is_empty()
                     || variants.iter().any(|x| match x {
                         EnumVariant::Simple { .. } => false,
-                        EnumVariant::Single { param, .. } => self.is_generic_type(*param),
-                        EnumVariant::Struct { params, .. } => {
-                            params.iter().any(|(_, ty)| self.is_generic_type(*ty))
+                        EnumVariant::Single { param, .. } => {
+                            self.is_generic_type(*param, seen.clone())
                         }
+                        EnumVariant::Struct { params, .. } => params
+                            .iter()
+                            .any(|(_, ty)| self.is_generic_type(*ty, seen.clone())),
                     })
             }
-            Type::Pointer { target, .. } => self.is_generic_type(*target),
+            Type::Pointer { target, .. } => self.is_generic_type(*target, seen),
         }
     }
 

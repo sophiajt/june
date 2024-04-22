@@ -481,9 +481,9 @@ impl Codegen {
             let mut has_generics_in_signature = !type_params.is_empty();
             for param in params {
                 let var = self.compiler.get_variable(param.var_id);
-                has_generics_in_signature |= self.compiler.is_generic_type(var.ty);
+                has_generics_in_signature |= self.compiler.is_generic_type(var.ty, vec![]);
             }
-            has_generics_in_signature |= self.compiler.is_generic_type(*return_type);
+            has_generics_in_signature |= self.compiler.is_generic_type(*return_type, vec![]);
 
             if !has_generics_in_signature {
                 self.codegen_fun_signature(
@@ -514,9 +514,9 @@ impl Codegen {
             let mut has_generics_in_signature = !type_params.is_empty();
             for param in params {
                 let var = self.compiler.get_variable(param.var_id);
-                has_generics_in_signature |= self.compiler.is_generic_type(var.ty);
+                has_generics_in_signature |= self.compiler.is_generic_type(var.ty, vec![]);
             }
-            has_generics_in_signature |= self.compiler.is_generic_type(*return_type);
+            has_generics_in_signature |= self.compiler.is_generic_type(*return_type, vec![]);
 
             if !has_generics_in_signature {
                 if let Some(body) = body {

@@ -1,0 +1,15 @@
+// output: 100
+
+struct Foo<T> {
+    x: T
+
+    fun get_value(self) [return == self] -> T  {
+        return self.x
+    }
+}
+
+fun main() {
+    let bar = new Foo(x: 100)
+
+    println(bar.get_value())
+}
