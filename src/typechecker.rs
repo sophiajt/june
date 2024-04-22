@@ -1387,9 +1387,13 @@ impl Typechecker {
                         self.error(
                             format!(
                                 "type mismatch for arg. expected {}, found {}",
-                                self.compiler.pretty_type(arg_ty),
-                                self.compiler
-                                    .pretty_type(self.compiler.get_variable(param.var_id).ty)
+                                self.compiler.pretty_type(
+                                    self.compiler.resolve_type(arg_ty, local_inferences)
+                                ),
+                                self.compiler.pretty_type(self.compiler.resolve_type(
+                                    self.compiler.get_variable(param.var_id).ty,
+                                    local_inferences
+                                ))
                             ),
                             arg,
                         );
@@ -1431,8 +1435,13 @@ impl Typechecker {
                                 self.error(
                                     format!(
                                         "type mismatch for arg. expected {}, found {}",
-                                        self.compiler.pretty_type(*replacement),
-                                        self.compiler.pretty_type(arg_type)
+                                        self.compiler.pretty_type(
+                                            self.compiler
+                                                .resolve_type(*replacement, local_inferences)
+                                        ),
+                                        self.compiler.pretty_type(
+                                            self.compiler.resolve_type(arg_type, local_inferences)
+                                        )
                                     ),
                                     arg,
                                 );
@@ -1442,14 +1451,21 @@ impl Typechecker {
                                 );
                             }
                         } else {
-                            type_var_replacements.insert(variable_ty, arg_type);
+                            type_var_replacements.insert(
+                                self.compiler.get_underlying_type_id(variable_ty),
+                                self.compiler.get_underlying_type_id(arg_type),
+                            );
                         }
                     } else if !self.unify_types(variable_ty, arg_type, local_inferences) {
                         self.error(
                             format!(
                                 "type mismatch for arg. expected {}, found {}",
-                                self.compiler.pretty_type(variable_ty),
-                                self.compiler.pretty_type(arg_type)
+                                self.compiler.pretty_type(
+                                    self.compiler.resolve_type(variable_ty, local_inferences)
+                                ),
+                                self.compiler.pretty_type(
+                                    self.compiler.resolve_type(arg_type, local_inferences)
+                                )
                             ),
                             arg,
                         );
@@ -2453,7 +2469,10 @@ impl Typechecker {
                                 if self.compiler.is_type_variable(known_field_type) {
                                     let value_type = self.typecheck_node(value, local_inferences);
 
-                                    replacements.insert(known_field_type, value_type);
+                                    replacements.insert(
+                                        self.compiler.get_underlying_type_id(known_field_type),
+                                        self.compiler.get_underlying_type_id(value_type),
+                                    );
 
                                     self.compiler.set_node_type(arg, value_type);
 
@@ -2623,7 +2642,11 @@ impl Typechecker {
 
                                             if self.compiler.is_type_variable(param) {
                                                 let mut replacements = HashMap::new();
-                                                replacements.insert(param, arg_type_id);
+                                                replacements.insert(
+                                                    self.compiler.get_underlying_type_id(param),
+                                                    self.compiler
+                                                        .get_underlying_type_id(arg_type_id),
+                                                );
 
                                                 type_id = self.instantiate_generic_type(
                                                     type_id,
@@ -3354,21 +3377,7 @@ impl Typechecker {
         for new_param in new_params.iter_mut() {
             let mut new_var = self.compiler.get_variable(new_param.var_id).clone();
 
-            println!(
-                "before param type: {}",
-                self.compiler.pretty_type(new_var.ty)
-            );
-
-            println!("type id: {:?}", new_var.ty);
-
-            println!("replacements: {:?}", replacements);
-
             new_var.ty = self.instantiate_generic_type(new_var.ty, replacements);
-
-            println!(
-                "after param type: {}",
-                self.compiler.pretty_type(new_var.ty)
-            );
 
             self.compiler.variables.push(new_var);
             new_param.var_id = VarId(self.compiler.variables.len() - 1);
@@ -3396,18 +3405,7 @@ impl Typechecker {
             }
         }
 
-        println!("replacements: {:?}", replacements);
-        for replacement in replacements {
-            println!(
-                "replace: {} with {}",
-                self.compiler.pretty_type(*replacement.0),
-                self.compiler.pretty_type(*replacement.1)
-            );
-        }
-
         return_type = self.instantiate_generic_type(return_type, replacements);
-
-        println!("return type: {}", self.compiler.pretty_type(return_type));
 
         if let (Some(inner_initial_node_id), Some(inner_body)) = (initial_node_id, body) {
             let offset = self.compiler.num_ast_nodes() - inner_initial_node_id.0;
@@ -3665,7 +3663,10 @@ impl Typechecker {
                     variants: new_variants,
                 });
 
-                replacements.insert(type_id, new_type_id);
+                replacements.insert(
+                    self.compiler.get_underlying_type_id(type_id),
+                    self.compiler.get_underlying_type_id(new_type_id),
+                );
 
                 for method in methods {
                     new_methods.push(self.instantiate_generic_fun(method, &replacements));
@@ -3716,10 +3717,15 @@ impl Typechecker {
                     is_allocator,
                 });
 
-                replacements.insert(type_id, new_type_id);
+                replacements.insert(
+                    self.compiler.get_underlying_type_id(type_id),
+                    self.compiler.get_underlying_type_id(new_type_id),
+                );
 
                 for method in methods {
-                    new_methods.push(self.instantiate_generic_fun(method, &replacements));
+                    let fun_id = self.instantiate_generic_fun(method, &replacements);
+
+                    new_methods.push(fun_id);
                 }
 
                 self.compiler
@@ -3731,9 +3737,9 @@ impl Typechecker {
             &Type::Pointer {
                 pointer_type,
                 optional,
-                ..
+                target,
             } => {
-                if let Some(replacement) = replacements.get(&type_id) {
+                if let Some(replacement) = replacements.get(&target) {
                     return self.compiler.find_or_create_type(Type::Pointer {
                         pointer_type,
                         optional,

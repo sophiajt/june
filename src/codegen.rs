@@ -76,7 +76,7 @@ impl Codegen {
                 } else if type_id == UNKNOWN_TYPE_ID {
                     panic!("(unknown) type should be resolved before codegen");
                 } else {
-                    panic!("unknown type")
+                    panic!("unknown type: {:?}", type_id)
                 }
             }
         }
@@ -478,7 +478,14 @@ impl Codegen {
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)
         {
-            if type_params.is_empty() {
+            let mut has_generics_in_signature = !type_params.is_empty();
+            for param in params {
+                let var = self.compiler.get_variable(param.var_id);
+                has_generics_in_signature |= self.compiler.is_generic_type(var.ty);
+            }
+            has_generics_in_signature |= self.compiler.is_generic_type(*return_type);
+
+            if !has_generics_in_signature {
                 self.codegen_fun_signature(
                     FunId(idx),
                     params,
@@ -504,7 +511,14 @@ impl Codegen {
             },
         ) in self.compiler.functions.iter().enumerate().skip(1)
         {
-            if type_params.is_empty() {
+            let mut has_generics_in_signature = !type_params.is_empty();
+            for param in params {
+                let var = self.compiler.get_variable(param.var_id);
+                has_generics_in_signature |= self.compiler.is_generic_type(var.ty);
+            }
+            has_generics_in_signature |= self.compiler.is_generic_type(*return_type);
+
+            if !has_generics_in_signature {
                 if let Some(body) = body {
                     self.codegen_fun_signature(FunId(idx), params, *return_type, output, false);
 
