@@ -641,6 +641,8 @@ impl Compiler {
     }
 
     pub fn is_generic_type(&self, type_id: TypeId, mut seen: Vec<TypeId>) -> bool {
+        // The `seen` parameter is used to protect the recursion from going infinite. Once we see a type,
+        // before we destructure it, we log that we have seen it so we do not check it again.
         if seen.contains(&type_id) {
             return false;
         }
