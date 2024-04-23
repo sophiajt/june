@@ -5,7 +5,7 @@ use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, BlockId, NodeId, PointerType};
 use crate::typechecker::{
-    FunId, Function, Module, ModuleId, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID,
+    EnumVariant, FunId, Function, Module, ModuleId, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -640,6 +640,65 @@ impl Compiler {
         matches!(self.get_type(type_id), Type::TypeVariable(_))
     }
 
+    pub fn is_generic_type(&self, type_id: TypeId, mut seen: Vec<TypeId>) -> bool {
+        // The `seen` parameter is used to protect the recursion from going infinite. Once we see a type,
+        // before we destructure it, we log that we have seen it so we do not check it again.
+        if seen.contains(&type_id) {
+            return false;
+        }
+        seen.push(type_id);
+
+        match self.get_type(type_id) {
+            Type::Bool
+            | Type::CChar
+            | Type::CExternalType(..)
+            | Type::CString
+            | Type::CVoidPtr
+            | Type::Void
+            | Type::I64
+            | Type::F64
+            | Type::CInt
+            | Type::CSizeT => false,
+            Type::TypeVariable(..) => true,
+            Type::FunLocalTypeVar { .. } => true,
+            Type::Unknown => true,
+            Type::Range(x) => self.is_generic_type(*x, seen),
+            Type::RawBuffer(x) => self.is_generic_type(*x, seen),
+            Type::Fun { params, ret } => {
+                params.iter().any(|x| {
+                    let var = self.get_variable(x.var_id);
+                    self.is_generic_type(var.ty, seen.clone())
+                }) || self.is_generic_type(*ret, seen)
+            }
+            Type::Struct {
+                generic_params,
+                fields,
+                ..
+            } => {
+                !generic_params.is_empty()
+                    || fields
+                        .iter()
+                        .any(|x| self.is_generic_type(x.ty, seen.clone()))
+            }
+            Type::Enum {
+                generic_params,
+                variants,
+            } => {
+                !generic_params.is_empty()
+                    || variants.iter().any(|x| match x {
+                        EnumVariant::Simple { .. } => false,
+                        EnumVariant::Single { param, .. } => {
+                            self.is_generic_type(*param, seen.clone())
+                        }
+                        EnumVariant::Struct { params, .. } => params
+                            .iter()
+                            .any(|(_, ty)| self.is_generic_type(*ty, seen.clone())),
+                    })
+            }
+            Type::Pointer { target, .. } => self.is_generic_type(*target, seen),
+        }
+    }
+
     pub fn get_underlying_type_id(&self, type_id: TypeId) -> TypeId {
         match self.get_type(type_id) {
             Type::Pointer {
@@ -702,6 +761,8 @@ impl Compiler {
                 let mut output = String::new();
                 if matches!(pointer_type, PointerType::Owned) {
                     output += "owned ";
+                } else {
+                    output += "shared ";
                 }
                 output += &self.pretty_type(*target);
                 if *optional {
@@ -715,9 +776,16 @@ impl Compiler {
             Type::RawBuffer(type_id) => {
                 format!("[{}]", self.pretty_type(*type_id))
             }
-            Type::Struct { fields, .. } => {
+            Type::Struct {
+                fields,
+                generic_params,
+                ..
+            } => {
                 // FIXME: need more info
-                format!("({:?})struct({:?})", type_id, fields)
+                format!(
+                    "({:?})struct({:?} generics: {:?})",
+                    type_id, fields, generic_params
+                )
             }
             Type::FunLocalTypeVar { offset } => format!("<local typevar: {}>", offset),
             Type::TypeVariable(node_id) => {
