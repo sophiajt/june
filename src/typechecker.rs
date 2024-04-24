@@ -1235,7 +1235,7 @@ impl Typechecker {
         }
     }
 
-    fn unify_subtypes(
+    fn check_is_subtype_of(
         &self,
         expected_type: TypeId,
         actual_type: TypeId,
@@ -1456,7 +1456,7 @@ impl Typechecker {
                         self.compiler.get_variable(param.var_id).ty,
                         local_inferences,
                     ) {
-                    } else if self.unify_subtypes(
+                    } else if self.check_is_subtype_of(
                         arg_ty,
                         self.compiler.get_variable(param.var_id).ty,
                         local_inferences,
@@ -1512,8 +1512,11 @@ impl Typechecker {
                     if self.compiler.is_type_variable(variable_ty) {
                         if let Some(replacement) = type_var_replacements.get(&variable_ty) {
                             if self.unify_types(*replacement, arg_type, local_inferences) {
-                            } else if self.unify_subtypes(*replacement, arg_type, local_inferences)
-                            {
+                            } else if self.check_is_subtype_of(
+                                *replacement,
+                                arg_type,
+                                local_inferences,
+                            ) {
                                 todo!()
                             } else {
                                 self.error(
@@ -1541,7 +1544,7 @@ impl Typechecker {
                             );
                         }
                     } else if self.unify_types(variable_ty, arg_type, local_inferences) {
-                    } else if self.unify_subtypes(variable_ty, arg_type, local_inferences) {
+                    } else if self.check_is_subtype_of(variable_ty, arg_type, local_inferences) {
                         self.compiler
                             .replace_node(arg, |_old_node, old_nodes_new_id| {
                                 AstNode::TypeCoercion {
