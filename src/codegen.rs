@@ -118,7 +118,7 @@ impl Codegen {
             output.extend_from_slice(name);
             output.extend_from_slice(b" */ ");
         }
-        for (depth, base_class) in base_classes.iter().enumerate() {
+        for base_class in base_classes {
             let Type::Struct { fields, .. } = self.compiler.get_type(*base_class) else {
                 panic!("base classes should be struct Types");
             };
@@ -126,7 +126,7 @@ impl Codegen {
                 output.extend_from_slice(b", ");
                 self.codegen_typename(*ty, &[], output);
                 output.push(b' ');
-                write!(output, "base_{}_field_{}", depth, idx).unwrap();
+                write!(output, "base_{}_field_{}", base_class.0, idx).unwrap();
                 output.extend_from_slice(b" /* ");
                 output.extend_from_slice(name);
                 output.extend_from_slice(b" */ ");
@@ -156,7 +156,7 @@ impl Codegen {
             output.extend_from_slice(name);
             output.extend_from_slice(b" */");
         }
-        for (depth, base_class) in base_classes.iter().enumerate() {
+        for base_class in base_classes {
             let Type::Struct {
                 fields,
                 is_allocator: _,
@@ -166,7 +166,7 @@ impl Codegen {
                 panic!("base classes should be struct Types");
             };
             for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
-                write!(output, ", base_{}_field_{}", depth, idx).unwrap();
+                write!(output, ", base_{}_field_{}", base_class.0, idx).unwrap();
                 output.extend_from_slice(b" /* ");
                 output.extend_from_slice(name);
                 output.extend_from_slice(b" */");
