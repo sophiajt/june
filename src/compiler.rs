@@ -816,7 +816,7 @@ impl Compiler {
 
     pub fn get_source_str(&self, node_id: NodeId) -> &str {
         std::str::from_utf8(&self.source[self.span_start[node_id.0]..self.span_end[node_id.0]])
-            .unwrap()
+            .expect("all source should be valid utf-8")
     }
 
     pub fn get_variable_name(&self, var_id: VarId) -> &[u8] {

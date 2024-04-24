@@ -120,7 +120,7 @@ impl Codegen {
         }
         for (depth, base_class) in base_classes.iter().enumerate() {
             let Type::Struct { fields, .. } = self.compiler.get_type(*base_class) else {
-                todo!()
+                panic!("base classes should be struct Types");
             };
             for (idx, TypedField { name, ty, .. }) in fields.iter().enumerate() {
                 output.extend_from_slice(b", ");
@@ -163,7 +163,7 @@ impl Codegen {
                 generic_params: _,
             } = self.compiler.get_type(*base_class)
             else {
-                todo!()
+                panic!("base classes should be struct Types");
             };
             for (idx, TypedField { name, .. }) in fields.iter().enumerate() {
                 write!(output, ", base_{}_field_{}", depth, idx).unwrap();
@@ -377,7 +377,7 @@ impl Codegen {
 
                     if let Some(ptr) = self.compiler.find_pointer_to(TypeId(idx)) {
                         self.codegen_initializer_function(ptr, fields, base_classes, output);
-                        if !dbg!(self.compiler.has_unsatisfied_virtual_methods(TypeId(idx))) {
+                        if !self.compiler.has_unsatisfied_virtual_methods(TypeId(idx)) {
                             self.codegen_allocator_function(
                                 ptr,
                                 fields,
@@ -637,9 +637,9 @@ impl Codegen {
         output: &mut Vec<u8>,
     ) {
         'bases: for base_class in base_classes.iter().rev() {
-            let Some(vtable_fully_satisfied) = dbg!(self
+            let Some(vtable_fully_satisfied) = self
                 .compiler
-                .fully_satisfies_virtual_methods(TypeId(type_id), *base_class))
+                .fully_satisfies_virtual_methods(TypeId(type_id), *base_class)
             else {
                 continue 'bases;
             };
@@ -656,8 +656,6 @@ impl Codegen {
                     (self.compiler.get_source_str(node_id), id)
                 })
                 .collect::<HashMap<_, _>>();
-
-            dbg!(&virtual_methods);
 
             output.extend_from_slice(b"static const vtable_");
             output.extend_from_slice(base_class.0.to_string().as_bytes());
@@ -1734,7 +1732,6 @@ impl Codegen {
                 output.extend_from_slice(b"(");
                 self.codegen_node(*source_node, local_inferences, output);
                 output.extend_from_slice(b")");
-                // todo!()
             }
             x => {
                 panic!("unsupported node: {:?}", x)

@@ -912,9 +912,10 @@ impl Typechecker {
             }
 
             if let Some(base_class) = base_class {
-                let Some(base_class) = self.find_type_in_scope(base_class) else {
-                    todo!()
-                };
+                let base_class = self
+                    .find_type_in_scope(base_class)
+                    .expect("base class should be a valid known type");
+
                 let mut base_classes = vec![base_class];
                 if let Some(base_base_classes) = self.compiler.base_classes.get(&base_class) {
                     base_classes.extend_from_slice(&base_base_classes);
