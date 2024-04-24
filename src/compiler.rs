@@ -552,12 +552,13 @@ impl Compiler {
         let node = self.get_node(node_id).clone();
         let span_start = self.span_start[node_id.0];
         let span_end = self.span_end[node_id.0];
-        let new_node_id = self.create_node(node.clone(), span_start, span_end);
+        let new_node_id = NodeId(self.num_ast_nodes());
+        let new_node = f(&node, new_node_id);
+        let new_node_id = self.create_node(node, span_start, span_end);
         if let Some(var) = self.var_resolution.remove(&node_id) {
             self.var_resolution.insert(new_node_id, var);
         }
         self.node_types.push(UNKNOWN_TYPE_ID);
-        let new_node = f(&node, new_node_id);
         self.ast_nodes[node_id.0] = new_node;
         self.node_types.swap(node_id.0, new_node_id.0);
         new_node_id
