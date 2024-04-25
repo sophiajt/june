@@ -5,7 +5,8 @@ use crate::errors::{Severity, SourceError};
 use crate::lifetime_checker::AllocationLifetime;
 use crate::parser::{AstNode, Block, BlockId, NodeId, PointerType};
 use crate::typechecker::{
-    EnumVariant, FunId, Function, Module, ModuleId, Type, TypeId, VarId, Variable, C_STRING_TYPE_ID,
+    EnumVariant, FunId, Function, Module, ModuleId, Type, TypeId, VarId, Variable,
+    C_STRING_TYPE_ID, UNKNOWN_TYPE_ID,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,7 +23,7 @@ pub enum CallTarget {
 // * vectors are private and can only be accessed from within this file
 // * this file does not contain any of the implementation details of the june compiler, it is purely an abstraction over the compiler's data moved_owned_values
 // * the only way to interact with these vectors is through helper methods that take the required indexing type as an argument
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Compiler {
     // Core information, indexed by NodeId
     pub span_start: Vec<usize>,
@@ -59,7 +60,8 @@ pub struct Compiler {
     pub exiting_blocks: HashMap<NodeId, Vec<BlockId>>,
 
     // Methods on types
-    pub methods_on_type: HashMap<TypeId, Vec<FunId>>,
+    methods_on_type: HashMap<TypeId, Vec<FunId>>,
+    virtual_methods_on_type: HashMap<TypeId, Vec<FunId>>,
 
     // Use/def
     pub call_resolution: HashMap<NodeId, CallTarget>,
@@ -68,45 +70,14 @@ pub struct Compiler {
     pub type_resolution: HashMap<NodeId, TypeId>,
     // lookup the id of a Module from the id of the block (value field from module_lookup_use) in the ast
     pub module_resolution: HashMap<NodeId, ModuleId>,
+    pub base_classes: HashMap<TypeId, Vec<TypeId>>,
 
     pub errors: Vec<SourceError>,
 }
 
 impl Compiler {
     pub fn new() -> Self {
-        Self {
-            span_start: vec![],
-            span_end: vec![],
-            ast_nodes: vec![],
-            node_types: vec![],
-            node_lifetimes: vec![],
-
-            blocks: vec![],
-
-            source: vec![],
-
-            file_offsets: vec![],
-
-            variables: vec![],
-            functions: vec![],
-            types: vec![],
-            modules: vec![],
-
-            module_lookup: HashMap::new(),
-            module_lookup_use: HashMap::new(),
-
-            exiting_blocks: HashMap::new(),
-
-            methods_on_type: HashMap::new(),
-
-            call_resolution: HashMap::new(),
-            var_resolution: HashMap::new(),
-            fun_resolution: HashMap::new(),
-            type_resolution: HashMap::new(),
-            module_resolution: HashMap::new(),
-
-            errors: vec![],
-        }
+        Default::default()
     }
 
     pub fn print(&self) {
@@ -203,7 +174,11 @@ impl Compiler {
                 return_ty,
                 initial_node_id,
                 block,
+                is_extern,
             } => {
+                if *is_extern {
+                    print!("extern ");
+                }
                 println!("Fun:[{}]", node_id.0);
                 self.print_helper(name, indent + 2);
                 if let Some(type_params) = type_params {
@@ -228,6 +203,7 @@ impl Compiler {
                 fields,
                 methods,
                 explicit_no_alloc,
+                base_class: _,
             } => {
                 println!(
                     "Struct:[{}] explicitly not an allocator: {}",
@@ -554,6 +530,40 @@ impl Compiler {
         NodeId(self.ast_nodes.len() - 1)
     }
 
+    pub fn create_node(&mut self, ast_node: AstNode, span_start: usize, span_end: usize) -> NodeId {
+        self.span_start.push(span_start);
+        self.span_end.push(span_end);
+        self.push_node(ast_node)
+    }
+
+    /// Takes a node_id to replace and a closure which takes the original node and it's new location as inputs
+    /// and returns the new node to insert in the old node's location as it's output
+    ///
+    /// Returns the node_id of the new location for the original node
+    ///
+    /// # INVARIANTS
+    ///
+    /// * The user must maintain a 1 to 1 mapping between the vectors for nodes in the ast and the vector of types
+    /// * this function swaps the nodes in the ast and the associated list of types, but leaves the type for the new node as unknown
+    pub fn replace_node<F>(&mut self, node_id: NodeId, f: F) -> NodeId
+    where
+        F: FnOnce(&AstNode, NodeId) -> AstNode,
+    {
+        let node = self.get_node(node_id).clone();
+        let span_start = self.span_start[node_id.0];
+        let span_end = self.span_end[node_id.0];
+        let new_node_id = NodeId(self.num_ast_nodes());
+        let new_node = f(&node, new_node_id);
+        let new_node_id = self.create_node(node, span_start, span_end);
+        if let Some(var) = self.var_resolution.remove(&node_id) {
+            self.var_resolution.insert(new_node_id, var);
+        }
+        self.node_types.push(UNKNOWN_TYPE_ID);
+        self.ast_nodes[node_id.0] = new_node;
+        self.node_types.swap(node_id.0, new_node_id.0);
+        new_node_id
+    }
+
     pub fn resize_node_types(&mut self, size: usize, type_id: TypeId) {
         self.node_types.resize(size, type_id)
     }
@@ -804,6 +814,11 @@ impl Compiler {
         &self.source[self.span_start[node_id.0]..self.span_end[node_id.0]]
     }
 
+    pub fn get_source_str(&self, node_id: NodeId) -> &str {
+        std::str::from_utf8(&self.source[self.span_start[node_id.0]..self.span_end[node_id.0]])
+            .expect("all source should be valid utf-8")
+    }
+
     pub fn get_variable_name(&self, var_id: VarId) -> &[u8] {
         self.get_source(self.variables[var_id.0].name)
     }
@@ -868,5 +883,79 @@ impl Compiler {
         self.modules.push(module);
         self.module_resolution.insert(module_block, module_id);
         module_id
+    }
+
+    pub(crate) fn fully_satisfies_virtual_methods(
+        &self,
+        type_id: TypeId,
+        base_class: TypeId,
+    ) -> Option<bool> {
+        let type_id = self.get_underlying_type_id(type_id);
+        let base_class = self.get_underlying_type_id(base_class);
+
+        let virtual_methods = self.virtual_methods_on_type.get(&base_class)?;
+        let methods = self.methods_on_type(type_id);
+
+        let virtual_methods = virtual_methods
+            .iter()
+            .map(|id| {
+                let node_id = self.functions[id.0].name;
+                (self.get_source_str(node_id), id)
+            })
+            .collect::<HashMap<_, _>>();
+
+        let method_names = methods
+            .iter()
+            .map(|id| {
+                let node_id = self.functions[id.0].name;
+                self.get_source_str(node_id)
+            })
+            .collect::<std::collections::HashSet<_>>();
+
+        for name in virtual_methods.keys() {
+            if !method_names.contains(*name) {
+                return Some(false);
+            }
+        }
+
+        Some(true)
+    }
+
+    pub(crate) fn methods_on_type(&self, idx: TypeId) -> &[FunId] {
+        self.methods_on_type
+            .get(&idx)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub(crate) fn virtual_methods_on_type(&self, idx: TypeId) -> &[FunId] {
+        self.virtual_methods_on_type
+            .get(&idx)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub(crate) fn insert_methods_on_type(&mut self, type_id: TypeId, methods: Vec<FunId>) {
+        self.methods_on_type.insert(type_id, methods);
+    }
+
+    pub(crate) fn insert_virtual_methods_on_type(&mut self, type_id: TypeId, methods: Vec<FunId>) {
+        if !methods.is_empty() {
+            self.virtual_methods_on_type.insert(type_id, methods);
+        }
+    }
+
+    pub(crate) fn has_unsatisfied_virtual_methods(&self, idx: TypeId) -> bool {
+        if !self.virtual_methods_on_type(idx).is_empty() {
+            return true;
+        }
+
+        for base_class in self.base_classes.get(&idx).into_iter().flatten() {
+            if let Some(false) = self.fully_satisfies_virtual_methods(idx, *base_class) {
+                return true;
+            }
+        }
+
+        false
     }
 }

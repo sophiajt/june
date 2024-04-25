@@ -1,0 +1,36 @@
+// output: button down
+
+class Button {
+    public button_down: bool
+
+    fun draw_button_down(self)
+    fun draw_button_up(self)
+
+    fun draw(self) {
+        if self.button_down {
+            self.draw_button_down()
+        } else {
+            self.draw_button_up()
+        }
+    }
+}
+
+class FancyButton: Button {
+    fun draw_button_up(self) {
+        // impl here
+        println(c"button up")
+    }
+}
+
+class FanciestButton: FancyButton {
+    fun draw_button_down(self) {
+        // impl here
+        println(c"button down")
+    }
+}
+
+fun main() {
+    let button = new FanciestButton(button_down: true);
+    button.draw()
+}
+

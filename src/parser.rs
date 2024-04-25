@@ -55,6 +55,12 @@ pub enum AstNode {
     RawBufferType {
         inner: NodeId,
     },
+    TypeCoercion {
+        /// the node of the value being coerced
+        source_node: NodeId,
+        /// the nodeid of the definition of the type that the value should be coerced into
+        target_type: NodeId,
+    },
 
     // Booleans
     True,
@@ -135,6 +141,7 @@ pub enum AstNode {
         return_ty: Option<NodeId>,
         initial_node_id: Option<NodeId>,
         block: Option<NodeId>,
+        is_extern: bool,
     },
     Params(Vec<NodeId>),
     Param {
@@ -147,6 +154,7 @@ pub enum AstNode {
         fields: Vec<NodeId>,
         methods: Vec<NodeId>,
         explicit_no_alloc: bool,
+        base_class: Option<NodeId>,
     },
     Field {
         member_access: MemberAccess,
@@ -174,6 +182,8 @@ pub enum AstNode {
 
     // Expressions
     Call {
+        // TODO replace with proper documentation answering the question
+        // this is the method name right? so if it's a method self ends up in args?
         head: NodeId,
         args: Vec<NodeId>,
     },
@@ -843,9 +853,7 @@ impl Parser {
     }
 
     pub fn create_node(&mut self, ast_node: AstNode, span_start: usize, span_end: usize) -> NodeId {
-        self.compiler.span_start.push(span_start);
-        self.compiler.span_end.push(span_end);
-        self.compiler.push_node(ast_node)
+        self.compiler.create_node(ast_node, span_start, span_end)
     }
 
     pub fn block(&mut self, expect_curly_braces: bool) -> NodeId {
@@ -966,6 +974,7 @@ impl Parser {
                     return_ty,
                     initial_node_id: None,
                     block: None,
+                    is_extern: true,
                 },
                 span_start,
                 span_end,
@@ -1041,9 +1050,14 @@ impl Parser {
 
         let initial_node_id = Some(NodeId(self.compiler.num_ast_nodes()));
 
-        let block = self.block(true);
-
-        let span_end = self.get_span_end(block);
+        let (block, span_end) = if self.is_lcurly() {
+            let block = self.block(true);
+            let span_end = self.get_span_end(block);
+            (Some(block), span_end)
+        } else {
+            let span_end = self.position();
+            (None, span_end)
+        };
 
         self.create_node(
             AstNode::Fun {
@@ -1053,7 +1067,8 @@ impl Parser {
                 lifetime_annotations,
                 return_ty,
                 initial_node_id,
-                block: Some(block),
+                block,
+                is_extern: false,
             },
             span_start,
             span_end,
@@ -1081,6 +1096,15 @@ impl Parser {
         };
 
         let name = self.typename();
+
+        // inheritance
+        let base_class = if self.is_colon() {
+            self.colon();
+            Some(self.typename())
+        } else {
+            None
+        };
+
         self.lcurly();
 
         // parse fields
@@ -1137,6 +1161,7 @@ impl Parser {
                 fields,
                 methods,
                 explicit_no_alloc,
+                base_class,
             },
             span_start,
             span_end,
