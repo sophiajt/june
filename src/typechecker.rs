@@ -1451,17 +1451,18 @@ impl Typechecker {
                         );
                     }
 
-                    if self.unify_types(
-                        arg_ty,
-                        self.compiler.get_variable(param.var_id).ty,
-                        local_inferences,
-                    ) {
-                    } else if self.check_is_subtype_of(
-                        arg_ty,
-                        self.compiler.get_variable(param.var_id).ty,
-                        local_inferences,
-                    ) {
-                        todo!()
+                    let variable = self.compiler.get_variable(param.var_id);
+                    let variable_ty = variable.ty;
+                    let variable_nodeid = variable.name;
+                    if self.unify_types(arg_ty, variable_ty, local_inferences) {
+                    } else if self.check_is_subtype_of(variable_ty, arg_ty, local_inferences) {
+                        self.compiler
+                            .replace_node(arg, |_old_node, old_nodes_new_id| {
+                                AstNode::TypeCoercion {
+                                    source_node: old_nodes_new_id,
+                                    target_type: variable_nodeid,
+                                }
+                            });
                     } else {
                         self.error(
                             format!(
@@ -1512,12 +1513,6 @@ impl Typechecker {
                     if self.compiler.is_type_variable(variable_ty) {
                         if let Some(replacement) = type_var_replacements.get(&variable_ty) {
                             if self.unify_types(*replacement, arg_type, local_inferences) {
-                            } else if self.check_is_subtype_of(
-                                *replacement,
-                                arg_type,
-                                local_inferences,
-                            ) {
-                                todo!()
                             } else {
                                 self.error(
                                     format!(
