@@ -2,9 +2,9 @@
 
 ## Goals
 
-Teachability | Learnability | Readability
-Efficiency | Productivity
-Systems and application programming
+- Teachability | Learnability | Readability
+- Efficiency | Productivity
+- Systems and application programming
 
 ## Participating in the closed alpha/beta
 
