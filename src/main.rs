@@ -7,8 +7,12 @@ mod typechecker;
 
 // cli submodules
 mod build;
+mod new;
 
+use core::fmt;
+use std::error::Error;
 use std::fs::File;
+use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -34,6 +38,7 @@ pub struct Cli {
 #[derive(clap::Subcommand, Debug)]
 pub enum Command {
     Build(build::Args),
+    New(new::Args),
 }
 
 impl Cli {
@@ -76,6 +81,7 @@ impl Cli {
             let app_filepath = build_dir.join("main");
             let mut output_file = File::create(&c_output_filepath).unwrap();
             let _ = output_file.write_all(&output);
+
             // Next, compile the file
             let compiler = std::process::Command::new("clang")
                 .arg(&c_output_filepath)
@@ -90,6 +96,49 @@ impl Cli {
                 panic!("Clang did not compile successfully");
             }
         }
+    }
+
+    fn new_project(&self, args: &new::Args) -> Result<(), NewProjectError> {
+        let main_dir = args.path.join("main");
+        // create the directory
+        // create the main subdirectory
+        std::fs::create_dir_all(&main_dir)?;
+        // .expect("path should be a valid path the user can create");
+        // create the hello world main.june file
+        let hello_world = r#"println(c"hello")"#;
+        std::fs::write(main_dir.join("main.june"), hello_world)?;
+        // create the empty June.toml file in the root
+        std::fs::File::create(args.path.join("June.toml"))?;
+        // initialize git vcs
+        let _cmd = std::process::Command::new("git")
+            .arg("init")
+            .arg("-b")
+            .arg("main")
+            .current_dir(&args.path)
+            .output()?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct NewProjectError(io::Error);
+
+impl fmt::Display for NewProjectError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("cannot create new project")
+    }
+}
+
+impl Error for NewProjectError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+impl From<io::Error> for NewProjectError {
+    fn from(value: io::Error) -> Self {
+        Self(value)
     }
 }
 
@@ -162,6 +211,7 @@ fn main() {
     match &cli.command {
         Some(command) => match command {
             Command::Build(args) => cli.build(args),
+            Command::New(args) => cli.new_project(args).unwrap(),
         },
         None => {
             for fname in &cli.files {
