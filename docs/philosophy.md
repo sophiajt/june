@@ -106,3 +106,11 @@ By enforcing full encapsulation, the developer can create an abstraction that:
 1. Is safe to move between threads
 2. Forms a reusable module with a clear interface
 3. Creates a memory boundary with the rest of the program, allowing for targeted memory reuse
+
+# Connections to other languages
+
+June has connections to a number of languages. Its most direct connection is to the language Rust, as Rust helped show what was possible with a safe systems language.
+
+While June shares some of Rust's goals, it does not share Rust's design to reach them. Like languages like Vale, June is aimed at reaching memory safety in ways that do not include the borrow checker.
+
+We do plan for June to have interop with Rust in the future. To achieve this goal, we'll need to connect to Rust via a stable ABI that allows the June compiler to lay out data in memory in a way that is accessible from June and also compatible with Rust. We hope to collaborate on this as June develops.
