@@ -258,7 +258,7 @@ impl fmt::Display for BuildProjectError {
             BuildProjectError::MainCCreate(_) => {
                 f.write_str("cannot create temporary file for c codegen")
             }
-            BuildProjectError::MainCWrite(_) => f.write_str("cannot write to codgen file"),
+            BuildProjectError::MainCWrite(_) => f.write_str("cannot write to codegen file"),
             BuildProjectError::Clang(_) => f.write_str("cannot compile codegen into binary"),
         }
     }
