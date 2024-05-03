@@ -14,9 +14,9 @@ Also see the [philosophy](docs/philosophy.md) for more info.
     * File feedback as issues on the repo: https://github.com/sophiajt/june/issues
     * When you file issues, please also submit the git hash of the revision you've built from
 
-## Project completeness
+# Status
 
-June is currently *alpha* quality. It's missing important features and may have corner cases when trying to compile valid programs.
+The June project is still in its early days of development. While we have developed a compiler in tandem with designing the language, both should be considered experimental and pre-alpha in quality. Significant changes to both the language and the compiler should be expected.
 
 ## Running the test suite
 
