@@ -1,4 +1,6 @@
-## Goal: Teachability, learnability, and readability
+# Goals
+
+## Teachability, learnability, and readability
 
 June was born of multiple years of experience teaching Rust. Rust, while being a powerful systems language, is also incredibly difficult to learn and a special challenge as a teacher to deliver complex concepts to classrooms of diverse technical backgrounds. In essence, June comes from the idea: "what if we could do safe systems programming in a simpler way?"
 
@@ -8,7 +10,7 @@ The language itself draws from a variety of inspirations in addition to Rust: Go
 
 June is also built to be a teaching language that could be used to teach software engineering concepts. It is suitable to be used as someone's first programming language.
 
-## Goal: Efficiency
+## Efficiency
 
 One major benefit of systems programming, in addition to the flexibility of being usable on bare-metal, is the efficiency of the compiled code. June leverages these benefits in its design, and includes some uncommon language design choices that leverage decades of embedded and high-performance work.
 
@@ -16,13 +18,15 @@ Namely, June uses the idea of a custom allocator as one of its core implementati
 
 The end goal is that related allocations maintain cache locality as much as possible. This gives the added benefit that programmers need not restrict themselves to vectors of structs to maximise efficiency via cache locality. Instead, they can build data structures in a way that feels more natural and readable, while still benefitting from the underlying locality of the allocations used to build those data structures.
 
-## Goal: Systems and application programming
+## Systems and application programming
 
 June is a systems language, meaning it is intended to be able to be used to create low-level applications that can work directly on the metal. Use of the allocator will be tune-able for these systems, and is already a natural fit for systems that do not have access to OS-level memory management.
 
 June is also geared towards application programming. Its direct OO approach coupled with its ease-of-use encourages application development using tradition OOP UI approaches as well as more innovative data-oriented styles. In essence, June allows the developer to pick the implementation that works best for the problem, and then encourages strong encapsulation for code reuse.
 
-## Non-goal: Fine-grained memory reclamation
+# Non-goals
+
+## Fine-grained memory reclamation
 
 One characteristic of June that you'll notice is that it prefers holding on to memory longer than other languages. You can think of this as a kind of memory "bloat" compared to more fine-grained allocation system. In one sense, the style is something more akin to garbage collection, though June does not use a garbage collector.
 
@@ -58,7 +62,7 @@ The goal of this is two-fold: it is more efficient to not free and reallocate me
 
 sjt: do we want to call this "bloat" or give it a nicer name?
 
-## Non-goal: RAII
+## RAII
 
 RAII, or Resource Acquisition Is Initialisation, is a common pattern with C++ and Rust developers.
 
@@ -71,3 +75,34 @@ June's memory system instead tracks groups of related lifetimes together as one.
 Equally important is June's ability to drop _all_ memory allocated to a group as a single drop. This is much more efficient then having to order destructors and waiting for them to run in sequence.
 
 June does offer the `defer` command to defer the freeing of a resource, which can be attached to the lifetime of a group via one of its pointers. In effect, this can approximate some of the cleanup logic of RAII without enforcing the whole of the RAII pattern.
+
+# Grouping memory
+
+June is designed to consider allocations as grouped and related. For example, allocations that make up a linked list are seen a part of the same allocation group. This is in contrast to languages like Rust and C++ that, by default, think of allocations as separate and unrelated.
+
+This group of allocations has some helpful properties:
+
+* Grouped allocations make for allocations that are easier to use as they can be used to created arbitrary data structures.
+* Grouped allocations simplify lifetimes down, so that a pointer can carry a single lifetime for itself and all data it points to. This simplifies by lifetime inference and lifetime annotation.
+* Grouped allocations also give lifetime names that are easier to read and understand. If, for example, the group comes from the parameter called `foo`, we can tell the user that the lifetime is `param(foo)` making it clear where the lifetime requirement comes from.
+
+Grouped allocations do also have some drawbacks:
+
+* Grouped allocations mean allocations live and die together. If you need to reuse memory before the group has completely, you'll need to use a memory recycling scheme.
+* It will sometimes be the case that you may unintentionally grow the amount of memory used by a group if you're more accustomed to garbage collected languages. This will need to be addressed via static analysis and addition profiling that comes with June.
+
+# Incremental improvement
+
+Rather than requiring that a program meet a strict set of requirements out the outset, June is set up to be more incremental in its enforcement of rules. By default, all programs are memory safe. The same programs, though, are not required to be thread safe or safe with regards to the use of aliases.
+
+This allows developers to more easily experiment with an idea, trying it out until they get what they want, and then incrementally increase the amount of checking the compiler does.
+
+# Importance of encapsulation
+
+June makes heavy use of the concept of encapsulation. In June, encapsulated private state represented internel implementation details that should not be shared with the outside world, and the developer can ask the June compiler to enforce this.
+
+By enforcing full encapsulation, the developer can create an abstraction that:
+
+1. Is safe to move between threads
+2. Forms a reusable module with a clear interface
+3. Creates a memory boundary with the rest of the program, allowing for targeted memory reuse
