@@ -14,7 +14,7 @@ Also see the [philosophy](docs/philosophy.md) for more info.
     * File feedback as issues on the repo: https://github.com/sophiajt/june/issues
     * When you file issues, please also submit the git hash of the revision you've built from
 
-# Status
+## Status
 
 The June project is still in its early days of development. While we have developed a compiler in tandem with designing the language, both should be considered experimental and pre-alpha in quality. Significant changes to both the language and the compiler should be expected.
 
@@ -46,3 +46,18 @@ Alternatively, the current version of June can be used compile June code to C by
 ## The June language
 
 For more information on the June language, check out [the June language documentation](docs/language.md)
+
+## Reporting issues
+
+The best way to file issues is to file them through the [GitHub issue tracker](https://github.com/sophiajt/june/issues).
+
+## Roadmap
+
+Our main goal with June is to build out an implementation of its initial design and to test it.
+
+As we dogfood, we will likely change the design of the language where we see it doesn't meet the goals of the project.
+
+We'll likely also work towards support in IDEs (using things like LSP) to make it easier to write larger June projects and get interactive feedback from the tools.
+
+
+
