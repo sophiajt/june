@@ -259,7 +259,7 @@ src/
 ```
 
 ### Future design
-Public APIs of modules are defined using the `export` keyword. The module tree structure of a june application or library is defined by it's file structure. Modules can be either files in the same directory as their parent module, or they can be subdirectories, with an optional file matching the subdirectory name defining the submodule, with additional files being submodules of the submodule.
+Public APIs of modules are defined using the `export` keyword. The module tree structure of a june application or library is defined by its file structure. Modules can be either files in the same directory as their parent module, or they can be subdirectories, with an optional file matching the subdirectory name defining the submodule, with additional files being submodules of the submodule.
 
 
 ```
