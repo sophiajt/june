@@ -30,7 +30,7 @@ The June compiler outputs C code, which you can then build with a C-compatible c
 
 ## How to compile
 
-June currently provides some rudamentary support for building june projects. We don't yet support creating new june projects. June only supports binary projects at the moment, with a main.june file inside a `main` folder. The project root is marked by a `June.toml` file which is currently empty and unused, but will eventually contain metadata about the project including the output binary name. Inside of a properly setup june project one should be able to build by simply typing `june build`. Once the build step completes you should have a binary in `build/debug` called`main` which you can run manually.
+June currently provides some rudimentary support for building june projects. We don't yet support creating new june projects. June only supports binary projects at the moment, with a main.june file inside a `main` folder. The project root is marked by a `June.toml` file which is currently empty and unused, but will eventually contain metadata about the project including the output binary name. Inside of a properly setup june project one should be able to build by simply typing `june build`. Once the build step completes you should have a binary in `build/debug` called`main` which you can run manually.
 
 ```
 project_dir/
