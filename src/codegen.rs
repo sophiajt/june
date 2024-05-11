@@ -724,7 +724,7 @@ impl Codegen {
                 for param in params {
                     output.extend_from_slice(b", ");
                     let variable_ty = self.compiler.get_variable(param.var_id).ty;
-                    self.codegen_typename(variable_ty, &inference_vars, output);
+                    self.codegen_typename(variable_ty, inference_vars, output);
                     output.push(b' ');
                     output.extend_from_slice(b"variable_");
                     output.extend_from_slice(param.var_id.0.to_string().as_bytes());

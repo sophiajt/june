@@ -31,6 +31,7 @@ pub struct TypedField {
     pub where_defined: NodeId,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Unknown,
@@ -368,6 +369,7 @@ impl Typechecker {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn typecheck_fun_predecl(
         &mut self,
         name: NodeId,
@@ -918,7 +920,7 @@ impl Typechecker {
 
                 let mut base_classes = vec![base_class];
                 if let Some(base_base_classes) = self.compiler.base_classes.get(&base_class) {
-                    base_classes.extend_from_slice(&base_base_classes);
+                    base_classes.extend_from_slice(base_base_classes);
                 }
 
                 self.compiler.base_classes.insert(type_id, base_classes);
@@ -1239,7 +1241,7 @@ impl Typechecker {
         &self,
         expected_type: TypeId,
         actual_type: TypeId,
-        local_inferences: &mut Vec<TypeId>,
+        local_inferences: &mut [TypeId],
     ) -> bool {
         let expected_type = self.compiler.resolve_type(expected_type, local_inferences);
         let expected_type = self.compiler.get_underlying_type_id(expected_type);
@@ -2523,12 +2525,12 @@ impl Typechecker {
                     let mut fields = fields.clone();
                     if let Some(base_classes) = self.compiler.base_classes.get(&type_id) {
                         for type_id in base_classes {
-                            match self.compiler.get_type(*type_id) {
-                                Type::Struct {
-                                    fields: base_fields,
-                                    ..
-                                } => fields.extend_from_slice(&base_fields),
-                                _ => {}
+                            if let Type::Struct {
+                                fields: base_fields,
+                                ..
+                            } = self.compiler.get_type(*type_id)
+                            {
+                                fields.extend_from_slice(base_fields)
                             }
                         }
                     }
