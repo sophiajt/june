@@ -1,0 +1,75 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+name: continuous-integration
+
+env:
+  NUSHELL_CARGO_PROFILE: ci
+  NU_LOG_LEVEL: DEBUG
+  CLIPPY_OPTIONS: "-D warnings"
+
+jobs:
+  fmt-clippy:
+    strategy:
+      fail-fast: true
+      matrix:
+        # Pinning to Ubuntu 20.04 because building on newer Ubuntu versions causes linux-gnu
+        # builds to link against a too-new-for-many-Linux-installs glibc version. Consider
+        # revisiting this when 20.04 is closer to EOL (April 2025)
+        platform: [macos-latest, ubuntu-20.04, windows-latest]
+        feature: [default]
+        include:
+          - feature: default
+            flags: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain and cache
+        uses: actions-rust-lang/setup-rust-toolchain@v1.5.0
+        with:
+          rustflags: ""
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace ${{ matrix.flags }} -- $CLIPPY_OPTIONS
+
+        # In tests we don't have to deny unwrap
+      - name: Clippy of tests
+        run: cargo clippy --tests --workspace ${{ matrix.flags }} -- -D warnings
+
+  tests:
+    strategy:
+      fail-fast: true
+      matrix:
+        platform: [macos-latest, ubuntu-20.04, windows-latest]
+        feature: [default]
+        include:
+          - feature: default
+            flags: ""
+        flags:
+          - # default
+          - --all-features
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain and cache
+        uses: actions-rust-lang/setup-rust-toolchain@v1.5.0
+        with:
+          rustflags: ""
+
+      - name: Tests
+        run: cargo test ${{ matrix.flags }}
+      - name: Ensure
+        working-directory: ./truffle
+        run: cargo build ${{ matrix.flags }}
