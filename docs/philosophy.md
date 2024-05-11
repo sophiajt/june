@@ -99,7 +99,7 @@ This allows developers to more easily experiment with an idea, trying it out unt
 
 # Importance of encapsulation
 
-June makes heavy use of the concept of encapsulation. In June, encapsulated private state represented internel implementation details that should not be shared with the outside world, and the developer can ask the June compiler to enforce this.
+June makes heavy use of the concept of encapsulation. In June, encapsulated private state represented internal implementation details that should not be shared with the outside world, and the developer can ask the June compiler to enforce this.
 
 By enforcing full encapsulation, the developer can create an abstraction that:
 
