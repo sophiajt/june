@@ -1063,6 +1063,49 @@ impl Codegen {
                     CallTarget::Function(fun_id) => {
                         let fun = &self.compiler.functions[fun_id.0];
                         if fun_id.0 == 0 {
+                            // special case for print
+                            match self.compiler.resolve_node_type(args[0], local_inferences) {
+                                C_STRING_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%s\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                I64_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%lli\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                F64_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%lf\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                BOOL_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%s\", (");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                    output.extend_from_slice(br#")?"true":"false""#);
+                                }
+                                C_INT_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%i\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                C_SIZE_T_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%li\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                C_CHAR_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%c\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                x => {
+                                    panic!(
+                                        "unknown type for printf: {:?}",
+                                        self.compiler.get_type(x)
+                                    );
+                                }
+                            }
+                            output.extend_from_slice(b");\n");
+                            return;
+                        }
+
+                        if fun_id.0 == 1 {
                             // special case for println
                             match self.compiler.resolve_node_type(args[0], local_inferences) {
                                 C_STRING_TYPE_ID => {
