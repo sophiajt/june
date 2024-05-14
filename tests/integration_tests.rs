@@ -81,7 +81,7 @@ fn test_example(test_name: &Path) -> TestResult {
 
     // Create it if it's not there
     let mut temp_dir = std::env::var("JUNE_TESTDIR")
-        .map(|dir| PathBuf::from(dir))
+        .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir());
     temp_dir.push("june_tests");
 
