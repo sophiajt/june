@@ -224,13 +224,21 @@ pub const C_STRING_TYPE_ID: TypeId = TypeId(10);
 
 impl Typechecker {
     pub fn new(mut compiler: Compiler) -> Self {
-        // temporarily - let's add `println` for now, to get examples to typecheck
+        // temporarily - let's add `print` and `println` for now, to get examples to typecheck
         compiler.variables.push(Variable {
             name: NodeId(0),
             ty: UNKNOWN_TYPE_ID,
             is_mutable: false,
             where_defined: NodeId(0),
         });
+
+        compiler.variables.push(Variable {
+            name: NodeId(1),
+            ty: UNKNOWN_TYPE_ID,
+            is_mutable: false,
+            where_defined: NodeId(1),
+        });
+
         compiler.functions.push(Function {
             name: NodeId(0),
             params: vec![Param::new(b"input".to_vec(), VarId(0))],
@@ -241,7 +249,20 @@ impl Typechecker {
             inference_vars: vec![],
             return_node: None,
             return_type: VOID_TYPE_ID,
-            is_extern: true,
+            is_extern: false,
+        });
+
+        compiler.functions.push(Function {
+            name: NodeId(1),
+            params: vec![Param::new(b"input".to_vec(), VarId(1))],
+            initial_node_id: None,
+            body: None,
+            type_params: vec![],
+            lifetime_annotations: vec![],
+            inference_vars: vec![],
+            return_node: None,
+            return_type: VOID_TYPE_ID,
+            is_extern: false,
         });
 
         // hardwire in the core types before the user-defined types
@@ -263,7 +284,13 @@ impl Typechecker {
             .last_mut()
             .expect("internal error: couldn't access function scope")
             .functions
-            .insert(b"println".to_vec(), FunId(0));
+            .insert(b"print".to_vec(), FunId(0));
+
+        scope
+            .last_mut()
+            .expect("internal error: couldn't access function scope")
+            .functions
+            .insert(b"println".to_vec(), FunId(1));
 
         Self { compiler, scope }
     }
@@ -3978,7 +4005,7 @@ impl Typechecker {
                 self.compiler.fun_resolution.insert(node_id, fun_id);
 
                 // FIXME: I'm going to hate having these workarounds soon, I bet
-                if fun_id.0 != 0 {
+                if fun_id.0 > 1 {
                     self.compiler.find_or_create_type(Type::Fun {
                         params: fun.params.clone(),
                         ret: fun.return_type,

@@ -1063,14 +1063,57 @@ impl Codegen {
                     CallTarget::Function(fun_id) => {
                         let fun = &self.compiler.functions[fun_id.0];
                         if fun_id.0 == 0 {
-                            // special case for println
+                            // special case for print
                             match self.compiler.resolve_node_type(args[0], local_inferences) {
                                 C_STRING_TYPE_ID => {
-                                    output.extend_from_slice(b"printf(\"%s\\n\", ");
+                                    output.extend_from_slice(b"printf(\"%s\", ");
                                     self.codegen_node(args[0], local_inferences, output);
                                 }
                                 I64_TYPE_ID => {
-                                    output.extend_from_slice(b"printf(\"%lli\\n\", ");
+                                    output.extend_from_slice(b"printf(\"%lli\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                F64_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%lf\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                BOOL_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%s\", (");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                    output.extend_from_slice(br#")?"true":"false""#);
+                                }
+                                C_INT_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%i\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                C_SIZE_T_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%li\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                C_CHAR_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%c\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                x => {
+                                    panic!(
+                                        "unknown type for printf: {:?}",
+                                        self.compiler.get_type(x)
+                                    );
+                                }
+                            }
+                            output.extend_from_slice(b");\n");
+                            return;
+                        }
+
+                        if fun_id.0 == 1 {
+                            // special case for println
+                            match self.compiler.resolve_node_type(args[0], local_inferences) {
+                                C_STRING_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%s\", ");
+                                    self.codegen_node(args[0], local_inferences, output);
+                                }
+                                I64_TYPE_ID => {
+                                    output.extend_from_slice(b"printf(\"%lli\n\", ");
                                     self.codegen_node(args[0], local_inferences, output);
                                 }
                                 F64_TYPE_ID => {
@@ -1807,7 +1850,7 @@ impl Codegen {
         self.codegen_user_types(&mut output);
         self.codegen_fun_decls(&mut output);
 
-        for (idx, fun) in self.compiler.functions.iter().enumerate().skip(1) {
+        for (idx, fun) in self.compiler.functions.iter().enumerate().skip(2) {
             let name = self.compiler.get_source(fun.name);
 
             if name == b"main" {
