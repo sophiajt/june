@@ -249,7 +249,7 @@ impl Typechecker {
             inference_vars: vec![],
             return_node: None,
             return_type: VOID_TYPE_ID,
-            is_extern: false,
+            is_extern: true,
         });
 
         compiler.functions.push(Function {
@@ -262,7 +262,7 @@ impl Typechecker {
             inference_vars: vec![],
             return_node: None,
             return_type: VOID_TYPE_ID,
-            is_extern: false,
+            is_extern: true,
         });
 
         // hardwire in the core types before the user-defined types

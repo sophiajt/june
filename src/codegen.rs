@@ -802,7 +802,7 @@ impl Codegen {
                 body,
                 ..
             },
-        ) in self.compiler.functions.iter().enumerate().skip(1)
+        ) in self.compiler.functions.iter().enumerate().skip(2)
         {
             let mut has_generics_in_signature = !type_params.is_empty();
             for param in params {
@@ -835,7 +835,7 @@ impl Codegen {
                 inference_vars: type_vars,
                 ..
             },
-        ) in self.compiler.functions.iter().enumerate().skip(1)
+        ) in self.compiler.functions.iter().enumerate().skip(2)
         {
             let mut has_generics_in_signature = !type_params.is_empty();
             for param in params {
