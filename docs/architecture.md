@@ -11,10 +11,10 @@ The June compiler data model is based on the data oriented school of design
 (similar to an ecs, which will be used as an analogy throughout this document).
 The compiler parses the program and creates a flattened AST of nodes and
 `NodeId`s that index into the vec of nodes. You can think NodeIds as equivalent
-to entity identifiers in an ECS and the nodes themselves as a component of that
-entity. Each pass of the compiler then creates additional  vectors of
-information associated with those same `NodeId`s, essentially setting up
-additional components for each entity.
+to entity identifiers in an [ECS](https://en.wikipedia.org/wiki/Entity_component_system)
+and the nodes themselves as a component of that entity. Each pass of the
+compiler then creates additional vectors of information associated with those
+same `NodeId`s, essentially setting up additional components for each entity.
 
 ## Parser
 
