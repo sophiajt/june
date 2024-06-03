@@ -1,3 +1,15 @@
+# PLEASE NOTE
+
+June is no longer maintained. For more information, please read [my blog post](https://www.sophiajt.com/following-new-paths-ahead/)
+
+
+
+
+
+
+
+
+# PREVIOUS README
 # June, a gradual, safe systems language
 
 ## Goals
